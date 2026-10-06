@@ -14,9 +14,11 @@ function isatu_db_connect(): mysqli
             throw new RuntimeException($connection->connect_error);
         }
         $connection->set_charset("utf8mb4");
-        // Philippine time, and the same text comparison rules as the tables whatever the
-        // server's default (MariaDB 11.5 and later changed it).
-        $connection->query("SET time_zone = '+08:00', collation_connection = 'utf8mb4_general_ci'");
+        // Philippine time, and the tables' text comparison rules for everything the app sends.
+        // SET NAMES ... COLLATE matters on MariaDB 11.4 and later: there, values bound to a
+        // query otherwise get utf8mb4_uca1400_ai_ci, and comparing one with text written in
+        // the query fails with "Illegal mix of collations" (appointment requests did).
+        $connection->query("SET NAMES utf8mb4 COLLATE utf8mb4_general_ci, time_zone = '+08:00'");
         return $connection;
     } catch (Throwable $error) {
         if (PHP_SAPI === "cli") {

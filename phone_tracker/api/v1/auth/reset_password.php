@@ -60,6 +60,6 @@ try {
     $conn->commit();
 } catch (Throwable $error) {
     $conn->rollback();
-    api_fail("Could not reset the password", 500);
+    api_fail("Could not reset the password", 500, [], $error);
 }
 api_success([], 200, "Password updated. Sign in again on your devices.");

@@ -20,5 +20,5 @@ try {
 } catch (DomainException $error) {
     api_fail($error->getMessage(), $error->getMessage() === "Visit not found" ? 404 : 409);
 } catch (Throwable $error) {
-    api_fail("Could not cancel the visit", 500);
+    api_fail("Could not cancel the visit", 500, [], $error);
 }

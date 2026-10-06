@@ -25,7 +25,7 @@ if ($date < $today || $date > $today->modify("+180 days")) {
 try {
     $settings = office_availability_get_settings($conn, $officeCode);
 } catch (Throwable $error) {
-    api_fail("Office availability database migration is required", 503);
+    api_fail("Office availability database migration is required", 503, [], $error);
 }
 if (!(int) $settings["accepting_visitors"]) {
     api_success([

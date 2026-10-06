@@ -23,5 +23,5 @@ try {
 } catch (DomainException $error) {
     api_fail($error->getMessage(), 409);
 } catch (Throwable $error) {
-    api_fail("Could not create the multi-stop visit", 500);
+    api_fail("Could not create the multi-stop visit", 500, [], $error);
 }

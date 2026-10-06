@@ -107,7 +107,7 @@ try {
     $conn->commit();
 } catch (Throwable $error) {
     $conn->rollback();
-    api_fail("Could not withdraw location consent", 500);
+    api_fail("Could not withdraw location consent", 500, [], $error);
 }
 api_success(["active" => false, "withdrawn_records" => max(0, $withdrawn)], 200, "Location sharing consent withdrawn");
 

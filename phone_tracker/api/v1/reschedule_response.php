@@ -160,7 +160,7 @@ try {
     api_fail($error->getMessage(), 409);
 } catch (Throwable $error) {
     $conn->rollback();
-    api_fail("Could not save the schedule response", 500);
+    api_fail("Could not save the schedule response", 500, [], $error);
 }
 if ($action !== "accept") {
     $responseMessage = "Proposed schedules declined.";

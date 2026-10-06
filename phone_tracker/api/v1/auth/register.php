@@ -75,7 +75,7 @@ try {
     $conn->commit();
 } catch (Throwable $error) {
     $conn->rollback();
-    api_fail("Could not create the visitor account", 500);
+    api_fail("Could not create the visitor account", 500, [], $error);
 }
 
 $data = [

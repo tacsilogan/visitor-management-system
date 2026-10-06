@@ -23,7 +23,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     } catch (DomainException $error) {
         api_fail($error->getMessage(), 409);
     } catch (Throwable $error) {
-        api_fail("Could not create the appointment request", 500);
+        api_fail("Could not create the appointment request", 500, [], $error);
     }
 }
 

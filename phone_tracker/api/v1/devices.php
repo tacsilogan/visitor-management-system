@@ -85,7 +85,7 @@ try {
     $conn->commit();
 } catch (Throwable $error) {
     $conn->rollback();
-    api_fail("Could not register this device", 500);
+    api_fail("Could not register this device", 500, [], $error);
 }
 api_success(["device_id" => $deviceId, "queued_notifications" => max(0, $queued)], 200, "Device registered for push notifications");
 

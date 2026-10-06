@@ -11,7 +11,7 @@ foreach (appointment_office_active_map() as $code => $label) {
     try {
         $settings = office_availability_get_settings($conn, $code);
     } catch (Throwable $error) {
-        api_fail("Office availability database migration is required", 503);
+        api_fail("Office availability database migration is required", 503, [], $error);
     }
     $rules = [];
     $stmt = $conn->prepare(

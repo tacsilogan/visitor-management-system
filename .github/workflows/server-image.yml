@@ -112,6 +112,37 @@ jobs:
           logs=$(docker logs web 2>&1)
           grep -qE 'Database is up to date\.$' <<< "$logs" || fail "After a restart, the database setup did not report up to date"
 
+      # The visitor app's main requests, on the same MariaDB as Railway. MariaDB 11.4 once
+      # refused every appointment request ("Illegal mix of collations") while MariaDB 10.4 on
+      # the laptops accepted them; this step catches that kind of difference before a deploy.
+      - name: Visitor app requests
+        run: |
+          set -eu
+          api=http://localhost:8080/phone_tracker/api/v1
+          fail() { echo "::error title=Server check failed::$1"; exit 1; }
+          contains() { grep -qiF -- "$2" <<< "$1"; }
+          send() { curl -s -H "Content-Type: application/json" -H "User-Agent: ISATU-Visitor-Android/ci" "$@"; }
+
+          email="ci-visitor-$(date +%s)@example.test"
+          reply=$(send -d "{\"email\":\"$email\",\"full_name\":\"CI Visitor\",\"contact_number\":\"09170000000\",\"password\":\"Ci-Visitor-Pass-1\",\"tracking_consent\":true,\"consent_version\":\"location-v1\"}" "$api/auth/register.php")
+          contains "$reply" '"success":true' || fail "Visitor registration failed: ${reply:0:300}"
+          reply=$(send -d "{\"identifier\":\"$email\",\"password\":\"Ci-Visitor-Pass-1\",\"installation_id\":\"ci-phone\",\"device_name\":\"CI phone\"}" "$api/auth/login.php")
+          token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
+          [ -n "$token" ] || fail "Visitor sign-in failed: ${reply:0:300}"
+
+          # 10:00 on the next weekday, Philippine time, when the offices take appointments.
+          day=1
+          while [ "$(TZ=Asia/Manila date -d "+$day day" +%u)" -gt 5 ]; do day=$((day + 1)); done
+          start=$(TZ=Asia/Manila date -d "+$day day" '+%Y-%m-%d 10:00:00')
+          for type in appointment walk_in; do
+            reply=$(send -H "Authorization: Bearer $token" -d "{\"visit_type\":\"$type\",\"office_code\":\"IT\",\"purpose\":\"Inquiry\",\"subject\":\"Server check\",\"scheduled_start_at\":\"$start\",\"device_name\":\"CI phone\",\"location_consent\":{\"granted\":true,\"version\":\"location-v1\"}}" "$api/appointments.php")
+            contains "$reply" '"success":true' || fail "Creating a $type from the app failed: ${reply:0:300}"
+          done
+          id=$(sed -n 's/.*"appointment":{"id":\([0-9]*\).*/\1/p' <<< "$reply")
+          [ -n "$id" ] || fail "The walk-in reply had no appointment id: ${reply:0:300}"
+          reply=$(send -H "Authorization: Bearer $token" "$api/campus_map.php?appointment_id=$id")
+          contains "$reply" '"walking_routes"' || fail "campus_map.php did not answer with walking_routes: ${reply:0:300}"
+
       - name: Startup log
         if: always()
         run: |

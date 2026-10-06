@@ -137,7 +137,7 @@ try {
     $db = isatu_db_settings();
     $conn = new mysqli($db["host"], $db["user"], $db["password"], $db["name"], $db["port"]);
     $conn->set_charset("utf8mb4");
-    $conn->query("SET time_zone = '+08:00', collation_connection = 'utf8mb4_general_ci'");
+    $conn->query("SET NAMES utf8mb4 COLLATE utf8mb4_general_ci, time_zone = '+08:00'"); // as db.php
 } catch (Throwable $error) {
     preflight_line("FAIL", "Cannot connect to the database: " . $error->getMessage());
     echo "\nResult: " . $failures . " problem(s) to fix, " . $warnings . " warning(s).\n";

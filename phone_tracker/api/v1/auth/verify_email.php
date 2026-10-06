@@ -41,6 +41,6 @@ try {
     $conn->commit();
 } catch (Throwable $error) {
     $conn->rollback();
-    api_fail("Could not verify the email address", 500);
+    api_fail("Could not verify the email address", 500, [], $error);
 }
 api_success(["email_verified" => true], 200, "Email address verified");

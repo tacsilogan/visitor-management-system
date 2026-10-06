@@ -17,6 +17,6 @@ try {
 } catch (DomainException $error) {
     api_fail($error->getMessage(), $error->getMessage() === "Appointment not found" ? 404 : 409);
 } catch (Throwable $error) {
-    api_fail("Could not cancel the appointment", 500);
+    api_fail("Could not cancel the appointment", 500, [], $error);
 }
 

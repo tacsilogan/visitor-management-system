@@ -61,8 +61,25 @@ function api_success(array $data = [], int $status = 200, string $message = ""):
     api_json($payload, $status);
 }
 
-function api_fail(string $message, int $status = 400, array $errors = []): never
+/**
+ * Ends the request with an error. Pass the [cause] of an unexpected failure: the app only
+ * sees [message], and the real reason goes to the server log (Railway's log) with the
+ * request id the app also receives.
+ */
+function api_fail(string $message, int $status = 400, array $errors = [], ?Throwable $cause = null): never
 {
+    if ($cause !== null) {
+        error_log(sprintf(
+            "[api %s] %s %s failed: %s: %s at %s:%d",
+            $GLOBALS["mobile_api_request_id"] ?? "-",
+            $_SERVER["REQUEST_METHOD"] ?? "",
+            strtok((string) ($_SERVER["REQUEST_URI"] ?? ""), "?") ?: "",
+            get_class($cause),
+            $cause->getMessage(),
+            basename($cause->getFile()),
+            $cause->getLine()
+        ));
+    }
     $payload = ["success" => false, "message" => $message];
     if ($errors) {
         $payload["errors"] = $errors;
