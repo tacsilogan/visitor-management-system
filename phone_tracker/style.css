@@ -9190,6 +9190,13 @@ html.has-expanded-map body {
     font-weight: 700;
 }
 
+/* A route but no pin: visitors are guided to where the route ends. */
+.campus-route-chip.is-warning {
+    border-color: #f08c00;
+    background: #fff8e6;
+    color: #8a4b00;
+}
+
 .campus-route-start-buttons {
     display: grid;
     margin-bottom: 8px;

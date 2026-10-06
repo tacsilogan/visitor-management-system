@@ -55,9 +55,16 @@ $offices = campus_map_office_details($conn);
 $visit = visit_for_appointment($conn, $appointmentId);
 $stopRows = $visit ? visit_stops($conn, (int) $visit["id"]) : [$row];
 $arrivals = arrival_lookup($conn, array_column($stopRows, "id"));
-$place = function (array $stop) use ($pins, $offices, $arrivals): array {
+// Walking routes recorded in Campus Map → Routes (CAMPUS_ROUTES.md). Empty until
+// campus_routes_migration.sql is imported.
+$routes = campus_routes_load($conn);
+// An office with a recorded route but no pin is found where its route ends (its door), so
+// a route alone is enough to guide visitors there.
+$routeEnds = campus_route_ends($routes);
+$place = function (array $stop) use ($pins, $offices, $arrivals, $routeEnds): array {
     $code = (string) $stop["office_code"];
     $pin = $pins[$code] ?? null;
+    $point = $pin ? [(float) $pin["latitude"], (float) $pin["longitude"]] : ($routeEnds[$code] ?? null);
     $arrival = $arrivals[(int) $stop["id"]] ?? arrival_public(null);
     return [
         "appointment_id" => (int) $stop["id"],
@@ -65,8 +72,10 @@ $place = function (array $stop) use ($pins, $offices, $arrivals): array {
         "label" => appointment_office_label($code),
         "location" => $offices[$code]["location"] ?? "",
         "description" => $offices[$code]["description"] ?? "",
-        "latitude" => $pin ? (float) $pin["latitude"] : null,
-        "longitude" => $pin ? (float) $pin["longitude"] : null,
+        "latitude" => $point ? $point[0] : null,
+        "longitude" => $point ? $point[1] : null,
+        // Where the coordinates come from: "pin", "route" (the end of a recorded route), or null.
+        "location_source" => $pin ? "pin" : ($point ? "route" : null),
         "status" => (string) $stop["status"],
         "visit_type" => (string) ($stop["visit_type"] ?? "appointment"),
         "scheduled_start_at" => $stop["scheduled_start_at"],
@@ -78,9 +87,8 @@ $place = function (array $stop) use ($pins, $offices, $arrivals): array {
 };
 
 $stops = array_map($place, $stopRows);
-// Walking routes recorded in Campus Map → Routes (CAMPUS_ROUTES.md). The app joins them
-// into one walkway network, so it can guide along walkways to any office or gate instead
-// of in a straight line. Empty until campus_routes_migration.sql is imported.
+// The app joins the routes into one walkway network, so it can guide along walkways to any
+// office or gate instead of in a straight line.
 $walkingRoutes = array_map(function (array $route): array {
     return [
         "id" => $route["id"],
@@ -91,7 +99,17 @@ $walkingRoutes = array_map(function (array $route): array {
         // [[latitude, longitude], ...] from the route's start (usually a gate) to the office.
         "points" => $route["points"],
     ];
-}, campus_routes_load($conn));
+}, $routes);
+// Gate pins, plus the named starts of routes no gate pin marks ("Main Gate"), so "Guide me
+// out" can lead back along a route to where it began.
+$gates = array_map(function (array $gate): array {
+    return [
+        "name" => (string) $gate["name"],
+        "latitude" => (float) $gate["latitude"],
+        "longitude" => (float) $gate["longitude"],
+    ];
+}, $campus["gates"]);
+$gates = array_merge($gates, campus_route_start_gates($routes, $gates));
 // The destination is the first stop still to visit. Once every stop is done it is null,
 // and the app guides the visitor back to a gate.
 $destination = null;
@@ -109,13 +127,7 @@ api_success([
     "campus_boundary" => array_map(function (array $point): array {
         return ["latitude" => $point[0], "longitude" => $point[1]];
     }, $campus["boundary"]),
-    "gates" => array_map(function (array $gate): array {
-        return [
-            "name" => (string) $gate["name"],
-            "latitude" => (float) $gate["latitude"],
-            "longitude" => (float) $gate["longitude"],
-        ];
-    }, $campus["gates"]),
+    "gates" => $gates,
     "destination" => $destination,
     "stops" => $stops,
     "walking_routes" => $walkingRoutes,

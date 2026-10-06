@@ -55,6 +55,9 @@ and finds the shortest walk along it, to any office or gate:
   out** picks the gate nearest on foot.
 - When two ways are about as long, the app keeps the one the visitor is already on, so the
   line does not flicker between them.
+- An office with a route but no pin is placed where its route ends (the server does this in
+  `campus_map.php`), so a recorded route alone is enough for directions. A route's named
+  start ("Main Gate") without a gate pin is offered as a gate for **Guide me out**.
 - Arrival is still judged at the office pin (the table below); the route only shows the way.
 
 ## Arrival: only what GPS can actually confirm

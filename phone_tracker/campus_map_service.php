@@ -17,6 +17,8 @@ const CAMPUS_PLACES_TABLE_SQL = "CREATE TABLE IF NOT EXISTS `campus_places` (
 
 /** Gates and route points may sit this far outside the drawn boundary (the campus edge). */
 const CAMPUS_EDGE_TOLERANCE_METERS = 40;
+/** A route starting this close to a gate pin starts at that gate. */
+const CAMPUS_ROUTE_START_GATE_METERS = 25;
 const CAMPUS_ROUTES_MIGRATION_MESSAGE = "Database update required: import phone_tracker/campus_routes_migration.sql into phone_tracker.";
 
 function campus_map_ensure_table(mysqli $conn): bool
@@ -173,6 +175,62 @@ function campus_path_length_meters(array $points): float
         $total += campus_distance_meters($points[$index - 1][0], $points[$index - 1][1], $points[$index][0], $points[$index][1]);
     }
     return $total;
+}
+
+/**
+ * Where each office's recorded routes end: the office's door, as the administrator walked
+ * it. The most recently saved route wins. Used for an office that has a route but no pin.
+ *
+ * @param array<int, array<string, mixed>> $routes from campus_routes_load()
+ * @return array<string, array{0: float, 1: float}> office code => [latitude, longitude]
+ */
+function campus_route_ends(array $routes): array
+{
+    $ends = [];
+    $savedAt = [];
+    foreach ($routes as $route) {
+        $points = $route["points"];
+        if (count($points) < 2) {
+            continue;
+        }
+        $code = (string) $route["office_code"];
+        $when = (string) ($route["updated_at"] ?? "");
+        if (!isset($ends[$code]) || strcmp($when, $savedAt[$code]) > 0) {
+            $last = $points[count($points) - 1];
+            $ends[$code] = [(float) $last[0], (float) $last[1]];
+            $savedAt[$code] = $when;
+        }
+    }
+    return $ends;
+}
+
+/**
+ * The named starts of recorded routes ("Main Gate", "Guard house") that no gate pin marks,
+ * as extra gates, so "Guide me out" can lead back along a route to where it began.
+ *
+ * @param array<int, array<string, mixed>> $routes from campus_routes_load()
+ * @param array<int, array<string, mixed>> $gates the campus map's gate pins
+ * @return array<int, array{name: string, latitude: float, longitude: float}>
+ */
+function campus_route_start_gates(array $routes, array $gates): array
+{
+    $extra = [];
+    foreach ($routes as $route) {
+        $name = trim((string) $route["start_label"]);
+        $first = $route["points"][0] ?? null;
+        if ($name === "" || !is_array($first)) {
+            continue;
+        }
+        foreach (array_merge($gates, $extra) as $gate) {
+            $near = campus_distance_meters((float) $first[0], (float) $first[1], (float) $gate["latitude"], (float) $gate["longitude"])
+                <= CAMPUS_ROUTE_START_GATE_METERS;
+            if ($near || mb_strtolower((string) $gate["name"]) === mb_strtolower($name)) {
+                continue 2;
+            }
+        }
+        $extra[] = ["name" => $name, "latitude" => (float) $first[0], "longitude" => (float) $first[1]];
+    }
+    return $extra;
 }
 
 /** "First Last", else the display name, else the username of whoever saved a route. */

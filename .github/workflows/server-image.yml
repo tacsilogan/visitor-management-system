@@ -143,6 +143,16 @@ jobs:
           reply=$(send -H "Authorization: Bearer $token" "$api/campus_map.php?appointment_id=$id")
           contains "$reply" '"walking_routes"' || fail "campus_map.php did not answer with walking_routes: ${reply:0:300}"
 
+          # An office with a recorded route but no pin (Tech Support on the starting map) is
+          # found where its route ends, and the route's named start is offered as a gate.
+          docker exec db mariadb -uisatu -pisatu-secret app -e "INSERT INTO campus_routes (office_code, name, start_label, method, points_json, point_count, distance_meters) VALUES ('TECH_SUPPORT', 'Back Gate to Tech Support', 'Back Gate', 'drawn', '[[10.71700,122.55500],[10.71740,122.55530]]', 2, 55)"
+          reply=$(send -H "Authorization: Bearer $token" -d "{\"visit_type\":\"walk_in\",\"office_code\":\"TECH_SUPPORT\",\"purpose\":\"Inquiry\",\"subject\":\"Server check\",\"device_name\":\"CI phone\",\"location_consent\":{\"granted\":true,\"version\":\"location-v1\"}}" "$api/appointments.php")
+          contains "$reply" '"success":true' || fail "Creating a walk-in to Tech Support failed: ${reply:0:300}"
+          id=$(sed -n 's/.*"appointment":{"id":\([0-9]*\).*/\1/p' <<< "$reply")
+          reply=$(send -H "Authorization: Bearer $token" "$api/campus_map.php?appointment_id=$id")
+          contains "$reply" '"location_source":"route"' || fail "An office with a route but no pin got no destination: ${reply:0:400}"
+          contains "$reply" '"name":"Back Gate"' || fail "The route's named start was not offered as a gate: ${reply:0:400}"
+
       - name: Startup log
         if: always()
         run: |

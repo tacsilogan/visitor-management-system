@@ -154,7 +154,10 @@
             remove.setAttribute("aria-label", "Remove " + title);
             remove.textContent = "×";
             remove.addEventListener("click", function () {
-                onRemove();
+                // onRemove returns false when the admin changes their mind.
+                if (onRemove() === false) {
+                    return;
+                }
                 markDirty();
                 render();
             });
@@ -190,7 +193,19 @@
                 point
                     ? placementText(placement.placed_by, placement.accuracy_meters) + " · " + point[0].toFixed(5) + ", " + point[1].toFixed(5)
                     : "Not placed yet",
-                point ? function () { delete state.offices[code]; delete state.officePlacement[code]; } : null
+                point ? function () {
+                    // The pin is the visitor's destination; say what removing it changes.
+                    const routeCount = window.CampusRoutes ? window.CampusRoutes.countFor(code) : 0;
+                    const consequence = routeCount > 0
+                        ? "Visitors will be guided to where its walking route ends instead."
+                        : officeNames[code] + " has no walking route either, so visitors will get no directions to it.";
+                    if (!window.confirm("Remove the " + officeNames[code] + " pin? " + consequence)) {
+                        return false;
+                    }
+                    delete state.offices[code];
+                    delete state.officePlacement[code];
+                    return true;
+                } : null
             ));
         });
     }

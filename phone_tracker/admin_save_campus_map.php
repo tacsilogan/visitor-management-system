@@ -107,12 +107,12 @@ foreach ($gates as $gate) {
     // Gates sit on the campus edge, so allow them a little outside the drawn line.
     if (!campus_contains($boundary, $gate["point"][0], $gate["point"][1])
         && campus_distance_to_boundary_meters($boundary, $gate["point"][0], $gate["point"][1]) > CAMPUS_GATE_TOLERANCE_METERS) {
-        campus_fail($gate["name"] . " must be on or inside the campus boundary.");
+        campus_fail($gate["name"] . " is outside the campus boundary. Drag it inside on the Gates tab, or adjust the boundary.");
     }
 }
 foreach ($offices as $code => $point) {
     if (!campus_contains($boundary, $point[0], $point[1])) {
-        campus_fail($officeMap[$code] . " must be placed inside the campus boundary.");
+        campus_fail("The " . $officeMap[$code] . " pin is outside the campus boundary. Move it inside on the Offices tab (drag it, or stand at the door and use Pin at my location), or adjust the boundary. Removing the pin would leave visitors without directions.");
     }
 }
 

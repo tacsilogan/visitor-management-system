@@ -231,17 +231,28 @@ if ($boundary < 3) {
     preflight_line("OK", "Campus map: " . $boundary . " boundary corners, " . $officePins . " office pin(s), " . $gates . " gate(s)");
 }
 $unpinned = [];
+$routeOnly = [];
+$routesReady = (bool) $conn->query("SHOW TABLES LIKE 'campus_routes'")->num_rows;
 $result = $conn->query(
-    "SELECT o.name FROM offices o
+    "SELECT o.name, " . ($routesReady ? "EXISTS (SELECT 1 FROM campus_routes r WHERE r.office_code = o.code)" : "0") . " AS has_route
+     FROM offices o
      WHERE o.is_active = 1
        AND NOT EXISTS (SELECT 1 FROM campus_places p WHERE p.place_type = 'office' AND p.office_code = o.code)
      ORDER BY o.sort_order, o.name"
 );
 while ($office = $result->fetch_assoc()) {
-    $unpinned[] = $office["name"];
+    if ((int) $office["has_route"] === 1) {
+        $routeOnly[] = $office["name"];
+    } else {
+        $unpinned[] = $office["name"];
+    }
 }
 if ($unpinned) {
     preflight_line("WARN", "Not on the campus map yet: " . implode(", ", $unpinned) . ". Visitors to them get no walking directions.");
+}
+if ($routeOnly) {
+    preflight_line("WARN", "A walking route but no pin: " . implode(", ", $routeOnly)
+        . ". Visitors are guided to where the route ends; place the pin at the door in Campus Map > Offices.");
 }
 $activeDepartments = (int) preflight_scalar($conn, "SELECT COUNT(*) FROM offices WHERE is_active = 1");
 $routedDepartments = (int) preflight_scalar(

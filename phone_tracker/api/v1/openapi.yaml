@@ -350,13 +350,16 @@ paths:
       summary: Campus map and walking guidance for one of the visitor's appointments
       description: >-
         Returns campus_configured, campus_updated_at, campus_boundary (latitude/longitude points), gates
-        (name, latitude, longitude), destination and stops, exit_policy (minimum_accuracy_meters,
+        (name, latitude, longitude; also the named starts of recorded routes that no gate pin marks),
+        destination and stops, exit_policy (minimum_accuracy_meters,
         outside_confirmation_points, outside_confirmation_seconds, boundary_buffer_meters),
         arrival_distance_meters and arrival_max_accuracy_meters (GPS must place the visitor within that
         distance of the office pin, from readings at least that accurate, to confirm an arrival;
         arrival_radius_meters repeats the distance for older app versions), and server_time.
         Each stop has appointment_id, office_code, label, location and description (from the Department
-        Directory), latitude and longitude (null until an administrator places the pin), status,
+        Directory), latitude and longitude (the office pin; for an office with a recorded route but no
+        pin, where its newest route ends; null when it has neither), location_source ("pin", "route",
+        or null), status,
         visit_type, scheduled_start_at, scheduled_end_at, and arrived_at and arrival_method once the
         arrival is recorded. destination is the first stop still to visit, and null once every stop is
         done, when the app guides the visitor to a gate. walking_routes lists every walking route an

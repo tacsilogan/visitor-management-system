@@ -16,6 +16,14 @@ Guessing a building on the map is often off by 10–30 m. Standing at the spot i
 - **Gates tab:** type the gate's name, stand at the gate, and press **Add gate at my location**.
 - Each list shows how a pin was placed: "GPS ±4 m" or "Placed on map". Dragging a pin
   turns it back into "Placed on map".
+- Removing a pin asks first, and says what visitors get instead: the end of the
+  department's walking route, or no directions at all when it has no route.
+- A pin must be inside the campus boundary. After redrawing the boundary, move any pin left
+  outside it (drag it, or use **Pin at my location**); the save says which one.
+
+**Set up in this order:** boundary, gates, office pins, then routes. Each step uses the one
+before it: pins and gates must be inside the boundary, routes start at a gate, and the pin
+is the visitor's destination, where "You have arrived" is said.
 
 ## Routes
 
@@ -35,13 +43,19 @@ have several routes, for example one from each gate.
    walking time, and any warnings. Name the start (gates are suggested). For a walked route
    you can also move the department's pin to where you stopped. Press **Save route**.
 
+**A department without a pin gets one from its route.** Saving a route, walked or drawn,
+places the department's pin where the route ends, and the message says so. The exception is
+a route that ends outside the campus boundary: the route is saved, and the message asks you
+to place the pin at the door inside the boundary.
+
 **Draw on the map (laptop, or to correct a route):** click along the walkway from the start
 to the department. Drag a point to move it, click a point to remove it, and click the line
 to add a point. **Reverse direction** swaps the start and the end. From the review,
 **Adjust points** opens a walked route for corrections.
 
 The list groups routes by department. Use **Show** to zoom to a route, plus **Edit** and
-**Delete**. The coverage line at the top shows which departments still need a route.
+**Delete**. The coverage line at the top shows which departments still need a route, and
+flags in orange a department that has a route but no pin ("⚠ IT Department · no pin").
 
 **Keep the screen on while recording.** Phones stop sharing a web page's location when the
 screen sleeps. The page asks the browser to keep the screen on, and it saves the unfinished
@@ -105,8 +119,13 @@ the app guides visitors along them instead of pointing in a straight line
   **Guide me out** (to the gate nearest on foot), follows the routes that meet.
 - An office without a route keeps the dotted straight pointer, and arrival is still judged
   at the office pin.
-- New or edited routes reach visitors the next time the app loads the campus map, with no
-  app update.
+- **A route alone is enough.** An office with a route but no pin is placed where its newest
+  route ends (`location_source: "route"` in the stop), so visitors are still guided there.
+  The readiness check lists such offices so the pin can be placed at the door.
+- A route's named start ("Main Gate") that no gate pin marks is sent as a gate too, so
+  **Guide me out** can lead back along the route.
+- New or edited routes and pins reach visitors within a minute: the app reloads the campus
+  map every minute during a visit, with no app update.
 
 ## Files
 
