@@ -159,30 +159,36 @@ if you own a domain, or `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWOR
 
 ## 6. The Android app for visitors
 
-The release app is signed with the key in `C:\Users\HP\isatu-visitor-signing`, which is
-described in `visitor_app/keystore.properties`. Neither is in Git.
+Release APKs are built on **one build laptop**: the laptop of the team member who builds
+the releases. It holds the signing folder `isatu-visitor-signing` in that person's user
+folder, with the key (`isatu-visitor-release.jks`) and its passwords (`keystore.properties`).
+Neither is in Git. Build every release there: phones only install an update signed with the
+same key.
 
-1. Add your address to `visitor_app/local.properties`:
+1. Add the hosted address to `visitor_app/local.properties`:
 
    ```
-   ISATU_RELEASE_API_BASE_URL=https://isatu-visitors.up.railway.app/phone_tracker/api/v1/
+   ISATU_RELEASE_API_BASE_URL=https://isatu-visitor.up.railway.app/phone_tracker/api/v1/
    ```
 
-   Keep the existing `ISATU_API_BASE_URL` line: test builds keep using the laptop.
-2. Build it in PowerShell:
+   Keep any `ISATU_API_BASE_URL` line: test builds keep using a laptop on the same Wi-Fi.
+2. Copy `keystore.properties` from the signing folder to `visitor_app/keystore.properties`.
+   Its `storeFile` line holds the full path of the key file, with forward slashes.
+3. Build it in PowerShell, with `JAVA_HOME` set to JDK 17 or newer (Android Studio's own
+   `jbr` folder works):
 
    ```powershell
-   cd C:\xampp\htdocs\visitor-management-system\visitor_app
-   $env:JAVA_HOME = "C:\Users\HP\AppData\Local\Android\jdk-21"
-   .\gradlew.bat assembleRelease --no-daemon
+   cd <project folder>\visitor_app
+   $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+   .\gradlew.bat testDebugUnitTest assembleRelease --no-daemon
    ```
 
    The build stops with an explanation if the address is not `https://` or the signing
    key is missing.
-3. Share `visitor_app\app\build\outputs\apk\release\app-release.apk` (Google Drive works).
-4. A phone that has the test version must uninstall it first, because the release is
-   signed with a different key.
-5. For every new version, raise `versionCode` and `versionName` in
+4. Share `visitor_app\app\build\outputs\apk\release\app-release.apk` (Google Drive works).
+5. A phone that has an app signed with another key (a test version, or a build from another
+   laptop) must uninstall it first.
+6. For every new version, raise `versionCode` and `versionName` in
    `visitor_app/app/build.gradle.kts`.
 
 **Back up the signing folder** (`isatu-visitor-signing`, which holds the key and a copy of
