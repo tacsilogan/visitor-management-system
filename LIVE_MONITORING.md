@@ -67,6 +67,12 @@ The boundary is the polygon an administrator draws in **Campus map setup**.
 - **Walked path:** orange line from a green start to the current position (or a red end
   point), with arrows every 40 m. Lost signal (a jump over 120 m or no reading for
   5 minutes) is never drawn as a straight line.
+- **Steady positions:** the visitor app (from version 0.5.0) and the visitor web page take a
+  reading every few seconds, leave out GPS jumps and weak readings, and send the steadied
+  position once per upload interval (`visitor_app/.../navigation/PositionFilter.kt`,
+  `phone_tracker/gps_filter.js`), so markers and walked paths no longer jump to places the
+  visitor never was. Positions already stored, and uploads from older app versions, are
+  shown as they were sent.
 - On phones the panel is a pull-up sheet.
 
 The map pauses updates while the browser tab is in the background.

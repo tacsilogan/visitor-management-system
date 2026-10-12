@@ -1,5 +1,6 @@
 // GPS helpers for the admin Campus Map page: placing a pin from where the admin stands,
 // recording a walked route, and cleaning up the recorded path. Points are [lat, lng].
+// The route recorder steadies its readings with gps_filter.js, which the page loads first.
 window.CampusGps = (function () {
     "use strict";
 
@@ -176,14 +177,23 @@ window.CampusGps = (function () {
         };
     }
 
+    /** The middle value of a list of numbers. */
+    function median(values) {
+        const sorted = values.slice().sort(function (a, b) { return a - b; });
+        const middle = Math.floor(sorted.length / 2);
+        return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+    }
+
     /**
      * Finds a steady position for a pin. Readings arrive for a few seconds; once
      * `goodReadings` of them are within `targetAccuracy` meters, their accuracy-weighted
-     * average is used. accept() takes the best estimate so far; cancel() gives up.
+     * average is used. A reading that sits apart from the others (more than `strayDistance`
+     * meters, or twice its own accuracy, from their middle) is left out of the average.
+     * accept() takes the best estimate so far; cancel() gives up.
      * The reported accuracy is the median of the readings used, not an optimistic figure.
      */
     function samplePosition(options) {
-        const settings = Object.assign({ targetAccuracy: 8, goodReadings: 5, acceptAccuracy: 25, maxWait: 45000, onProgress: null }, options);
+        const settings = Object.assign({ targetAccuracy: 8, goodReadings: 5, acceptAccuracy: 25, strayDistance: 10, maxWait: 45000, onProgress: null }, options);
         const readings = [];
         const startedAt = Date.now();
         let finished = false;
@@ -202,9 +212,20 @@ window.CampusGps = (function () {
                 return null;
             }
             const best = Math.min.apply(null, usable.map(function (reading) { return reading.accuracy; }));
-            const chosen = usable.filter(function (reading) {
+            const sharpest = usable.filter(function (reading) {
                 return reading.accuracy <= Math.max(best * 1.5, best + 2);
             }).slice(-10);
+            // One reading far from where the others sit (a signal bounced off a wall) must not
+            // drag the pin, so it is left out. When none of them agree there is no telling
+            // which is right, and all are kept.
+            const middle = [
+                median(sharpest.map(function (reading) { return reading.latitude; })),
+                median(sharpest.map(function (reading) { return reading.longitude; })),
+            ];
+            const agreeing = sharpest.filter(function (reading) {
+                return distanceMeters(middle, [reading.latitude, reading.longitude]) <= Math.max(settings.strayDistance, 2 * reading.accuracy);
+            });
+            const chosen = agreeing.length ? agreeing : sharpest;
             let weightSum = 0;
             let latitude = 0;
             let longitude = 0;
@@ -286,13 +307,19 @@ window.CampusGps = (function () {
     }
 
     /**
-     * Records a walked path. A reading is kept when its accuracy is within maxAccuracy, it is
-     * at least minStep from the last kept point, and it does not jump faster than a person can
-     * walk (a GPS glitch). Several consistent "jumps" in a row are accepted, in case the
-     * earlier point was the glitch. Readings while paused only move the "you are here" dot.
+     * Records a walked path. Every reading goes through a GpsFilter (gps_filter.js), and what
+     * is kept is the steady position it gives, not the reading as it came. A point is kept
+     * when the reading's accuracy is within maxAccuracy, the filter did not hold it back as a
+     * jump (a GPS glitch), the admin is walking (standing still adds no points, so waiting at
+     * a door leaves no knot in the line), and it is at least minStep from the last kept point.
+     * Readings that stay at a new place are believed after a few seconds, in case the earlier
+     * position was the glitch. Readings while paused only move the "you are here" dot.
      */
     function createRecorder(options) {
+        // maxSpeed is not read any more (the filter judges jumps); it stays for callers that set it.
         const settings = Object.assign({ maxAccuracy: 20, minStep: 2, maxSpeed: 6, onUpdate: null, onError: null }, options);
+        // Without gps_filter.js (an old copy of the page), readings are used as they come.
+        const filter = window.GpsFilter ? window.GpsFilter.create() : null;
         let points = [];
         let current = null;
         let state = "idle";
@@ -303,7 +330,6 @@ window.CampusGps = (function () {
         let pausedAt = null;
         let pausedTotal = 0;
         let weak = 0;
-        let jumps = 0;
         let lastFixAt = null;
 
         function elapsed() {
@@ -342,8 +368,20 @@ window.CampusGps = (function () {
             }
         }
 
+        /** The steady position after this reading, or null while the filter has none yet. */
+        function steadyPosition(position) {
+            if (!filter) {
+                return { latitude: position.coords.latitude, longitude: position.coords.longitude, quality: "used", still: false };
+            }
+            return filter.update(window.GpsFilter.fromPosition(position));
+        }
+
         function onPosition(position) {
-            const reading = [position.coords.latitude, position.coords.longitude, position.coords.accuracy, Date.now()];
+            // Paused or weak, every reading goes to the filter, so it always knows where the admin is.
+            const steady = steadyPosition(position);
+            const here = steady || position.coords;
+            // The steady position, with the accuracy the phone gave for this reading.
+            const reading = [here.latitude, here.longitude, position.coords.accuracy, Date.now()];
             current = { latitude: reading[0], longitude: reading[1], accuracy: reading[2] };
             lastFixAt = Date.now();
             if (state !== "recording") {
@@ -355,21 +393,19 @@ window.CampusGps = (function () {
                 emit();
                 return;
             }
+            // A reading held back as a jump (or before the filter has a position) is not part of the path.
+            if (!steady || steady.quality !== "used") {
+                emit();
+                return;
+            }
             const last = points[points.length - 1];
             if (last) {
-                const step = distanceMeters(last, reading);
-                if (step < settings.minStep) {
-                    emit();
-                    return;
-                }
-                const seconds = Math.max(1, (reading[3] - last[3]) / 1000);
-                if (step / seconds > settings.maxSpeed && step > reading[2] + last[2] && jumps < 4) {
-                    jumps++;
+                // Standing still adds nothing after the starting point: that is what tied knots at doors.
+                if (steady.still || distanceMeters(last, reading) < settings.minStep) {
                     emit();
                     return;
                 }
             }
-            jumps = 0;
             points.push(reading);
             emit();
         }
@@ -409,6 +445,10 @@ window.CampusGps = (function () {
                     pausedTotal += Date.now() - pausedAt;
                     pausedAt = null;
                     state = "recording";
+                    // The filter is not reset here: it kept following the readings while paused, so
+                    // it already stands where the admin is and the way walked meanwhile is not taken
+                    // for a jump. If no readings came (the screen slept), it starts afresh by itself
+                    // after RESTART_GAP_MILLIS of silence, and a shorter silence only lets it move farther.
                     watch();
                     emit();
                 }
@@ -423,7 +463,7 @@ window.CampusGps = (function () {
                 emit();
                 return removed;
             },
-            /** Adds where the admin stands now as the final point, when accurate enough. */
+            /** Adds where the admin stands now (the steady position) as the final point, when accurate enough. */
             addCurrent: function () {
                 if (!current || current.accuracy > settings.maxAccuracy) {
                     return false;
@@ -469,6 +509,11 @@ window.CampusGps = (function () {
                 startedAt = Date.now() - (Number(saved.elapsed) || 0);
                 pausedAt = Date.now();
                 state = "paused";
+                // The saved points are from before the reload. The filter starts afresh, so the
+                // first readings are not measured against where the admin stood back then.
+                if (filter) {
+                    filter.reset();
+                }
                 watch();
                 emit();
             },

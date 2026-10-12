@@ -11,8 +11,8 @@ Guessing a building on the map is often off by 10–30 m. Standing at the spot i
 
 - **Offices tab:** choose the department, stand at its entrance, and press
   **Pin at my location**. The page collects GPS readings and averages the accurate ones
-  (±8 m or better). It places the pin after 5 of those, or press **Use this location**
-  to take the best so far. Then press **Save campus map**.
+  (±8 m or better), leaving out any reading that sits apart from the others. It places the
+  pin after 5 of those, or press **Use this location** to take the best so far. Then press **Save campus map**.
 - **Gates tab:** type the gate's name, stand at the gate, and press **Add gate at my location**.
 - Each list shows how a pin was placed: "GPS ±4 m" or "Placed on map". Dragging a pin
   turns it back into "Placed on map".
@@ -35,11 +35,12 @@ have several routes, for example one from each gate.
 
 1. In the **Routes** tab, choose the destination department, stand at the start, and press
    **Record by walking**. On a phone the map and controls fill the screen.
-2. Walk the way a visitor should. The line follows you. Readings worse than ±20 m and
-   sudden GPS jumps are skipped. **Pause** while waiting at a door; **Undo last 10 m**
-   after a wrong turn.
+2. Walk the way a visitor should. The line follows you. Each reading is steadied first,
+   with the same filter the visitor app uses (`gps_filter.js`), so GPS wobble and sudden
+   jumps stay out of the line; readings worse than ±20 m are skipped, and standing still
+   adds no points. **Pause** while waiting at a door; **Undo last 10 m** after a wrong turn.
 3. At the department's entrance, press **I've arrived**.
-4. **Review:** the cleaned line appears over the raw GPS track (dashed), with the distance,
+4. **Review:** the cleaned line appears over the recorded track (dashed), with the distance,
    walking time, and any warnings. Name the start (gates are suggested). For a walked route
    you can also move the department's pin to where you stopped. Press **Save route**.
 

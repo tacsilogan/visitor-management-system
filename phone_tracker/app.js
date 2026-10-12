@@ -12,6 +12,9 @@
     let anchorPosition = null;
     const MIN_MOVEMENT_METERS = 10;
     const MAX_MOVEMENT_ACCURACY_METERS = 50;
+    // Steadies the GPS readings before they are sent (gps_filter.js). Without that file (an
+    // old copy of the page) the readings are sent as they come.
+    const gpsFilter = typeof GpsFilter === "undefined" ? null : GpsFilter.create();
     let pollTimer = null;
     let autoStarted = false;
     let trackedDeviceName = "My Phone";
@@ -427,9 +430,18 @@
         }
 
         setTrackingStatus("starting...");
+        if (gpsFilter) {
+            gpsFilter.reset();
+        }
         watchId = navigator.geolocation.watchPosition(
             async function (position) {
-                const reported = stabilize(position.coords);
+                // The reading is steadied first, so one that jumps away or is too rough is not
+                // sent as if the phone had moved. Until there is a position good enough, nothing is sent.
+                const steady = gpsFilter ? gpsFilter.update(GpsFilter.fromPosition(position)) : position.coords;
+                if (!steady) {
+                    return;
+                }
+                const reported = stabilize(steady);
                 try {
                     const response = await fetch("save_location.php", {
                         method: "POST",
@@ -464,6 +476,9 @@
             navigator.geolocation.clearWatch(watchId);
             watchId = null;
             anchorPosition = null;
+            if (gpsFilter) {
+                gpsFilter.reset();
+            }
         }
         autoStarted = false;
         if (locationPollTimer) {
