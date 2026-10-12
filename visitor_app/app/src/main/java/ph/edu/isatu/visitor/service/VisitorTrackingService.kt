@@ -14,6 +14,7 @@ import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -37,6 +38,10 @@ import ph.edu.isatu.visitor.R
 import ph.edu.isatu.visitor.VisitorApplication
 import ph.edu.isatu.visitor.data.ApiException
 import ph.edu.isatu.visitor.data.VisitorRepository
+import ph.edu.isatu.visitor.navigation.GeoPoint
+import ph.edu.isatu.visitor.navigation.PositionFilter
+import ph.edu.isatu.visitor.navigation.PositionReading
+import ph.edu.isatu.visitor.navigation.readingTimeMillis
 
 class VisitorTrackingService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -49,6 +54,9 @@ class VisitorTrackingService : Service() {
     private var locationCallback: LocationCallback? = null
     private var anchorLocation: Location? = null
     private var monitorJob: Job? = null
+    private val filter = PositionFilter()
+    private var uploadIntervalMillis = 15_000L
+    private var queuedAtMillis: Long? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -119,8 +127,12 @@ class VisitorTrackingService : Service() {
         }
         locationCallback = callback
         val interval = intervalSeconds * 1000L
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, interval)
-            .setMinUpdateIntervalMillis(interval)
+        uploadIntervalMillis = interval
+        // Readings are taken more often than they are uploaded, so the filter can tell a GPS
+        // jump from a walk. Security still receives one position per upload interval.
+        val sampling = minOf(interval, SAMPLE_INTERVAL_MILLIS)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, sampling)
+            .setMinUpdateIntervalMillis(sampling)
             .setWaitForAccurateLocation(false)
             .build()
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
@@ -128,9 +140,31 @@ class VisitorTrackingService : Service() {
         }
     }
 
+    /**
+     * Every reading steadies the position ([PositionFilter] leaves out GPS jumps and weak
+     * readings); once per upload interval the steady position is queued for Security.
+     */
     private fun handleLocation(location: Location) {
         if (sessionId <= 0) return
-        val reported = stabilize(location)
+        val elapsedMillis = readingTimeMillis(location.elapsedRealtimeNanos, SystemClock.elapsedRealtime())
+        val steady = filter.update(
+            PositionReading(
+                point = GeoPoint(location.latitude, location.longitude),
+                accuracyMeters = if (location.hasAccuracy()) location.accuracy.toDouble() else null,
+                elapsedMillis = elapsedMillis,
+                speedMetersPerSecond = if (location.hasSpeed()) location.speed.toDouble() else null,
+            ),
+        ) ?: return
+        val queuedAt = queuedAtMillis
+        if (queuedAt != null && elapsedMillis - queuedAt < uploadIntervalMillis - UPLOAD_SLACK_MILLIS) return
+        queuedAtMillis = elapsedMillis
+        val reported = stabilize(
+            Location(location).apply {
+                latitude = steady.point.latitude
+                longitude = steady.point.longitude
+                accuracy = steady.accuracyMeters.toFloat()
+            },
+        )
         scope.launch {
             repository.queueLocation(appointmentId, sessionId, reported)
             flushQueued()
@@ -273,6 +307,9 @@ class VisitorTrackingService : Service() {
         private const val NOTIFICATION_ID = 4101
         private const val MIN_MOVEMENT_METERS = 10f
         private const val MAX_MOVEMENT_ACCURACY_METERS = 50f
+        /** How often a reading is taken for the filter, at most the upload interval. */
+        private const val SAMPLE_INTERVAL_MILLIS = 2_000L
+        private const val UPLOAD_SLACK_MILLIS = 250L
 
         fun start(context: Context, appointmentId: Long) {
             val intent = Intent(context, VisitorTrackingService::class.java)

@@ -135,6 +135,8 @@ data class GuidanceUpdate(
  *   6 s of another prompt. Readings worse than 50 m show a weak-signal notice.
  * - Outside the campus (past the server's 25 m allowance), directions pause and the
  *   visitor is warned once; coming back is acknowledged.
+ * - The position may be one that [PositionFilter] steadied; the reading it came from is
+ *   then passed too, and arrival is judged from that reading alone.
  * - With a [WalkingPath] along the walkways an administrator recorded, directions follow
  *   the path instead of a straight line: distances are walking distances, each turn is
  *   announced ahead ("In 20 meters, turn left") and at the turn ("Turn left now"), and
@@ -177,6 +179,8 @@ class GuidanceEngine {
         unit: DistanceUnit,
         arrival: ArrivalRule = ArrivalRule(),
         path: WalkingPath? = null,
+        /** The reading as GPS gave it, when [fix] is a steadied position: arrival is judged from it. */
+        reading: LocationFix? = fix,
     ): GuidanceUpdate {
         val prompts = mutableListOf<VoicePrompt>()
         if (target?.key != targetKey) resetTarget(target)
@@ -204,7 +208,11 @@ class GuidanceEngine {
         val bearing = when {
             fix == null || point == null -> null
             // Along the path: toward a point a few meters ahead on it, so the arrow turns with it.
-            walkway != null -> GeoMath.bearingDegrees(fix.point, walkway.pointAt(walkway.joinMeters + LOOK_AHEAD_METERS))
+            // On the walkway itself it follows the line, not the position's wander beside it.
+            walkway != null -> GeoMath.bearingDegrees(
+                if (walkway.joinMeters <= 0.0) walkway.points.first() else fix.point,
+                walkway.pointAt(walkway.joinMeters + LOOK_AHEAD_METERS),
+            )
             else -> GeoMath.bearingDegrees(fix.point, point)
         }
         val heading = chooseHeading(fix, compassHeading)
@@ -244,14 +252,17 @@ class GuidanceEngine {
             return result(GuidancePhase.WEAK_SIGNAL)
         }
 
-        // Arrival: the exact spot, from accurate readings, held for a few seconds.
-        val confirmable = accuracy != null && accuracy <= arrival.maxAccuracyMeters
-        arrivalStreak = if (confirmable && distance <= arrival.distanceMeters) arrivalStreak + 1 else 0
+        // Arrival: the exact spot, from accurate readings, held for a few seconds. It is judged
+        // from the readings themselves, never from a steadied position.
+        val readingDistance = if (reading != null && point != null) GeoMath.distanceMeters(reading.point, point) else null
+        val readingAccuracy = reading?.accuracyMeters
+        val confirmable = readingAccuracy != null && readingAccuracy <= arrival.maxAccuracyMeters
+        arrivalStreak = if (confirmable && readingDistance != null && readingDistance <= arrival.distanceMeters) arrivalStreak + 1 else 0
         if (arrivalStreak >= ARRIVAL_READINGS) {
             arrivedBy = ArrivalMethod.GPS
             started = true
             prompts += say(fix.timeMillis, arrivalLine(target), urgent = true)
-            return result(GuidancePhase.ARRIVED, ArrivalEvent(target, ArrivalMethod.GPS, distance, accuracy))
+            return result(GuidancePhase.ARRIVED, ArrivalEvent(target, ArrivalMethod.GPS, readingDistance, readingAccuracy))
         }
 
         // Very close: the pin is inside this reading's uncertainty, so GPS can't say more.

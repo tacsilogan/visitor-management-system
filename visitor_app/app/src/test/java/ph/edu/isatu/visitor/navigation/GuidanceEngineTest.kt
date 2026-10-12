@@ -121,6 +121,45 @@ class GuidanceEngineTest {
     }
 
     @Test
+    fun arrivalIsJudgedFromTheReadingNotTheSteadiedPosition() {
+        val engine = GuidanceEngine()
+        val rule = ArrivalRule(distanceMeters = 3.0, maxAccuracyMeters = 8.0)
+        // The steadied position sits on the pin, but GPS itself still reads 9 m away.
+        repeat(5) { second ->
+            val update = engine.update(
+                fix(-1.0, second.toLong()), 0.0, itOffice, null, DistanceUnit.METERS, rule,
+                reading = fix(-9.0, second.toLong()),
+            )
+            assertNotEquals(GuidancePhase.ARRIVED, update.snapshot.phase)
+            assertNull(update.arrival)
+        }
+        // GPS itself within 3 m three times in a row: arrived, reported with the reading's own numbers.
+        engine.update(fix(-5.0, 10), 0.0, itOffice, null, DistanceUnit.METERS, rule, reading = fix(-2.0, 10))
+        engine.update(fix(-5.0, 11), 0.0, itOffice, null, DistanceUnit.METERS, rule, reading = fix(-2.0, 11))
+        val arrival = engine.update(
+            fix(-5.0, 12), 0.0, itOffice, null, DistanceUnit.METERS, rule,
+            reading = fix(-2.0, 12, accuracy = 6.0),
+        )
+        assertEquals(GuidancePhase.ARRIVED, arrival.snapshot.phase)
+        assertEquals(2.0, arrival.arrival!!.distanceMeters!!, 0.05)
+        assertEquals(6.0, arrival.arrival!!.accuracyMeters!!, 0.0001)
+    }
+
+    @Test
+    fun aRoughReadingNeverConfirmsAnArrivalWhateverTheSteadiedPositionSays() {
+        val engine = GuidanceEngine()
+        val rule = ArrivalRule(distanceMeters = 3.0, maxAccuracyMeters = 8.0)
+        repeat(6) { second ->
+            val update = engine.update(
+                fix(-1.0, second.toLong(), accuracy = 5.0), 0.0, itOffice, null, DistanceUnit.METERS, rule,
+                reading = fix(-1.0, second.toLong(), accuracy = 12.0),
+            )
+            assertNotEquals(GuidancePhase.ARRIVED, update.snapshot.phase)
+            assertNull(update.arrival)
+        }
+    }
+
+    @Test
     fun visitorCanConfirmTheirArrival() {
         val engine = GuidanceEngine()
         engine.step(fix(-40.0, 0))

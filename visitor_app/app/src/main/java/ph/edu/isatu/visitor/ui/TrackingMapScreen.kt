@@ -142,7 +142,10 @@ import ph.edu.isatu.visitor.navigation.HeadingSensor
 import ph.edu.isatu.visitor.navigation.LiveLocation
 import ph.edu.isatu.visitor.navigation.LocationFix
 import ph.edu.isatu.visitor.navigation.NavigationPreferences
+import ph.edu.isatu.visitor.navigation.PathFollower
+import ph.edu.isatu.visitor.navigation.PositionQuality
 import ph.edu.isatu.visitor.navigation.RouteGuidance
+import ph.edu.isatu.visitor.navigation.SteadyPosition
 import ph.edu.isatu.visitor.navigation.TargetKind
 import ph.edu.isatu.visitor.navigation.VoiceGuide
 import ph.edu.isatu.visitor.navigation.WalkingPath
@@ -258,6 +261,10 @@ fun TrackingMapScreen(
     }
 
     val location by liveLocation.location.collectAsStateWithLifecycle()
+    // The same reading with the steady position made of the readings so far: the arrow and
+    // the directions follow the steady one, so they do not jump with GPS.
+    val live by liveLocation.position.collectAsStateWithLifecycle()
+    val steady = live?.steady
     val compass by headingSensor.heading.collectAsStateWithLifecycle()
     val needsCalibration by headingSensor.needsCalibration.collectAsStateWithLifecycle()
     val voiceStatus by voice.status.collectAsStateWithLifecycle()
@@ -295,12 +302,12 @@ fun TrackingMapScreen(
     var entryPoint by remember(visit.trackingAppointmentId) {
         mutableStateOf(preferences.entryPoint(visit.trackingAppointmentId))
     }
-    LaunchedEffect(location) {
-        val here = location ?: return@LaunchedEffect
-        if (entryPoint != null || !here.hasAccuracy() || here.accuracy > ENTRY_MAX_ACCURACY_METERS) return@LaunchedEffect
+    LaunchedEffect(steady) {
+        val here = steady?.takeIf { it.quality == PositionQuality.USED } ?: return@LaunchedEffect
+        if (entryPoint != null || here.accuracyMeters > ENTRY_MAX_ACCURACY_METERS) return@LaunchedEffect
         val checkedIn = serverTimeMillis(visit.checkedInAt) ?: return@LaunchedEffect
         if (System.currentTimeMillis() + clockOffsetMillis - checkedIn > ENTRY_WINDOW_MILLIS) return@LaunchedEffect
-        val point = GeoPoint(here.latitude, here.longitude)
+        val point = here.point
         if (campusArea != null && !GeoMath.insideCampus(campusArea.boundary, point, campusArea.bufferMeters)) return@LaunchedEffect
         preferences.saveEntryPoint(visit.trackingAppointmentId, point)
         entryPoint = point
@@ -313,10 +320,9 @@ fun TrackingMapScreen(
     val exitMode = exitRequested || allStopsDone
     val gates = campusMap?.gates.orEmpty()
     var chosenGate by rememberSaveable(visit.trackingAppointmentId, exitMode) { mutableStateOf<String?>(null) }
-    LaunchedEffect(exitMode, location != null, gates, planner) {
-        val here = location ?: return@LaunchedEffect
+    LaunchedEffect(exitMode, steady != null, gates, planner) {
+        val from = steady?.point ?: return@LaunchedEffect
         if (exitMode && (chosenGate == null || gates.none { it.name == chosenGate })) {
-            val from = GeoPoint(here.latitude, here.longitude)
             // The gate nearest on foot along the walkways; a gate no walkway reaches counts as
             // farther than it looks, since the way there is unknown.
             chosenGate = gates.minByOrNull { gate ->
@@ -345,19 +351,43 @@ fun TrackingMapScreen(
     }
     // The way to walk along the recorded walkways, planned again from every new position.
     var walkingPath by remember { mutableStateOf<WalkingPath?>(null) }
-    LaunchedEffect(location, target, campusArea, unit, arrivalRule, planner) {
-        val fix = location?.toFix()
+    // Where the arrow is drawn: on the blue line while the visitor is following it.
+    var shownPoint by remember { mutableStateOf<GeoPoint?>(null) }
+    // The arrow for the map: the latest reading, moved to where the arrow is drawn. It only
+    // changes with a reading that was used, so the arrow greys out when none comes for a while.
+    var shownLocation by remember { mutableStateOf<Location?>(null) }
+    var shownAt by remember { mutableLongStateOf(Long.MIN_VALUE) }
+    val follower = remember(visit.trackingAppointmentId) { PathFollower() }
+    LaunchedEffect(live, target, campusArea, unit, arrivalRule, planner) {
+        val raw = live?.reading
+        val reading = raw?.toFix()
+        val here = live?.steady
         val goal = target?.point
-        walkingPath = if (fix != null && goal != null) planner.plan(fix.point, goal, walkingPath, target?.officeCode) else null
+        val planned = if (here != null && goal != null) planner.plan(here.point, goal, walkingPath, target?.officeCode) else null
+        val onPath = here != null && follower.follows(planned, here.accuracyMeters, here.elapsedMillis)
+        val path = if (onPath) planned?.onWalkway() else planned
+        walkingPath = path
+        val point = if (onPath && path != null) path.points.first() else here?.point
+        if (point == null || raw == null || here == null) {
+            shownLocation = null
+        } else if (shownLocation == null || point != shownPoint || here.elapsedMillis != shownAt) {
+            shownLocation = Location(raw).apply {
+                latitude = point.latitude
+                longitude = point.longitude
+            }
+            shownAt = here.elapsedMillis
+        }
+        shownPoint = point
         applyGuidance(
             engine.update(
-                fix = fix,
+                fix = guidanceFix(reading, here),
                 compassHeading = headingSensor.heading.value?.toDouble(),
                 target = target,
                 campus = campusArea,
                 unit = unit,
                 arrival = arrivalRule,
-                path = walkingPath,
+                path = path,
+                reading = reading,
             ),
         )
     }
@@ -457,7 +487,7 @@ fun TrackingMapScreen(
         Box(Modifier.fillMaxSize()) {
             CampusMap(
                 model = mapModel,
-                location = location,
+                location = shownLocation,
                 headingSensor = headingSensor,
                 following = following,
                 command = command,
@@ -532,8 +562,7 @@ fun TrackingMapScreen(
                 }
                 MapButton(Icons.Rounded.ZoomOutMap, "Show the whole route") {
                     following = false
-                    val here = location?.let { GeoPoint(it.latitude, it.longitude) }
-                    val points = walkingPath?.points ?: listOfNotNull(here, target?.point)
+                    val points = walkingPath?.points ?: listOfNotNull(shownPoint, target?.point)
                     send(MapCommand.Overview(if (points.isEmpty()) boundary else points))
                 }
                 AnimatedVisibility(visible = !following) {
@@ -1381,6 +1410,27 @@ private fun Location.toFix() = LocationFix(
     speedMetersPerSecond = if (hasSpeed()) speed.toDouble() else null,
     courseDegrees = if (hasBearing()) bearing.toDouble() else null,
 )
+
+/**
+ * The position directions are worked out from: the steady one, with the accuracy GPS itself
+ * reported, so the banner never claims more than GPS knows. A reading that was left out
+ * (too weak, or an impossible jump) keeps the last good position and lends it no speed or
+ * course. Before there is a steady position, a weak reading is passed as it is, so the
+ * weak-signal notice still shows.
+ */
+private fun guidanceFix(reading: LocationFix?, steady: SteadyPosition?): LocationFix? = when {
+    reading == null -> null
+    steady == null -> reading.takeIf { (it.accuracyMeters ?: 0.0) > GuidanceEngine.WEAK_SIGNAL_METERS }
+    steady.quality == PositionQuality.USED -> reading.copy(point = steady.point)
+    steady.quality == PositionQuality.HELD_WEAK ->
+        reading.copy(point = steady.point, speedMetersPerSecond = null, courseDegrees = null)
+    else -> reading.copy(
+        point = steady.point,
+        accuracyMeters = steady.accuracyMeters,
+        speedMetersPerSecond = null,
+        courseDegrees = null,
+    )
+}
 
 /**
  * Whether location sharing is on: from the permission, the server's tracking session,

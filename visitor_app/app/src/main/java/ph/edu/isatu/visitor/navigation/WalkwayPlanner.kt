@@ -57,6 +57,27 @@ data class WalkingPath(
         }
         return points.last()
     }
+
+    /**
+     * The same path from its point on the walkway, without the straight leg onto it: for a
+     * visitor who is on the walkway as far as GPS can tell (see [PathFollower]), so distances
+     * and turns are measured along the blue line itself.
+     */
+    fun onWalkway(): WalkingPath =
+        if (walkwayStart == 0) {
+            this
+        } else {
+            WalkingPath(
+                points = points.subList(walkwayStart, points.size).toList(),
+                lengthMeters = lengthMeters - joinMeters,
+                joinMeters = 0.0,
+                finishMeters = finishMeters,
+                walkwayStart = 0,
+                walkwayEnd = walkwayEnd - walkwayStart,
+                turns = turns.map { it.copy(atMeters = it.atMeters - joinMeters) },
+                nodes = nodes,
+            )
+        }
 }
 
 /**

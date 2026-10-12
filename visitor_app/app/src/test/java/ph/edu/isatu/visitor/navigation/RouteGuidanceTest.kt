@@ -130,6 +130,22 @@ class RouteGuidanceTest {
     }
 
     @Test
+    fun onTheWalkwayDirectionsFollowTheLineNotGpsWander() {
+        // GPS places the visitor 5 m beside the walkway, 20 m up it; they count as on it.
+        val fix = LocationFix(at(20.0, 5.0), 5.0, 0)
+        val path = planner.plan(fix.point, office, targetOffice = "IT")!!.onWalkway()
+        val update = GuidanceEngine().update(fix, 0.0, itOffice, null, DistanceUnit.METERS, ArrivalRule(3.0, 8.0), path)
+        val bearing = update.snapshot.bearingDegrees!!
+        assertEquals("the arrow points up the walkway, not 40° across it", 0.0, GeoMath.signedDifference(bearing, 0.0), 1.0)
+        val route = update.snapshot.route!!
+        assertEquals(0.0, route.offPathMeters, 0.0)
+        assertEquals(80.0, route.remainingMeters, 0.5)
+        assertEquals(40.0, route.nextTurnMeters!!, 1.0)
+        assertEquals(listOf("Heading to IT Department. Follow the blue line, 80 meters to walk."), update.said())
+        assertEquals("Turn right in 40 m", routeInstruction(route, DistanceUnit.METERS))
+    }
+
+    @Test
     fun bannerInstructions() {
         val m = DistanceUnit.METERS
         assertEquals("Turn right in 25 m", routeInstruction(RouteGuidance(100.0, 0.0, TurnDirection.RIGHT, 25.0), m))

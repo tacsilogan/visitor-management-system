@@ -20,7 +20,7 @@ The **Campus visit** screen opens by itself when the pass is scanned at the gate
   mistaken for the arrival area.
 - **Blue route line:** the way to walk, along the walking routes administrators recorded in
   Campus Map → Routes (`CAMPUS_ROUTES.md`), with arrows toward the office. It goes around
-  buildings, not through them, and is planned again from every new position. The short
+  buildings, not through them, and is planned again from every new steadied position. The short
   straight legs from the visitor onto the route and from the route to the office are dotted.
   See **Walking routes** below.
 - **Dotted line:** where no recorded route leads (none passes within 40 m of the visitor or
@@ -36,6 +36,34 @@ The **Campus visit** screen opens by itself when the pass is scanned at the gate
 - **Panel (pull up):** walking time and distance, **Show pass**, voice on/off, **Guide me out**,
   check-in time, time on campus, the booked slot, office stops, settings, and location
   sharing.
+
+## A steady position
+
+Phone GPS wanders a few meters every second, and now and then a reading lands tens of meters
+away (a Wi-Fi position, or a signal bounced off a building). The app does not draw readings
+as they come (`navigation/PositionFilter.kt`):
+
+- The arrow first appears once a reading is accurate to 25 m (after 6 seconds, to 50 m),
+  never on a coarse guess or on a position more than 10 seconds old.
+- A reading farther away than the visitor could have walked is left out, so one bad reading,
+  or a burst of them beside a building, never moves the arrow. Readings that stay at a new
+  place are believed after 6 seconds when the phone's own speed says the visitor could have
+  walked there, otherwise after 20 seconds.
+- Readings worse than ±50 m never move the arrow; the banner shows the weak signal as before.
+- Other readings are averaged by their accuracy, and one farther off than walking and
+  ordinary error explain counts only a little, so the arrow edges over instead of jumping.
+  While the phone reports walking speed the arrow stays within about 4 m of the visitor.
+- Standing still, the arrow settles on the average of the readings and then does not move;
+  it lets go as soon as the visitor walks on.
+- Along a recorded route, a visitor whom GPS places within 10 m of it twice in a row is drawn
+  on the blue line, and distances and turns are measured along the line
+  (`navigation/PathFollower.kt`). The arrow leaves the line after 3 readings more than 12 m
+  from it (more with a rough reading, never more than 20 m), within 10 m of the office, and
+  past the end of the route.
+- Arrival is still judged from the readings themselves, never from the steadied position or
+  the line (see the table below), and "GPS ±4 m" is always the phone's own figure.
+
+The background uploads to Security are steadied the same way (`LIVE_MONITORING.md`).
 
 ## Walking routes
 
@@ -192,6 +220,8 @@ The last campus map is kept on the phone for short losses of connection.
 | `visitor_app/.../navigation/GeoMath.kt` | Distances, directions, the server's boundary math |
 | `visitor_app/.../navigation/HeadingSensor.kt` | Compass |
 | `visitor_app/.../navigation/LiveLocation.kt` | Second-by-second position for the screen |
+| `visitor_app/.../navigation/PositionFilter.kt` | Steadies GPS readings: leaves out jumps and weak readings, holds still when standing |
+| `visitor_app/.../navigation/PathFollower.kt` | When the arrow is drawn on the blue line |
 | `visitor_app/.../navigation/VoiceGuide.kt` | Text-to-speech |
 | `phone_tracker/api/v1/campus_map.php` | Boundary, gates, stops with locations and arrivals, walking routes, rules |
 | `phone_tracker/api/v1/arrival.php`, `phone_tracker/arrival_service.php` | Recording an arrival |
