@@ -641,6 +641,11 @@
         });
 
         usersEmpty.hidden = users.length > 0;
+        const noVisitorsYet = users.length === 0 && userState.role === "visitor" && !userState.query && !userState.department;
+        text("usersEmptyTitle", noVisitorsYet ? "No visitor accounts yet" : "No matching users");
+        text("usersEmptyText", noVisitorsYet
+            ? "Visitors appear here once they create an account in the ISATU Visitor app or on the visitor website."
+            : "Try a different role or search term.");
         const wrap = usersBody.closest(".admin-table-wrap");
         if (wrap) {
             wrap.hidden = users.length === 0;
@@ -651,6 +656,16 @@
             text("usersShowing", "Showing " + (start + 1) + "–" + (start + pageUsers.length) + " of " + users.length + " users");
         }
         renderUserPages(totalPages);
+    }
+
+    /** How many accounts each role filter tab shows. */
+    function renderRoleCounts() {
+        document.querySelectorAll("[data-role-count]").forEach(function (badge) {
+            const role = badge.getAttribute("data-role-count");
+            const count = userState.users.filter(function (user) { return !role || user.role === role; }).length;
+            badge.textContent = count > 999 ? "999+" : String(count);
+            badge.hidden = false;
+        });
     }
 
     function updateUserSummary() {
@@ -671,6 +686,7 @@
             }
             userState.users = Array.isArray(data.data) ? data.data : [];
             updateUserSummary();
+            renderRoleCounts();
             renderUsers();
             if (activityState.loaded) {
                 fillPersonSelect();
@@ -1174,7 +1190,9 @@
         document.querySelectorAll("[data-analytics-period]").forEach(function (button) {
             button.classList.toggle("is-active", button.getAttribute("data-analytics-period") === analyticsState.period);
         });
-        document.getElementById("analyticsExportBtn").href = "admin_analytics.php?period=" + encodeURIComponent(analyticsState.period) + "&format=csv";
+        const exportPeriod = "admin_analytics.php?period=" + encodeURIComponent(analyticsState.period);
+        document.getElementById("analyticsExportBtn").href = exportPeriod + "&format=xlsx";
+        document.getElementById("analyticsCsvBtn").href = exportPeriod + "&format=csv";
         try {
             const data = await fetchJson("admin_analytics.php?period=" + encodeURIComponent(analyticsState.period));
             if (!data || !data.success) {
@@ -1792,7 +1810,8 @@
         }
         const requestId = activityState.requestId;
         const range = activityRange();
-        document.getElementById("uaExportBtn").href = "admin_activity.php?" + activityParams({ format: "csv" }).toString();
+        document.getElementById("uaExportBtn").href = "admin_activity.php?" + activityParams({ format: "xlsx" }).toString();
+        document.getElementById("uaCsvBtn").href = "admin_activity.php?" + activityParams({ format: "csv" }).toString();
         showMessage("uaError", "");
         const params = activityParams({ limit: "50" });
         if (!reset && activityState.nextBeforeId) {
@@ -2397,6 +2416,238 @@
             analyticsState.period = button.getAttribute("data-analytics-period") || "month";
             loadAnalytics();
         });
+    });
+
+    /* ---------- Resetting Visitor Analytics ---------- */
+
+    // Deletes visit records after the admin picks what to delete, types RESET, and enters a
+    // fresh authenticator (or backup) code; the server checks all three again.
+    const resetDialog = document.getElementById("analyticsResetDialog");
+    const resetState = { counts: null, twoFactor: true, backupCodes: 0, method: "authenticator", busy: false };
+
+    function resetScope() {
+        const checked = document.querySelector("input[name='analyticsResetScope']:checked");
+        return checked ? checked.value : "all";
+    }
+
+    function plural(count, one, many) {
+        return Number(count || 0).toLocaleString() + " " + (Number(count) === 1 ? one : many);
+    }
+
+    function resetCountsFor(scope) {
+        return resetState.counts ? resetState.counts[scope] || null : null;
+    }
+
+    function renderResetImpact() {
+        const host = document.getElementById("analyticsResetImpact");
+        const live = document.getElementById("analyticsResetLive");
+        const scope = resetScope();
+        const counts = resetCountsFor(scope);
+        host.replaceChildren();
+        live.hidden = true;
+        if (!counts) {
+            host.appendChild(element("p", "acct-loading", "Counting records…"));
+            updateResetSubmit();
+            return;
+        }
+        host.appendChild(element("p", "reset-impact-title", "This will permanently delete:"));
+        const grid = element("div", "reset-impact-grid");
+        [
+            [counts.appointments, "Visit record", "Visit records"],
+            [counts.gps_points, "GPS point", "GPS points"],
+            [counts.tracking_sessions, "Tracking session", "Tracking sessions"],
+            [counts.notifications, "Notification", "Notifications"],
+        ].forEach(function (item) {
+            const cell = element("div", "reset-impact-item" + (Number(item[0]) > 0 ? "" : " is-zero"));
+            cell.append(element("strong", "", Number(item[0] || 0).toLocaleString()), element("span", "", Number(item[0]) === 1 ? item[1] : item[2]));
+            grid.appendChild(cell);
+        });
+        host.appendChild(grid);
+        const notes = [];
+        if (scope === "all" && counts.upcoming > 0) {
+            notes.push(plural(counts.upcoming, "upcoming booking", "upcoming bookings"));
+        }
+        if (counts.visits > 0) {
+            notes.push(plural(counts.visits, "multi-office visit", "multi-office visits"));
+        }
+        if (counts.oldest && counts.newest) {
+            const oldest = formatDateTime(counts.oldest);
+            const newest = formatDateTime(counts.newest);
+            notes.push(oldest === newest ? "dated " + oldest : "dated " + oldest + " to " + newest);
+        }
+        if (notes.length) {
+            host.appendChild(element("p", "reset-impact-note", "Includes " + notes.join(" · ")));
+        }
+        if (scope === "all" && counts.on_campus > 0) {
+            live.textContent = plural(counts.on_campus, "visitor is", "visitors are") +
+                " on campus right now. Their visit and live tracking end and are deleted too; Security will no longer see them.";
+            live.hidden = false;
+        }
+        updateResetSubmit();
+    }
+
+    function resetCodeValid() {
+        const code = document.getElementById("analyticsResetCode").value.trim();
+        return resetState.method === "backup_code"
+            ? code.replace(/[^A-Za-z0-9]/g, "").length === 10
+            : /^\d{6}$/.test(code);
+    }
+
+    function updateResetSubmit() {
+        const counts = resetCountsFor(resetScope());
+        const nothing = Boolean(counts) && !counts.appointments && !counts.gps_points && !counts.visits;
+        const confirmed = document.getElementById("analyticsResetConfirm").value.trim() === "RESET";
+        const submit = document.getElementById("analyticsResetSubmit");
+        submit.disabled = resetState.busy || !resetState.twoFactor || !counts || nothing || !confirmed || !resetCodeValid();
+        if (resetState.busy) {
+            submit.textContent = "Deleting…";
+        } else if (nothing) {
+            submit.textContent = "Nothing to delete";
+        } else {
+            submit.textContent = resetScope() === "all" ? "Delete all visitor data" : "Delete finished visits";
+        }
+    }
+
+    function setResetMethod(method) {
+        resetState.method = method;
+        const input = document.getElementById("analyticsResetCode");
+        const backup = method === "backup_code";
+        input.value = "";
+        input.maxLength = backup ? 12 : 6;
+        input.inputMode = backup ? "text" : "numeric";
+        input.placeholder = backup ? "Backup code" : "6-digit code";
+        text("analyticsResetCodeLabel", backup ? "Backup code" : "Authenticator code");
+        text("analyticsResetCodeHelp", backup
+            ? "One of the backup codes you saved when you set up two-step verification. Each code works once."
+            : "The same 6-digit code you enter when you sign in.");
+        const toggle = document.getElementById("analyticsResetMethodBtn");
+        toggle.textContent = backup ? "Use my authenticator app instead" : "Use a backup code instead";
+        toggle.hidden = !backup && resetState.backupCodes === 0;
+        updateResetSubmit();
+    }
+
+    async function openResetDialog() {
+        resetState.counts = null;
+        resetState.busy = false;
+        document.getElementById("analyticsResetForm").reset();
+        document.getElementById("analyticsResetNo2fa").hidden = true;
+        showMessage("analyticsResetError", "");
+        setResetMethod("authenticator");
+        renderResetImpact();
+        resetDialog.showModal();
+        try {
+            const data = await fetchJson("admin_analytics_reset.php", { cache: "no-store" });
+            if (!data || !data.success) {
+                showMessage("analyticsResetError", (data && data.message) || "Could not count the visit records.");
+                return;
+            }
+            resetState.counts = data.scopes || null;
+            resetState.twoFactor = Boolean(data.two_factor_enabled);
+            resetState.backupCodes = Number(data.backup_codes_remaining || 0);
+            document.getElementById("analyticsResetNo2fa").hidden = resetState.twoFactor;
+            document.getElementById("analyticsResetCodeField").hidden = !resetState.twoFactor;
+            setResetMethod("authenticator");
+            renderResetImpact();
+            document.getElementById("analyticsResetConfirm").focus();
+        } catch (error) {
+            if (error.message !== "Not authenticated") {
+                showMessage("analyticsResetError", "Could not reach the server. Please try again.");
+            }
+        }
+    }
+
+    function closeResetDialog() {
+        if (resetState.busy) {
+            return;
+        }
+        document.getElementById("analyticsResetCode").value = "";
+        if (resetDialog.open) {
+            resetDialog.close();
+        }
+    }
+
+    async function submitReset(event) {
+        event.preventDefault();
+        updateResetSubmit();
+        if (document.getElementById("analyticsResetSubmit").disabled) {
+            return;
+        }
+        const scope = resetScope();
+        resetState.busy = true;
+        updateResetSubmit();
+        showMessage("analyticsResetError", "");
+        try {
+            const data = await fetchJson("admin_analytics_reset.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    scope: scope,
+                    confirm: document.getElementById("analyticsResetConfirm").value.trim(),
+                    method: resetState.method,
+                    code: document.getElementById("analyticsResetCode").value.trim(),
+                }),
+            });
+            if (!data || !data.success) {
+                let message = (data && data.message) || "The reset did not go through.";
+                if (data && data.attempts_remaining != null && data.attempts_remaining <= 3) {
+                    message += " " + plural(data.attempts_remaining, "try", "tries") + " left before sign-in is paused.";
+                }
+                showMessage("analyticsResetError", message);
+                document.getElementById("analyticsResetCode").value = "";
+                document.getElementById("analyticsResetCode").focus();
+                return;
+            }
+            const deleted = data.deleted || {};
+            const parts = [plural(deleted.appointments, "visit record", "visit records")];
+            if (deleted.gps_points) {
+                parts.push(plural(deleted.gps_points, "GPS point", "GPS points"));
+            }
+            if (deleted.tracking_sessions) {
+                parts.push(plural(deleted.tracking_sessions, "tracking session", "tracking sessions"));
+            }
+            resetState.busy = false;
+            closeResetDialog();
+            showMessage("analyticsResetDone", "Visitor data reset (" + (scope === "all" ? "all visitor data" : "finished visits") + "): deleted " +
+                parts.join(", ") + ". The reset is recorded in the activity log.");
+            loadAnalytics();
+            loadDashboard();
+        } catch (error) {
+            if (error.message !== "Not authenticated") {
+                showMessage("analyticsResetError", "Could not reach the server. Nothing was deleted; please try again.");
+            }
+        } finally {
+            resetState.busy = false;
+            updateResetSubmit();
+        }
+    }
+
+    document.getElementById("analyticsResetBtn").addEventListener("click", function () {
+        showMessage("analyticsResetDone", "");
+        openResetDialog();
+    });
+    document.getElementById("analyticsResetForm").addEventListener("submit", submitReset);
+    document.querySelectorAll("input[name='analyticsResetScope']").forEach(function (input) {
+        input.addEventListener("change", renderResetImpact);
+    });
+    document.getElementById("analyticsResetConfirm").addEventListener("input", updateResetSubmit);
+    document.getElementById("analyticsResetCode").addEventListener("input", function (event) {
+        if (resetState.method === "authenticator") {
+            event.target.value = event.target.value.replace(/\D/g, "").slice(0, 6);
+        }
+        updateResetSubmit();
+    });
+    document.getElementById("analyticsResetMethodBtn").addEventListener("click", function () {
+        setResetMethod(resetState.method === "authenticator" ? "backup_code" : "authenticator");
+        document.getElementById("analyticsResetCode").focus();
+    });
+    document.querySelectorAll("[data-reset-cancel]").forEach(function (button) {
+        button.addEventListener("click", closeResetDialog);
+    });
+    resetDialog.addEventListener("cancel", function (event) {
+        if (resetState.busy) {
+            event.preventDefault();
+        }
+        document.getElementById("analyticsResetCode").value = "";
     });
 
     const routeOfficeFilter = document.getElementById("routeOfficeFilter");

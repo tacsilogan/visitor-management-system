@@ -481,6 +481,132 @@ if (($_GET["format"] ?? "") === "csv") {
     exit;
 }
 
+if (($_GET["format"] ?? "") === "xlsx") {
+    require_once __DIR__ . "/xlsx_writer.php";
+    $result = activity_entries($conn, $filters, 5000);
+    auth_audit($conn, (int) $_SESSION["user_id"], "activity.exported", "activity_log", "", [
+        "from" => $range["from"],
+        "to" => $range["to"],
+        "category" => $filters["category"],
+        "department" => $filters["department"],
+        "user_id" => $filters["user_id"],
+        "rows" => count($result["entries"]),
+        "format" => "xlsx",
+    ]);
+    activity_send_workbook($conn, $result, $filters, $from, $to);
+}
+
+/** The activity log as a formatted Excel report: a summary sheet and every entry. */
+function activity_send_workbook(mysqli $conn, array $result, array $filters, DateTimeImmutable $from, DateTimeImmutable $to): never
+{
+    $categoryLabels = [
+        "all" => "All activity",
+        "signins" => "Sign-ins",
+        "decisions" => "Approvals & declines",
+        "gate" => "Gate & visits",
+        "schedules" => "Office schedules",
+        "accounts" => "Accounts & security",
+        "visitors" => "Visitor requests",
+        "system" => "Automatic",
+    ];
+    $department = $filters["department"];
+    $departmentLabel = [
+        "" => "All departments",
+        "admin" => "Administration",
+        "security" => "Security",
+        "visitor" => "Visitors",
+        "system" => "Automatic (system)",
+    ][$department] ?? appointment_office_label($department);
+    $entries = $result["entries"];
+    $filtersText = [
+        $from->format("M j, Y") . ($from == $to ? "" : " – " . $to->format("M j, Y")),
+        $categoryLabels[$filters["category"]] ?? "All activity",
+        $departmentLabel,
+    ];
+    if ($filters["user_id"] > 0) {
+        $person = $entries && $entries[0]["actor"] ? $entries[0]["actor"]["name"] : "Person #" . $filters["user_id"];
+        $filtersText[] = "Person: " . $person;
+    }
+    if ($filters["q"] !== "") {
+        $filtersText[] = "Search: \"" . $filters["q"] . "\"";
+    }
+    $me = auth_current_user();
+    $generated = "Generated " . date("M j, Y, g:i A") . " by " . (($me["display_name"] ?? "") ?: ($me["username"] ?? "an administrator"));
+
+    $book = new XlsxBook("User Activity Log");
+
+    // Summary: how much of each kind of activity, and who was busiest.
+    $summary = $book->sheet("Summary");
+    $summary->withoutTableTools();
+    $summary->title("User Activity Log", implode(" · ", $filtersText) . " · " . $generated);
+    $people = [];
+    $categories = array_fill_keys(array_keys($categoryLabels), 0);
+    foreach ($entries as $entry) {
+        $categories[$entry["category"]] = ($categories[$entry["category"]] ?? 0) + 1;
+        $key = $entry["actor"] ? $entry["actor"]["username"] : "";
+        if ($key !== "") {
+            $people[$key] ??= ["name" => $entry["actor"]["name"], "department" => $entry["actor"]["department"], "count" => 0];
+            $people[$key]["count"]++;
+        }
+    }
+    $summary->section("Overview");
+    $summary->facts([
+        ["Activity entries", count($entries), "number"],
+        ["People with activity", count($people), "number"],
+        ["Automatic (system) entries", $categories["system"] ?? 0, "number"],
+        ["Period", $filtersText[0], "text"],
+    ]);
+    $summary->section("By type of activity");
+    $summary->columns([["Type of activity", "text"], ["Entries", "number"], ["Share", "text"]]);
+    foreach ($categoryLabels as $key => $label) {
+        if ($key === "all" || empty($categories[$key])) {
+            continue;
+        }
+        $summary->row([$label, $categories[$key], count($entries) ? round($categories[$key] * 100 / count($entries)) . "%" : "—"]);
+    }
+    if ($people) {
+        uasort($people, fn ($a, $b) => $b["count"] <=> $a["count"]);
+        $summary->section("Most active people");
+        $summary->columns([["Person", "text"], ["Department", "text"], ["Entries", "number"]]);
+        foreach (array_slice($people, 0, 15) as $person) {
+            $summary->row([$person["name"], $person["department"], $person["count"]]);
+        }
+    }
+
+    // Every entry, newest first, as on screen.
+    $sheet = $book->sheet("Activity");
+    $sheet->title("User Activity Log", implode(" · ", $filtersText));
+    $sheet->columns([
+        ["Date", "date"], ["Time", "time"], ["Person", "text"], ["Username", "text"], ["Department", "text"],
+        ["Position", "text"], ["Activity", "status"], ["Details", "wrap"], ["Visitor", "text"],
+        ["Appointment", "text"], ["IP address", "text"], ["Device", "text"],
+    ]);
+    foreach ($entries as $entry) {
+        $time = strtotime((string) $entry["created_at"]);
+        $actor = $entry["actor"];
+        $sheet->row([
+            date("Y-m-d", $time),
+            date("H:i:s", $time),
+            $actor ? $actor["name"] : "System",
+            $actor ? $actor["username"] : "",
+            $actor ? $actor["department"] : "Automatic",
+            $actor ? $actor["position"] : "",
+            [$entry["title"], (string) $entry["tone"]],
+            $entry["text"],
+            $entry["visitor_name"],
+            $entry["appointment_id"] !== null ? "#" . $entry["appointment_id"] : "",
+            $entry["ip"],
+            $entry["device"],
+        ]);
+    }
+    if (!$entries) {
+        $sheet->note("No activity matches these filters.");
+    } elseif ($result["has_more"]) {
+        $sheet->note("Showing the newest " . number_format(count($entries)) . " entries. Narrow the dates or filters to export the rest.");
+    }
+    $book->send("activity-log-" . $from->format("Y-m-d") . "-to-" . $to->format("Y-m-d") . ".xlsx");
+}
+
 $limit = min(200, max(1, (int) ($_GET["limit"] ?? 50)));
 $result = activity_entries($conn, $filters, $limit);
 $payload = ["success" => true, "range" => $range] + $result;

@@ -6,7 +6,7 @@
     <title>ISATU Admin Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
-    <link rel="stylesheet" href="style.css?v=20261006-4">
+    <link rel="stylesheet" href="style.css?v=20261013-1">
 </head>
 <body class="admin-page">
     <header class="admin-topbar">
@@ -238,11 +238,12 @@
                         </div>
                     </div>
 
-                    <div class="admin-filter-tabs" role="group" aria-label="Filter users by role">
-                        <button class="is-active" type="button" data-role-filter="">All Users</button>
-                        <button type="button" data-role-filter="admin">Admin</button>
-                        <button type="button" data-role-filter="security">Security</button>
-                        <button type="button" data-role-filter="offices">Office</button>
+                    <div class="admin-filter-tabs role-filter-tabs" role="group" aria-label="Filter users by role">
+                        <button class="is-active" type="button" data-role-filter="">All Users <span data-role-count="" hidden></span></button>
+                        <button type="button" data-role-filter="admin">Admin <span data-role-count="admin" hidden></span></button>
+                        <button type="button" data-role-filter="security">Security <span data-role-count="security" hidden></span></button>
+                        <button type="button" data-role-filter="offices">Office <span data-role-count="offices" hidden></span></button>
+                        <button type="button" data-role-filter="visitor">Visitor <span data-role-count="visitor" hidden></span></button>
                     </div>
 
                     <p class="admin-message is-error" id="adminListError" role="alert" hidden></p>
@@ -262,8 +263,8 @@
                         </table>
                     </div>
                     <div class="admin-empty-state" id="usersEmpty" hidden>
-                        <strong>No matching users</strong>
-                        <span>Try a different role or search term.</span>
+                        <strong id="usersEmptyTitle">No matching users</strong>
+                        <span id="usersEmptyText">Try a different role or search term.</span>
                     </div>
                     <div class="admin-pagination">
                         <p id="usersShowing">Showing 0 users</p>
@@ -450,10 +451,13 @@
                                 <span>Search</span>
                                 <input type="search" id="uaSearch" placeholder="Name or appointment #" autocomplete="off">
                             </label>
-                            <a class="analytics-export-button ua-export" id="uaExportBtn" href="admin_activity.php?format=csv" download>
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-                                Export CSV
-                            </a>
+                            <div class="export-group ua-export">
+                                <a class="analytics-export-button" id="uaExportBtn" href="admin_activity.php?format=xlsx" download title="Formatted Excel report: summary, colours, and columns sized to fit">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+                                    Export Excel
+                                </a>
+                                <a class="export-csv-link" id="uaCsvBtn" href="admin_activity.php?format=csv" download title="Plain CSV for other programs">CSV</a>
+                            </div>
                         </div>
                         <div class="admin-filter-tabs ua-category-tabs" role="group" aria-label="Type of activity">
                             <button class="is-active" type="button" data-ua-category="all">All <span data-ua-count="all"></span></button>
@@ -512,14 +516,22 @@
                             <button class="is-active" type="button" data-analytics-period="month">Month</button>
                             <button type="button" data-analytics-period="quarter">Quarter</button>
                         </div>
-                        <a class="analytics-export-button" id="analyticsExportBtn" href="admin_analytics.php?period=month&amp;format=csv" download>
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-                            Export Report
-                        </a>
+                        <div class="export-group">
+                            <a class="analytics-export-button" id="analyticsExportBtn" href="admin_analytics.php?period=month&amp;format=xlsx" download title="Formatted Excel report: summary sheet, colours, and columns sized to fit">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+                                Export Report
+                            </a>
+                            <a class="export-csv-link" id="analyticsCsvBtn" href="admin_analytics.php?period=month&amp;format=csv" download title="Plain CSV for other programs">CSV</a>
+                        </div>
+                        <button class="analytics-reset-button" id="analyticsResetBtn" type="button" title="Delete visit records and start the analytics from zero">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+                            Reset data
+                        </button>
                     </div>
                 </header>
 
                 <p class="admin-message is-error" id="analyticsError" role="alert" hidden></p>
+                <p class="admin-message is-success" id="analyticsResetDone" role="status" hidden></p>
 
                 <div class="analytics-summary-grid" aria-label="Visitor analytics summary">
                     <article class="analytics-summary-card">
@@ -1060,6 +1072,73 @@
         </div>
     </dialog>
 
+    <dialog class="admin-dialog reset-dialog" id="analyticsResetDialog" aria-labelledby="analyticsResetTitle">
+        <form id="analyticsResetForm" novalidate>
+            <div class="admin-dialog-header">
+                <div>
+                    <p class="admin-eyebrow reset-eyebrow">Visitor Analytics · cannot be undone</p>
+                    <h2 id="analyticsResetTitle">Reset visitor data</h2>
+                </div>
+                <button class="admin-dialog-close" type="button" data-reset-cancel aria-label="Close">×</button>
+            </div>
+            <p class="reset-intro">Deletes visit records so the analytics start again from zero. Choose what to delete, check the numbers, then confirm with your authenticator code.</p>
+
+            <fieldset class="reset-scopes">
+                <legend class="sr-only">What to delete</legend>
+                <label class="reset-scope">
+                    <input type="radio" name="analyticsResetScope" value="all" checked>
+                    <span>
+                        <strong>All visitor data</strong>
+                        <small>Every appointment and visit, including upcoming bookings and visitors on campus now, with their GPS history.</small>
+                    </span>
+                </label>
+                <label class="reset-scope">
+                    <input type="radio" name="analyticsResetScope" value="finished">
+                    <span>
+                        <strong>Finished visits only</strong>
+                        <small>Completed, cancelled, declined and unanswered visits. Upcoming bookings and visitors on campus now are kept.</small>
+                    </span>
+                </label>
+            </fieldset>
+
+            <div class="reset-impact" id="analyticsResetImpact" aria-live="polite">
+                <p class="acct-loading">Counting records…</p>
+            </div>
+            <p class="reset-warning" id="analyticsResetLive" hidden></p>
+
+            <details class="reset-kept">
+                <summary>What is kept</summary>
+                <p>All accounts (staff and visitors), departments and office schedules, the campus map and walking routes, settings, sign-in history, and the activity log. The reset itself is recorded in the activity log.</p>
+            </details>
+
+            <a class="reset-backup" id="analyticsResetBackup" href="admin_analytics.php?period=all&amp;format=xlsx" download>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+                <span><strong>Download a copy first</strong><small>Every visit record as an Excel report, to keep before deleting.</small></span>
+            </a>
+
+            <div class="reset-confirm-grid">
+                <label class="acct-field">
+                    <span>Type <b>RESET</b> to confirm</span>
+                    <input type="text" id="analyticsResetConfirm" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="RESET">
+                </label>
+                <label class="acct-field" id="analyticsResetCodeField">
+                    <span id="analyticsResetCodeLabel">Authenticator code</span>
+                    <input type="text" id="analyticsResetCode" inputmode="numeric" autocomplete="one-time-code" maxlength="6" spellcheck="false" placeholder="6-digit code">
+                </label>
+            </div>
+            <p class="reset-code-help">
+                <span id="analyticsResetCodeHelp">The same 6-digit code you enter when you sign in.</span>
+                <button class="admin-text-action" type="button" id="analyticsResetMethodBtn">Use a backup code instead</button>
+            </p>
+            <p class="reset-warning" id="analyticsResetNo2fa" hidden>A reset needs a code from your authenticator app. Turn on two-step verification in <b>Account security</b> first.</p>
+
+            <p class="admin-message is-error" id="analyticsResetError" role="alert" hidden></p>
+            <div class="admin-dialog-actions">
+                <button class="admin-cancel-button" type="button" data-reset-cancel>Cancel</button>
+                <button class="reset-danger-button" type="submit" id="analyticsResetSubmit" disabled>Delete visitor data</button>
+            </div>
+        </form>
+    </dialog>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Sharp map at every zoom (campus_map.js falls back to OpenStreetMap images without it). -->
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
@@ -1072,6 +1151,6 @@
     <script src="campus_gps.js?v=20261012-1"></script>
     <script src="campus_setup.js?v=20261006-4"></script>
     <script src="campus_routes_editor.js?v=20261006-4"></script>
-    <script src="admin.js?v=20261005-1"></script>
+    <script src="admin.js?v=20261013-1"></script>
 </body>
 </html>

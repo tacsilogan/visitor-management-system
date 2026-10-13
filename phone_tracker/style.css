@@ -9441,3 +9441,364 @@ html.has-expanded-map body {
         min-height: 44px;
     }
 }
+
+/* Accounts per role on the User Management filter tabs. */
+.role-filter-tabs [data-role-count] {
+    min-width: 20px;
+    margin-left: 5px;
+    padding: 1px 6px;
+    border-radius: 999px;
+    background: rgba(7, 85, 181, 0.1);
+    color: inherit;
+    font-size: 10.5px;
+    text-align: center;
+}
+
+.role-filter-tabs [data-role-count][hidden] {
+    display: none;
+}
+
+.role-filter-tabs button.is-active [data-role-count] {
+    background: #0755b5;
+    color: #ffffff;
+}
+
+/* Exports: the formatted Excel report, with the plain CSV beside it. */
+.export-group {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 0;
+}
+
+.export-group .analytics-export-button {
+    border-radius: 6px 0 0 6px;
+}
+
+.export-csv-link {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 11px;
+    border: 1px solid #0755b5;
+    border-left: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 0 6px 6px 0;
+    background: #ffffff;
+    color: #0755b5;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-decoration: none;
+}
+
+.export-csv-link:hover {
+    background: #edf3fa;
+    color: #064899;
+}
+
+/* Visitor Analytics: resetting the data. (.analytics-actions: ".admin-page button" sets the font.) */
+.analytics-actions .analytics-reset-button {
+    display: inline-flex;
+    min-height: 38px;
+    padding: 9px 13px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid #e3a1a1;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #b42318;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.analytics-actions .analytics-reset-button:hover {
+    border-color: #b42318;
+    background: #fff0f0;
+}
+
+.analytics-reset-button svg,
+.reset-backup svg {
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.reset-dialog {
+    width: min(94vw, 600px);
+}
+
+.reset-dialog form {
+    padding: 24px 25px 22px;
+}
+
+.reset-dialog .admin-dialog-header {
+    margin-bottom: 12px;
+}
+
+.reset-eyebrow {
+    color: #b42318;
+}
+
+.reset-intro {
+    margin: 0 0 16px;
+    color: #475467;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.reset-scopes {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 0;
+    border: 0;
+}
+
+.reset-scope {
+    display: flex;
+    gap: 9px;
+    margin: 0;
+    padding: 12px;
+    border: 1px solid #d5dce4;
+    border-radius: 10px;
+    background: #ffffff;
+    cursor: pointer;
+}
+
+.reset-scope:hover {
+    border-color: #98a2b3;
+}
+
+.reset-scope:has(input:checked) {
+    border-color: #b42318;
+    background: #fff7f6;
+    box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.08);
+}
+
+.reset-scope input {
+    width: 16px;
+    height: 16px;
+    margin: 2px 0 0;
+    flex: 0 0 auto;
+    accent-color: #b42318;
+}
+
+.reset-scope strong {
+    display: block;
+    margin-bottom: 3px;
+    color: #142033;
+    font-size: 13px;
+}
+
+.reset-scope small {
+    display: block;
+    color: #667085;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.reset-impact {
+    margin: 0 0 10px;
+    padding: 13px 14px;
+    border-radius: 10px;
+    background: #f6f8fb;
+}
+
+.reset-impact .acct-loading {
+    margin: 0;
+}
+
+.reset-impact-title {
+    margin: 0 0 9px;
+    color: #344054;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.reset-impact-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.reset-impact-item {
+    padding: 9px 10px;
+    border: 1px solid #f3c4c0;
+    border-radius: 8px;
+    background: #ffffff;
+}
+
+.reset-impact-item strong {
+    display: block;
+    color: #b42318;
+    font-size: 20px;
+    line-height: 1.1;
+}
+
+.reset-impact-item span {
+    display: block;
+    margin-top: 3px;
+    color: #475467;
+    font-size: 11px;
+}
+
+.reset-impact-item.is-zero {
+    border-color: #e4e7ec;
+}
+
+.reset-impact-item.is-zero strong {
+    color: #98a2b3;
+}
+
+.reset-impact-note {
+    margin: 9px 0 0;
+    color: #667085;
+    font-size: 11.5px;
+}
+
+.reset-warning {
+    margin: 0 0 12px;
+    padding: 10px 12px;
+    border-left: 3px solid #f79009;
+    border-radius: 6px;
+    background: #fffaeb;
+    color: #93370d;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.reset-warning[hidden] {
+    display: none;
+}
+
+.reset-kept {
+    margin: 0 0 12px;
+    color: #475467;
+    font-size: 12px;
+}
+
+.reset-kept summary {
+    color: #0755b5;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.reset-kept p {
+    margin: 6px 0 0;
+    line-height: 1.5;
+}
+
+.reset-backup {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 16px;
+    padding: 10px 12px;
+    border: 1px dashed #8fb3e3;
+    border-radius: 10px;
+    background: #f3f8ff;
+    color: #0755b5;
+    text-decoration: none;
+}
+
+.reset-backup:hover {
+    border-style: solid;
+    background: #e9f2fe;
+}
+
+.reset-backup strong {
+    display: block;
+    font-size: 12.5px;
+}
+
+.reset-backup small {
+    display: block;
+    color: #475467;
+    font-size: 11.5px;
+}
+
+.reset-confirm-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.reset-confirm-grid .acct-field {
+    margin-bottom: 6px;
+}
+
+.reset-confirm-grid input {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    letter-spacing: 0.08em;
+}
+
+.reset-code-help {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 10px;
+    margin: 0 0 12px;
+    color: #667085;
+    font-size: 11.5px;
+}
+
+.reset-code-help .admin-text-action {
+    min-height: 0;
+    padding: 2px 4px;
+    color: #0755b5;
+    font-size: 11.5px;
+}
+
+.reset-code-help .admin-text-action[hidden] {
+    display: none;
+}
+
+.reset-danger-button {
+    min-height: 34px;
+    padding: 7px 14px;
+    border-radius: 7px;
+    background: #b42318;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.reset-danger-button:hover:not(:disabled) {
+    background: #912018;
+}
+
+.reset-danger-button:disabled {
+    background: #f1b5af;
+    cursor: not-allowed;
+}
+
+@media (max-width: 780px) {
+    .export-group {
+        width: 100%;
+    }
+
+    .export-group .analytics-export-button {
+        flex: 1;
+    }
+
+    .analytics-reset-button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 560px) {
+    .reset-scopes,
+    .reset-confirm-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .reset-impact-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}

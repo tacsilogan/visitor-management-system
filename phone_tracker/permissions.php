@@ -13,6 +13,7 @@ const AUTH_ROLE_PERMISSIONS = [
         "activity.view",
         "security.manage",
         "analytics.view",
+        "analytics.reset",
         "campus_map.view",
         "campus_map.edit",
         "appointments.list",

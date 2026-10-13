@@ -356,8 +356,28 @@ function activity_describe(array $row): array
         case "activity.exported":
             return [
                 "Exported the activity log",
-                "Downloaded " . (int) ($details["rows"] ?? 0) . " activity entries (" . ($details["from"] ?? "") . " to " . ($details["to"] ?? "") . ")",
+                "Downloaded " . (int) ($details["rows"] ?? 0) . " activity entries (" . ($details["from"] ?? "") . " to " . ($details["to"] ?? "") . ")"
+                    . (($details["format"] ?? "") === "xlsx" ? " as an Excel report" : ""),
                 "info",
+            ];
+        case "analytics.reset":
+            $count = function (string $key, string $one, string $many) use ($details): ?string {
+                $value = (int) ($details[$key] ?? 0);
+                return $value > 0 ? number_format($value) . " " . ($value === 1 ? $one : $many) : null;
+            };
+            $parts = array_filter([
+                $count("appointments", "visit record", "visit records"),
+                $count("gps_points", "GPS point", "GPS points"),
+                $count("tracking_sessions", "tracking session", "tracking sessions"),
+                $count("notifications", "notification", "notifications"),
+            ]);
+            $scope = ($details["scope"] ?? "") === "finished" ? "finished visits" : "all visitor data";
+            $with = ($details["confirmed_with"] ?? "") === "backup_code" ? "a backup code" : "an authenticator code";
+            return [
+                "Reset visitor data",
+                "Reset Visitor Analytics (" . $scope . "), confirmed with " . $with . ": "
+                    . ($parts ? "deleted " . implode(", ", $parts) : "there was nothing to delete"),
+                "danger",
             ];
     }
     return [ucfirst(str_replace(["_", "."], [" ", ": "], $action)), "", "muted"];

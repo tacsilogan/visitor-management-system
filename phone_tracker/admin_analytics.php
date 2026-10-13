@@ -43,14 +43,14 @@ $purposeSelect = $hasPurpose ? "a.purpose" : "NULL AS purpose";
 $subjectSelect = $hasSubject ? "a.subject" : "NULL AS subject";
 $visitTypeSelect = $hasVisitType ? "a.visit_type" : "'Appointment' AS visit_type";
 
-if (isset($_GET["format"]) && $_GET["format"] === "csv") {
-    header("Content-Type: text/csv; charset=utf-8");
-    header("Content-Disposition: attachment; filename=visitor-analytics-" . $period . "-" . $now->format("Y-m-d") . ".csv");
-    $output = fopen("php://output", "w");
-    fputcsv($output, [
-        "Registration ID", "Visitor", "Visit Type", "Purpose", "Destination", "Subject",
-        "Status", "Appointment", "Check In", "Check Out", "Duration Minutes",
-    ]);
+$exportFormat = (string) ($_GET["format"] ?? "");
+if ($exportFormat === "csv" || $exportFormat === "xlsx") {
+    // Exports may also cover every record ("all"), for example a copy kept before a reset.
+    if (strtolower(trim((string) ($_GET["period"] ?? ""))) === "all") {
+        $period = "all";
+        $start = new DateTimeImmutable("2000-01-01 00:00:00");
+        $startSql = $start->format("Y-m-d H:i:s");
+    }
     $exportStmt = $conn->prepare(
         "SELECT a.id, a.visitor_full_name, a.office_code, a.status, a.appointment_at,
                 a.checked_in_at, a.completed_at, a.created_at,
@@ -62,30 +62,54 @@ if (isset($_GET["format"]) && $_GET["format"] === "csv") {
     $exportStmt->bind_param("ss", $startSql, $endSql);
     $exportStmt->execute();
     $exportResult = $exportStmt->get_result();
+    $exportRows = [];
     while ($row = $exportResult->fetch_assoc()) {
         $year = $row["created_at"] ? date("Y", strtotime($row["created_at"])) : $now->format("Y");
-        $duration = "";
+        $duration = null;
         if ($row["checked_in_at"] && $row["completed_at"]) {
             $duration = max(0, (int) round((strtotime($row["completed_at"]) - strtotime($row["checked_in_at"])) / 60));
         }
         $officeCode = (string) ($row["office_code"] ?? "");
-        fputcsv($output, [
-            "V-" . $year . "-" . str_pad((string) $row["id"], 6, "0", STR_PAD_LEFT),
-            $row["visitor_full_name"],
-            $row["visit_type"],
-            $row["purpose"],
-            $officeMap[$officeCode] ?? $officeCode,
-            $row["subject"],
-            $row["status"],
-            $row["appointment_at"],
-            $row["checked_in_at"],
-            $row["completed_at"],
-            $duration,
-        ]);
+        $exportRows[] = [
+            "registration" => "V-" . $year . "-" . str_pad((string) $row["id"], 6, "0", STR_PAD_LEFT),
+            "visitor" => (string) $row["visitor_full_name"],
+            "visit_type" => (string) ($row["visit_type"] ?? ""),
+            "purpose" => (string) ($row["purpose"] ?? ""),
+            "destination" => (string) ($officeMap[$officeCode] ?? $officeCode),
+            "subject" => (string) ($row["subject"] ?? ""),
+            "status" => (string) $row["status"],
+            "appointment_at" => $row["appointment_at"],
+            "checked_in_at" => $row["checked_in_at"],
+            "completed_at" => $row["completed_at"],
+            "duration" => $duration,
+        ];
     }
     $exportStmt->close();
-    fclose($output);
     $conn->close();
+
+    if ($exportFormat === "xlsx") {
+        require_once __DIR__ . "/analytics_export.php";
+        $me = auth_current_user();
+        analytics_send_workbook($exportRows, $period, $start, $now, (($me["display_name"] ?? "") ?: ($me["username"] ?? "an administrator")));
+    }
+
+    header("Content-Type: text/csv; charset=utf-8");
+    header("Content-Disposition: attachment; filename=visitor-analytics-" . $period . "-" . $now->format("Y-m-d") . ".csv");
+    $output = fopen("php://output", "w");
+    // The byte-order mark makes Excel read accents (Niño, Peña) correctly.
+    fwrite($output, "\xEF\xBB\xBF");
+    fputcsv($output, [
+        "Registration ID", "Visitor", "Visit Type", "Purpose", "Destination", "Subject",
+        "Status", "Appointment", "Check In", "Check Out", "Duration Minutes",
+    ]);
+    foreach ($exportRows as $row) {
+        // Spreadsheet apps run cells that start with = + - @ as formulas; keep them as text.
+        fputcsv($output, array_map(function ($value) {
+            $text = (string) ($value ?? "");
+            return preg_match('/^[=+\-@\t\r]/', $text) ? "'" . $text : $text;
+        }, array_values($row)));
+    }
+    fclose($output);
     exit;
 }
 
