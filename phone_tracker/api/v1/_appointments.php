@@ -206,6 +206,13 @@ function mobile_create_appointment(mysqli $conn, array $user, array $input): arr
             trim((string) ($settings["unavailable_reason"] ?? "")) ?: "This office is not accepting visitors right now"
         );
     }
+    if ($visitType === "walk_in") {
+        // No walk-in passes during a break, a posted closure, or outside visitor hours.
+        $blocked = office_walk_in_block_reason($conn, $officeCode, $offices[$officeCode], new DateTimeImmutable("now"));
+        if ($blocked !== null) {
+            throw new DomainException($blocked);
+        }
+    }
     $end = $visitType === "appointment" && $endText !== "" ? mobile_parse_datetime($endText) : null;
     if ($visitType === "walk_in") {
         $end = clone $start;

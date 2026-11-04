@@ -42,6 +42,7 @@ const SETUP_FILES = [
     "live_monitoring_migration.sql" => null,
     "visitor_arrival_migration.sql" => null,
     "campus_routes_migration.sql" => null,
+    "office_breaks_migration.sql" => null,
 ];
 const SETUP_CAMPUS_SEED = "campus_map_isatu_seed.sql";
 const SETUP_PUBLISHED_PASSWORD = "password";

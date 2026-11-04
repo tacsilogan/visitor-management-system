@@ -50,6 +50,7 @@ while ($row = $ruleResult->fetch_assoc()) {
     $windows[] = [substr((string) $row["start_time"], 0, 5), substr((string) $row["end_time"], 0, 5)];
 }
 $rule->close();
+$hasWeeklyHoursToday = $windows !== [];
 if (!$windows) {
     $countRules = $conn->prepare(
         "SELECT COUNT(*) AS total FROM office_availability_rules WHERE office_code = ? AND is_active = 1"
@@ -101,6 +102,34 @@ foreach ($windows as [$startTime, $endTime]) {
     }
 }
 usort($slots, fn(array $a, array $b): int => strcmp($a["scheduled_start_at"], $b["scheduled_start_at"]));
+
+// Why the day has gaps: the office's named breaks and its posted "Office unavailable" changes.
+$unavailable = [];
+if ($hasWeeklyHoursToday) {
+    foreach (office_breaks_by_day(office_load_break_rows($conn, $officeCode))[$day] ?? [] as $break) {
+        $unavailable[] = [
+            "starts_at" => $dateText . " " . office_minutes_sql($break["start"]),
+            "ends_at" => $dateText . " " . office_minutes_sql($break["end"]),
+            "label" => $break["label"],
+            "kind" => "break",
+        ];
+    }
+}
+$dayStart = new DateTimeImmutable($dateText . " 00:00:00");
+$dayEnd = $dayStart->modify("+1 day");
+foreach (office_load_exceptions_between($conn, $officeCode, $dayStart, $dayEnd) as $closure) {
+    if ((int) $closure["is_available"]) {
+        continue;
+    }
+    $unavailable[] = [
+        "starts_at" => max((string) $closure["starts_at"], $dayStart->format("Y-m-d H:i:s")),
+        "ends_at" => min((string) $closure["ends_at"], $dayEnd->format("Y-m-d H:i:s")),
+        "label" => trim((string) $closure["reason"]) ?: "Office unavailable",
+        "kind" => "closure",
+    ];
+}
+usort($unavailable, fn(array $a, array $b): int => strcmp($a["starts_at"], $b["starts_at"]));
+
 api_success([
     "office_code" => $officeCode,
     "office_name" => $officeMap[$officeCode],
@@ -109,4 +138,5 @@ api_success([
     "slot_duration_minutes" => $duration,
     "accepting_visitors" => true,
     "slots" => $slots,
+    "unavailable_periods" => $unavailable,
 ]);

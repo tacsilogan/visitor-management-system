@@ -1050,6 +1050,33 @@ textarea {
     color: #b42318;
 }
 
+.office-availability-chip.is-break {
+    background: #fff4d6;
+    color: #8a5a00;
+}
+
+.office-availability-chip.is-off {
+    background: #eef1f5;
+    color: #4f5b69;
+}
+
+.office-availability-chip.is-paused {
+    background: #fff0e6;
+    color: #b54708;
+}
+
+.office-status-group {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.office-status-group [hidden] {
+    display: none;
+}
+
 .office-settings-card {
     max-width: 1050px;
     margin: 0 auto 20px;
@@ -1211,13 +1238,21 @@ textarea {
 }
 
 .office-schedule-row {
+    padding: 9px 14px 12px;
+    border-bottom: 1px solid #e8ebef;
+}
+
+/* A day's hours and each of its breaks share columns, so break times sit under the day's times. */
+.office-day-main,
+.office-break-row {
     display: grid;
-    grid-template-columns: minmax(150px, 1.2fr) 130px 24px 130px 70px;
+    grid-template-columns: minmax(150px, 1.2fr) 130px 24px 130px 74px 62px;
     gap: 10px;
     align-items: center;
-    min-height: 59px;
-    padding: 9px 14px;
-    border-bottom: 1px solid #e8ebef;
+}
+
+.office-day-main {
+    min-height: 41px;
 }
 
 .office-schedule-row:last-child {
@@ -1270,10 +1305,401 @@ textarea {
     color: #7b838d;
 }
 
+.office-schedule-row.has-problem {
+    background: #fffafa;
+}
+
+.office-schedule-toolbar {
+    display: flex;
+    margin-top: 18px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+}
+
+.office-schedule-toolbar p {
+    margin: 0;
+    color: #6f7884;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.office-day-to {
+    color: #6f7884;
+    font-size: 12px;
+    text-align: center;
+}
+
+.office-day-summary {
+    color: #4f5b69;
+    font-size: 11px;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.office-day-breaks {
+    display: grid;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.office-day-breaks:empty {
+    display: none;
+}
+
+.office-break-row .office-break-label {
+    width: 100%;
+    height: 34px;
+    margin: 0;
+    padding: 6px 10px 6px 31px;
+    border: 1px solid #ecd29a;
+    border-radius: 7px;
+    background: #fffaf0 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23b7791f' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 8h1a4 4 0 1 1 0 8h-1'/%3E%3Cpath d='M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z'/%3E%3Cpath d='M6 2v2M10 2v2M14 2v2'/%3E%3C/svg%3E") 10px center / 14px no-repeat;
+    color: #5b3d00;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.office-schedule-row .office-break-row input[type="time"] {
+    height: 34px;
+    border-color: #ecd29a;
+    background: #fffaf0;
+}
+
+.office-break-remove {
+    grid-column: span 2;
+    justify-self: start;
+    padding: 6px 8px;
+    background: transparent;
+    color: #b42318;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.office-break-remove:hover {
+    background: #fff0f0;
+}
+
+.office-day-tools {
+    display: flex;
+    margin-top: 6px;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+}
+
+.office-link-button {
+    padding: 4px 2px;
+    background: transparent;
+    color: var(--office-blue);
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.office-link-button:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.office-link-button:disabled {
+    color: #9aa3ae;
+    cursor: not-allowed;
+}
+
+/* Each open day as a bar: visitor time in green, breaks striped, a line where each slot starts. */
+.office-day-timeline {
+    position: relative;
+    height: 12px;
+    margin-top: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #eef1f5;
+}
+
+.office-timeline-segment {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+.office-timeline-segment.is-open {
+    background: #34a46f;
+}
+
+.office-timeline-segment.is-break {
+    background: repeating-linear-gradient(135deg, #f0b23a 0 5px, #f8d488 5px 10px);
+}
+
+.office-timeline-tick {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.85);
+}
+
+.office-timeline-scale {
+    position: relative;
+    height: 28px;
+    margin: 0 14px;
+}
+
+.office-timeline-scale span {
+    position: absolute;
+    bottom: 6px;
+    color: #8a94a0;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    transform: translateX(-50%);
+}
+
+.office-timeline-scale span:first-child {
+    transform: none;
+}
+
+.office-timeline-scale span:last-child {
+    transform: translateX(-100%);
+}
+
+.office-day-note,
+.office-day-error {
+    margin: 6px 0 0;
+    font-size: 11px;
+}
+
+.office-day-note {
+    color: #8a5a00;
+}
+
+.office-day-error {
+    color: #b42318;
+    font-weight: 700;
+}
+
+.office-day-note[hidden],
+.office-day-error[hidden] {
+    display: none;
+}
+
+.office-slot-preview {
+    margin-top: 18px;
+    padding: 16px;
+    border: 1px solid #dce6f3;
+    border-radius: 11px;
+    background: #f7faff;
+}
+
+.office-slot-preview > header {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 12px 20px;
+}
+
+.office-slot-preview h3 {
+    margin: 0;
+    color: #1e2a3a;
+    font-size: 13px;
+}
+
+.office-slot-preview p {
+    max-width: 560px;
+    margin: 4px 0 0;
+    color: #6f7884;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.office-preview-days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.office-preview-day {
+    min-width: 44px;
+    padding: 6px 8px;
+    border: 1px solid #c9d6e6;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #33415c;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.office-preview-day.is-closed {
+    color: #9aa3ae;
+    text-decoration: line-through;
+}
+
+.office-preview-day[aria-pressed="true"] {
+    border-color: var(--office-blue);
+    background: var(--office-blue);
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.office-preview-slots {
+    display: flex;
+    margin-top: 12px;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.office-preview-slot,
+.office-preview-break {
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.office-preview-slot {
+    border: 1px solid #bcd2ed;
+    background: #ffffff;
+    color: #0b3b75;
+}
+
+.office-preview-break {
+    border: 1px dashed #e0ad46;
+    background: #fff7e3;
+    color: #7a4f00;
+}
+
+.office-preview-empty {
+    color: #6f7884;
+    font-size: 12px;
+}
+
 .office-settings-actions {
     display: flex;
     margin-top: 18px;
+    align-items: center;
     justify-content: flex-end;
+    gap: 14px;
+}
+
+.office-unsaved-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #8a5a00;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.office-unsaved-note::before {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f0b23a;
+    content: "";
+}
+
+.office-unsaved-note[hidden] {
+    display: none;
+}
+
+.office-conflict-list {
+    display: grid;
+    max-height: 44vh;
+    margin: 16px 0 0;
+    padding: 0;
+    overflow-y: auto;
+    gap: 8px;
+    list-style: none;
+}
+
+.office-conflict-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 11px 13px;
+    border: 1px solid #f3d6a4;
+    border-radius: 10px;
+    background: #fffaf0;
+}
+
+.office-conflict-item div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.office-conflict-item strong {
+    color: #273343;
+    font-size: 12px;
+}
+
+.office-conflict-item span {
+    color: #4f5b69;
+    font-size: 11px;
+}
+
+.office-conflict-item small {
+    color: #8a5a00;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.office-conflict-more {
+    padding: 4px 2px;
+    color: #6f7884;
+    font-size: 11px;
+}
+
+.office-pause-lengths {
+    margin: 16px 0;
+    padding: 0;
+    border: 0;
+}
+
+.office-pause-lengths legend {
+    margin-bottom: 8px;
+    padding: 0;
+    color: #3d4855;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.office-pause-lengths label {
+    position: relative;
+    display: inline-block;
+    margin: 0 6px 8px 0;
+}
+
+.office-pause-lengths input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.office-pause-lengths span {
+    display: inline-block;
+    padding: 8px 13px;
+    border: 1px solid #c9d6e6;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #33415c;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.office-pause-lengths input:checked + span {
+    border-color: var(--office-blue);
+    background: var(--office-blue);
+    color: #ffffff;
+}
+
+.office-pause-lengths input:focus-visible + span {
+    outline: 3px solid rgba(7, 85, 181, 0.25);
+    outline-offset: 2px;
 }
 
 .office-exception-list {
@@ -1622,8 +2048,9 @@ textarea {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .office-schedule-row {
-        grid-template-columns: minmax(130px, 1fr) 110px 22px 110px 62px;
+    .office-day-main,
+    .office-break-row {
+        grid-template-columns: minmax(130px, 1fr) 110px 22px 110px 64px 56px;
     }
 }
 
@@ -1717,12 +2144,62 @@ textarea {
     }
 
     .office-schedule-row {
-        grid-template-columns: minmax(120px, 1fr) 1fr 18px 1fr;
         padding: 10px;
     }
 
-    .office-day-state {
+    /* On a phone: the day on its own line, its times below; a break's name and Remove, then its times. */
+    .office-day-main {
+        grid-template-columns: 1fr 18px 1fr;
+    }
+
+    .office-day-toggle {
+        grid-column: 1 / -1;
+    }
+
+    .office-schedule-row input[type="time"] {
+        min-width: 0;
+    }
+
+    .office-day-summary,
+    .office-day-state,
+    .office-timeline-scale {
         display: none;
+    }
+
+    .office-break-row {
+        grid-template-columns: 1fr 18px 1fr;
+        grid-template-areas:
+            "label label remove"
+            "start to end";
+    }
+
+    .office-break-row .office-break-label {
+        grid-area: label;
+    }
+
+    .office-break-row .office-break-start {
+        grid-area: start;
+    }
+
+    .office-break-row .office-day-to {
+        grid-area: to;
+    }
+
+    .office-break-row .office-break-end {
+        grid-area: end;
+    }
+
+    .office-break-remove {
+        grid-area: remove;
+        justify-self: end;
+    }
+
+    .office-status-group {
+        justify-content: flex-start;
+    }
+
+    .office-availability-chip {
+        white-space: normal;
     }
 
     .office-compact-fields {

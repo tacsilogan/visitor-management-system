@@ -52,12 +52,43 @@ function office_availability_payload(mysqli $conn, string $officeCode): array
         }
         $exceptionStmt->close();
     }
-    return ["settings" => $settings, "rules" => $rules, "exceptions" => $exceptions];
+    $now = new DateTimeImmutable("now");
+    return [
+        "settings" => $settings,
+        "rules" => $rules,
+        // The weekly hours with their breaks, as the dashboard edits them.
+        "week" => office_week_for_editing($rules, office_load_break_rows($conn, $officeCode)),
+        "breaks_ready" => office_breaks_ready($conn),
+        "exceptions" => $exceptions,
+        "status" => office_open_state($conn, $officeCode, $now),
+        "server_time" => $now->format("Y-m-d H:i:s"),
+    ];
+}
+
+function office_availability_audit(mysqli $conn, int $actorId, string $action, string $entityType, string $entityId, array $details): void
+{
+    $audit = $conn->prepare(
+        "INSERT INTO audit_logs (actor_user_id, action, entity_type, entity_id, details_json, ip_address)
+         VALUES (?, ?, ?, ?, ?, ?)"
+    );
+    if ($audit) {
+        $json = json_encode($details);
+        $ipAddress = substr((string) ($_SERVER["REMOTE_ADDR"] ?? ""), 0, 45);
+        $audit->bind_param("isssss", $actorId, $action, $entityType, $entityId, $json, $ipAddress);
+        $audit->execute();
+        $audit->close();
+    }
 }
 
 if ($_SERVER["REQUEST_METHOD"] === "GET") {
     try {
-        $payload = office_availability_payload($conn, $officeCode);
+        if (isset($_GET["status"])) {
+            // The dashboard refreshes the "Open now / On lunch break" chip with this.
+            $now = new DateTimeImmutable("now");
+            $payload = ["status" => office_open_state($conn, $officeCode, $now), "server_time" => $now->format("Y-m-d H:i:s")];
+        } else {
+            $payload = office_availability_payload($conn, $officeCode);
+        }
         $conn->close();
         echo json_encode(array_merge(["success" => true], $payload));
     } catch (Throwable $error) {
@@ -104,21 +135,27 @@ try {
             $availableAgainSql = $availableAgain->format("Y-m-d H:i:s");
         }
 
-        $normalizedRules = [];
-        foreach ($schedules as $schedule) {
-            if (!is_array($schedule) || empty($schedule["enabled"])) {
-                continue;
-            }
-            $day = (int) ($schedule["day_of_week"] ?? 0);
-            $start = trim((string) ($schedule["start_time"] ?? ""));
-            $end = trim((string) ($schedule["end_time"] ?? ""));
-            if ($day < 1 || $day > 7 || !preg_match('/^\d{2}:\d{2}$/', $start) || !preg_match('/^\d{2}:\d{2}$/', $end) || $start >= $end) {
-                throw new RuntimeException("Every open day needs valid opening and closing times");
-            }
-            $normalizedRules[] = [$day, $start . ":00", $end . ":00"];
-        }
-        if ($accepting && count($normalizedRules) === 0) {
+        // Each open day's hours and breaks, checked, with its bookable windows worked out.
+        $week = office_normalize_week($schedules);
+        if ($accepting && count($week) === 0) {
             throw new RuntimeException("Select at least one open day, or turn off accepting visitors");
+        }
+        // Visits already booked that the new hours or breaks would leave out. The office
+        // sees them first and saves anyway only when it says so.
+        $conflicts = office_schedule_conflicts($conn, $officeCode, $week, new DateTimeImmutable("now"));
+        if ($conflicts && empty($input["confirm_conflicts"])) {
+            $conn->close();
+            $count = count($conflicts);
+            echo json_encode([
+                "success" => false,
+                "code" => "schedule_conflicts",
+                "message" => $count === 1
+                    ? "1 booked visit falls outside the new schedule."
+                    : "{$count} booked visits fall outside the new schedule.",
+                "conflicts" => array_slice($conflicts, 0, 50),
+                "conflict_total" => $count,
+            ]);
+            exit;
         }
 
         $reason = substr($reason, 0, 500);
@@ -139,37 +176,22 @@ try {
         $settings->execute();
         $settings->close();
 
-        $deleteRules = $conn->prepare("DELETE FROM office_availability_rules WHERE office_code = ?");
-        $deleteRules->bind_param("s", $officeCode);
-        $deleteRules->execute();
-        $deleteRules->close();
-        if ($normalizedRules) {
-            $insertRule = $conn->prepare(
-                "INSERT INTO office_availability_rules
-                 (office_code, day_of_week, start_time, end_time, is_active)
-                 VALUES (?, ?, ?, ?, 1)"
-            );
-            foreach ($normalizedRules as [$day, $start, $end]) {
-                $insertRule->bind_param("siss", $officeCode, $day, $start, $end);
-                $insertRule->execute();
-            }
-            $insertRule->close();
-        }
+        office_store_week($conn, $officeCode, $week);
 
-        $audit = $conn->prepare(
-            "INSERT INTO audit_logs
-             (actor_user_id, action, entity_type, entity_id, details_json, ip_address)
-             VALUES (?, 'office.availability_updated', 'office', ?, ?, ?)"
-        );
-        if ($audit) {
-            $details = json_encode(["accepting_visitors" => (bool) $accepting, "weekly_rule_count" => count($normalizedRules), "slot_duration_minutes" => $slotDuration, "capacity" => $maximum]);
-            $ipAddress = substr((string) ($_SERVER["REMOTE_ADDR"] ?? ""), 0, 45);
-            $audit->bind_param("isss", $actorId, $officeCode, $details, $ipAddress);
-            $audit->execute();
-            $audit->close();
-        }
+        office_availability_audit($conn, $actorId, "office.availability_updated", "office", $officeCode, [
+            "accepting_visitors" => (bool) $accepting,
+            "open_days" => count($week),
+            "weekly_rule_count" => array_sum(array_map(fn(array $day): int => count($day["windows"]), $week)),
+            "break_count" => array_sum(array_map(fn(array $day): int => count($day["breaks"]), $week)),
+            "slot_duration_minutes" => $slotDuration,
+            "capacity" => $maximum,
+            "booked_visits_outside" => count($conflicts),
+        ]);
         $conn->commit();
-        $message = "Availability settings saved";
+        $message = $conflicts
+            ? "Availability saved. " . (count($conflicts) === 1 ? "1 booked visit is" : count($conflicts) . " booked visits are")
+                . " outside the new schedule: open it from Appointments to suggest another time."
+            : "Availability settings saved";
     } elseif ($action === "add_exception") {
         $startsRaw = trim((string) ($input["starts_at"] ?? ""));
         $endsRaw = trim((string) ($input["ends_at"] ?? ""));
@@ -239,6 +261,67 @@ try {
             $audit->close();
         }
         $message = "Availability exception removed";
+    } elseif ($action === "pause_now") {
+        // An unplanned break: no new bookings or walk-ins from now until the chosen time,
+        // saved as an "Office unavailable" change so every check already respects it.
+        $now = new DateTimeImmutable("now");
+        $length = (string) ($input["length"] ?? "");
+        if ($length === "end_of_day") {
+            $today = office_windows_by_day(office_load_rule_rows($conn, $officeCode))[(int) $now->format("N")] ?? [];
+            $closing = $today ? new DateTimeImmutable(office_time_on($now, $today[count($today) - 1][1])) : null;
+            $ends = $closing !== null && $closing > $now ? $closing : $now->setTime(23, 59, 59);
+        } else {
+            $minutes = (int) $length;
+            if ($minutes < 5 || $minutes > 720) {
+                throw new RuntimeException("Choose how long to pause visits");
+            }
+            $ends = $now->modify("+{$minutes} minutes");
+        }
+        $reason = mb_substr(trim((string) ($input["reason"] ?? "")), 0, 120);
+        if ($reason === "") {
+            $reason = "Office briefly unavailable";
+        }
+        $startsSql = $now->format("Y-m-d H:i:s");
+        $endsSql = $ends->format("Y-m-d H:i:s");
+        $stmt = $conn->prepare(
+            "INSERT INTO office_availability_exceptions
+             (office_code, starts_at, ends_at, is_available, capacity_override, reason, created_by_user_id)
+             VALUES (?, ?, ?, 0, NULL, ?, ?)"
+        );
+        $stmt->bind_param("ssssi", $officeCode, $startsSql, $endsSql, $reason, $actorId);
+        $stmt->execute();
+        $pauseId = (int) $conn->insert_id;
+        $stmt->close();
+        office_availability_audit($conn, $actorId, "office.visits_paused", "office_availability_exception", (string) $pauseId, [
+            "office_code" => $officeCode,
+            "until" => $endsSql,
+            "reason" => $reason,
+        ]);
+        $message = "Visits paused until " . $ends->format("g:i A") . ".";
+        $booked = office_visits_between($conn, $officeCode, $now, $ends);
+        if ($booked) {
+            $message .= " Already booked in that time: " . implode(", ", array_map(
+                fn(array $visit): string => date("g:i A", strtotime($visit["starts_at"])) . " " . $visit["visitor"],
+                array_slice($booked, 0, 3)
+            )) . (count($booked) > 3 ? " and " . (count($booked) - 3) . " more" : "") . ".";
+        }
+    } elseif ($action === "resume_now") {
+        $exceptionId = (int) ($input["exception_id"] ?? 0);
+        $stmt = $conn->prepare(
+            "UPDATE office_availability_exceptions SET ends_at = NOW()
+             WHERE id = ? AND office_code = ? AND is_available = 0 AND starts_at <= NOW() AND ends_at > NOW()"
+        );
+        $stmt->bind_param("is", $exceptionId, $officeCode);
+        $stmt->execute();
+        $ended = $stmt->affected_rows === 1;
+        $stmt->close();
+        if (!$ended) {
+            throw new RuntimeException("That pause has already ended");
+        }
+        office_availability_audit($conn, $actorId, "office.visits_resumed", "office_availability_exception", (string) $exceptionId, [
+            "office_code" => $officeCode,
+        ]);
+        $message = "Visits resumed";
     } else {
         throw new RuntimeException("Unknown availability action");
     }

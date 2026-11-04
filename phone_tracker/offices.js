@@ -23,6 +23,14 @@
         recentPageSize: 10,
         requestQuery: "",
         availabilityLoaded: false,
+        // The weekly hours being edited: {day, enabled, start, end, breaks: [{key, start, end, label}]}.
+        week: [],
+        weekDirty: false,
+        breakSeq: 0,
+        // The day "What visitors can book" shows, 1 = Monday; today to start with.
+        previewDay: ((new Date().getDay() + 6) % 7) + 1,
+        status: null,
+        statusTimer: null,
         toastTimer: null,
     };
 
@@ -479,7 +487,11 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
         if (view === "availability" && !state.availabilityLoaded) {
             loadAvailability();
+        } else if (view === "availability") {
+            refreshStatus();
         }
+        // The "Open now / On lunch break" chip stays current while Availability is open.
+        setStatusRefresh(view === "availability");
     }
 
     function detailPair(label, value, full) {
@@ -647,81 +659,697 @@
         });
     }
 
-    function defaultScheduleRules() {
-        return dayNames.map(function (_, index) {
-            return { day_of_week: index + 1, enabled: index < 5, start_time: "08:00", end_time: "17:00" };
-        });
+    // ---------- Weekly visitor hours, with breaks ----------
+    // A day is its visitor hours with its breaks cut out. The server saves the result as
+    // bookable windows (office_availability_service.php), so visitors are never offered a
+    // time inside a break. These helpers mirror the server's rules for live feedback.
+
+    const LUNCH = { start: "12:00", end: "13:00", label: "Lunch break" };
+    const MAX_BREAKS = 4;
+
+    function minutesOf(value) {
+        const match = /^(\d{1,2}):(\d{2})/.exec(String(value || ""));
+        if (!match) {
+            return null;
+        }
+        const hours = Number(match[1]);
+        const minutes = Number(match[2]);
+        return hours <= 23 && minutes <= 59 ? hours * 60 + minutes : null;
     }
 
-    function renderWeeklySchedule(rules) {
-        const wrap = byId("officeWeeklySchedule");
-        wrap.replaceChildren();
-        const normalized = defaultScheduleRules();
-        if (rules && rules.length) {
-            normalized.forEach(function (day) { day.enabled = false; });
+    function timeValue(minutes) {
+        return String(Math.floor(minutes / 60)).padStart(2, "0") + ":" + String(minutes % 60).padStart(2, "0");
+    }
+
+    function clockText(minutes) {
+        const hours = Math.floor(minutes / 60) % 24;
+        return (hours % 12 || 12) + ":" + String(minutes % 60).padStart(2, "0") + " " + (hours < 12 ? "AM" : "PM");
+    }
+
+    function serverClock(value) {
+        const date = parseServerDate(value);
+        return date ? clockText(date.getHours() * 60 + date.getMinutes()) : "";
+    }
+
+    /** "at 8:00 AM" today, "tomorrow at 8:00 AM", or "Mon at 8:00 AM". */
+    function whenText(value) {
+        const date = parseServerDate(value);
+        if (!date) {
+            return "";
+        }
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const day = new Date(date.getTime());
+        day.setHours(0, 0, 0, 0);
+        const days = Math.round((day.getTime() - today.getTime()) / 86400000);
+        const time = clockText(date.getHours() * 60 + date.getMinutes());
+        if (days <= 0) {
+            return "at " + time;
+        }
+        if (days === 1) {
+            return "tomorrow at " + time;
+        }
+        const options = days < 7 ? { weekday: "short" } : { month: "short", day: "numeric" };
+        return new Intl.DateTimeFormat("en-PH", options).format(date) + " at " + time;
+    }
+
+    function newBreak(start, end, label) {
+        state.breakSeq += 1;
+        return {
+            key: "b" + state.breakSeq,
+            start: String(start || "").slice(0, 5),
+            end: String(end || "").slice(0, 5),
+            label: label == null ? "" : String(label),
+        };
+    }
+
+    function weekFromPayload(data) {
+        const rules = data.rules || [];
+        let week;
+        if (Array.isArray(data.week) && data.week.length === 7) {
+            week = data.week.map(function (day) {
+                return {
+                    day: Number(day.day_of_week),
+                    enabled: Boolean(day.enabled),
+                    start: String(day.start_time || "08:00").slice(0, 5),
+                    end: String(day.end_time || "17:00").slice(0, 5),
+                    breaks: (day.breaks || []).map(function (item) {
+                        return newBreak(item.start_time, item.end_time, item.label);
+                    }),
+                };
+            });
+        } else {
+            // A server without breaks: one window per open day.
+            week = dayNames.map(function (_, index) {
+                return { day: index + 1, enabled: false, start: "08:00", end: "17:00", breaks: [] };
+            });
             rules.forEach(function (rule) {
-                const day = normalized[Number(rule.day_of_week) - 1];
+                const day = week[Number(rule.day_of_week) - 1];
                 if (day && Number(rule.is_active) === 1) {
                     day.enabled = true;
-                    day.start_time = String(rule.start_time || "08:00").slice(0, 5);
-                    day.end_time = String(rule.end_time || "17:00").slice(0, 5);
+                    day.start = String(rule.start_time || "08:00").slice(0, 5);
+                    day.end = String(rule.end_time || "17:00").slice(0, 5);
                 }
             });
         }
-        normalized.forEach(function (day) {
-            const row = document.createElement("div");
-            row.className = "office-schedule-row";
-            row.dataset.day = String(day.day_of_week);
-            const toggleLabel = document.createElement("label");
-            toggleLabel.className = "office-day-toggle";
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.className = "office-day-enabled";
-            checkbox.checked = day.enabled;
-            const dayName = document.createElement("strong");
-            dayName.textContent = dayNames[day.day_of_week - 1];
-            toggleLabel.append(checkbox, dayName);
-            const start = document.createElement("input");
-            start.type = "time";
-            start.className = "office-day-start";
-            start.value = day.start_time;
-            start.disabled = !day.enabled;
-            const separator = document.createElement("span");
-            separator.textContent = "to";
-            const end = document.createElement("input");
-            end.type = "time";
-            end.className = "office-day-end";
-            end.value = day.end_time;
-            end.disabled = !day.enabled;
-            const stateText = document.createElement("span");
-            stateText.className = "office-day-state";
-            stateText.textContent = day.enabled ? "Open" : "Closed";
-            checkbox.addEventListener("change", function () {
-                start.disabled = !checkbox.checked;
-                end.disabled = !checkbox.checked;
-                stateText.textContent = checkbox.checked ? "Open" : "Closed";
-                row.classList.toggle("is-closed", !checkbox.checked);
-            });
-            row.classList.toggle("is-closed", !day.enabled);
-            row.append(toggleLabel, start, separator, end, stateText);
-            wrap.appendChild(row);
+        if (rules.length === 0) {
+            // Nothing saved yet: suggest Monday to Friday, 8:00 to 5:00.
+            week.forEach(function (day) { day.enabled = day.day <= 5; });
+        }
+        return week;
+    }
+
+    function slotLength() {
+        return Math.max(15, Number(byId("officeSlotDuration").value) || 30);
+    }
+
+    /** The day's breaks in minutes, in time order. A time that can't be read stays null. */
+    function breakSpans(day) {
+        return day.breaks.map(function (item) {
+            return { key: item.key, label: item.label.trim() || "Break", start: minutesOf(item.start), end: minutesOf(item.end) };
+        }).sort(function (left, right) {
+            return (left.start === null ? 1e9 : left.start) - (right.start === null ? 1e9 : right.start);
         });
     }
 
-    function renderAvailability(data) {
-        const settings = data.settings || {};
-        const accepting = Number(settings.accepting_visitors) === 1;
-        byId("officeAcceptingVisitors").checked = accepting;
-        byId("officeClosureFields").hidden = accepting;
-        byId("officeUnavailableReason").value = settings.unavailable_reason || "";
-        byId("officeAvailableAgain").value = settings.available_again_at ? String(settings.available_again_at).replace(" ", "T").slice(0, 16) : "";
-        byId("officeSlotDuration").value = String(settings.slot_duration_minutes || 30);
-        byId("officeSlotCapacity").value = String(settings.maximum_visitors_per_slot || 1);
+    /** What is wrong with a day, in the server's words, or "" when it can be saved. */
+    function dayProblem(day) {
+        if (!day.enabled) {
+            return "";
+        }
+        const open = minutesOf(day.start);
+        const close = minutesOf(day.end);
+        if (open === null || close === null || open >= close) {
+            return "The closing time must be after the opening time.";
+        }
+        if (day.breaks.length > MAX_BREAKS) {
+            return "A day can have at most " + MAX_BREAKS + " breaks.";
+        }
+        const spans = breakSpans(day);
+        for (let index = 0; index < spans.length; index += 1) {
+            const span = spans[index];
+            if (span.start === null || span.end === null || span.start >= span.end) {
+                return span.label + " needs an end time after its start time.";
+            }
+            if (span.start < open || span.end > close) {
+                return span.label + " (" + clockText(span.start) + " – " + clockText(span.end)
+                    + ") must be within the visitor hours (" + clockText(open) + " – " + clockText(close) + ").";
+            }
+            if (index > 0 && span.start < spans[index - 1].end) {
+                return spans[index - 1].label + " and " + span.label + " overlap.";
+            }
+        }
+        if (dayWindows(day).length === 0) {
+            return "The breaks take up all of the visitor hours. Close the day instead.";
+        }
+        return "";
+    }
+
+    /** The day's bookable windows: its hours with the breaks cut out. */
+    function dayWindows(day) {
+        const open = minutesOf(day.start);
+        const close = minutesOf(day.end);
+        if (open === null || close === null || open >= close) {
+            return [];
+        }
+        const windows = [];
+        let cursor = open;
+        breakSpans(day).forEach(function (span) {
+            if (span.start === null || span.end === null || span.start >= span.end) {
+                return;
+            }
+            if (span.start > cursor) {
+                windows.push([cursor, Math.min(span.start, close)]);
+            }
+            cursor = Math.max(cursor, span.end);
+        });
+        if (close > cursor) {
+            windows.push([cursor, close]);
+        }
+        return windows.filter(function (window) { return window[1] > window[0]; });
+    }
+
+    /** Where every slot visitors can book on the day starts, as the visitor app lists them. */
+    function daySlots(day, length) {
+        const slots = [];
+        dayWindows(day).forEach(function (window) {
+            for (let start = window[0]; start + length <= window[1]; start += length) {
+                slots.push(start);
+            }
+        });
+        return slots;
+    }
+
+    /** Time at the end of a window too short for one more slot: "30 min before Lunch break". */
+    function dayLeftovers(day, length) {
+        const spans = breakSpans(day);
+        return dayWindows(day).map(function (window) {
+            const rest = (window[1] - window[0]) % length;
+            const next = spans.find(function (span) { return span.start === window[1]; });
+            return rest > 0 ? rest + " min before " + (next ? next.label : "closing") : "";
+        }).filter(Boolean);
+    }
+
+    /** The hours every day's timeline shows: the earliest opening to the latest closing. */
+    function timelineRange() {
+        let first = null;
+        let last = null;
+        state.week.forEach(function (day) {
+            const open = minutesOf(day.start);
+            const close = minutesOf(day.end);
+            if (!day.enabled || open === null || close === null || open >= close) {
+                return;
+            }
+            first = first === null ? open : Math.min(first, open);
+            last = last === null ? close : Math.max(last, close);
+        });
+        if (first === null) {
+            return { start: 7 * 60, end: 18 * 60 };
+        }
+        const start = Math.floor(first / 60) * 60;
+        return { start: start, end: Math.min(24 * 60, Math.max(start + 4 * 60, Math.ceil(last / 60) * 60)) };
+    }
+
+    function percent(minutes, range) {
+        return ((minutes - range.start) / (range.end - range.start) * 100).toFixed(3) + "%";
+    }
+
+    function scaleElement(range) {
+        const scale = document.createElement("div");
+        scale.className = "office-timeline-scale";
+        scale.setAttribute("aria-hidden", "true");
+        const step = range.end - range.start > 12 * 60 ? 120 : 60;
+        for (let minute = range.start; minute <= range.end; minute += step) {
+            const mark = document.createElement("span");
+            const hour = Math.floor(minute / 60) % 24;
+            mark.style.left = percent(minute, range);
+            mark.textContent = (hour % 12 || 12) + (hour < 12 ? " AM" : " PM");
+            scale.appendChild(mark);
+        }
+        return scale;
+    }
+
+    function renderTimeline(container, day, range, slots) {
+        container.replaceChildren();
+        const parts = [];
+        function segment(className, start, end, title) {
+            const piece = document.createElement("span");
+            piece.className = "office-timeline-segment " + className;
+            piece.style.left = percent(start, range);
+            piece.style.width = ((end - start) / (range.end - range.start) * 100).toFixed(3) + "%";
+            piece.title = title;
+            container.appendChild(piece);
+            parts.push({ at: start, text: title });
+        }
+        dayWindows(day).forEach(function (window) {
+            segment("is-open", window[0], window[1], "Visitors " + clockText(window[0]) + " – " + clockText(window[1]));
+        });
+        breakSpans(day).forEach(function (span) {
+            if (span.start !== null && span.end !== null && span.start < span.end) {
+                segment("is-break", span.start, span.end, span.label + " " + clockText(span.start) + " – " + clockText(span.end));
+            }
+        });
+        (slots || []).forEach(function (start) {
+            const tick = document.createElement("span");
+            tick.className = "office-timeline-tick";
+            tick.style.left = percent(start, range);
+            container.appendChild(tick);
+        });
+        parts.sort(function (left, right) { return left.at - right.at; });
+        container.setAttribute("role", "img");
+        container.setAttribute("aria-label", dayNames[day.day - 1] + ": " + (parts.length
+            ? parts.map(function (part) { return part.text; }).join(", ")
+            : "no visitor hours"));
+    }
+
+    function makeInput(type, className, value, label) {
+        const input = document.createElement("input");
+        input.type = type;
+        input.className = className;
+        input.value = value;
+        input.setAttribute("aria-label", label);
+        return input;
+    }
+
+    function makeButton(className, text, action, label) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = className;
+        button.textContent = text;
+        button.dataset.action = action;
+        if (label) {
+            button.setAttribute("aria-label", label);
+        }
+        return button;
+    }
+
+    function makeText(tag, className, text) {
+        const element = document.createElement(tag);
+        element.className = className;
+        if (text) {
+            element.textContent = text;
+        }
+        return element;
+    }
+
+    function breakRow(day, item) {
+        const dayName = dayNames[day.day - 1];
+        const what = item.label.trim() || "break";
+        const row = makeText("div", "office-break-row");
+        row.dataset.breakKey = item.key;
+        const label = makeInput("text", "office-break-label", item.label, dayName + " break name");
+        label.dataset.field = "label";
+        label.placeholder = "Break name";
+        label.maxLength = 60;
+        label.setAttribute("list", "officeBreakNames");
+        const start = makeInput("time", "office-break-start", item.start, dayName + " " + what + " starts");
+        start.dataset.field = "start";
+        const end = makeInput("time", "office-break-end", item.end, dayName + " " + what + " ends");
+        end.dataset.field = "end";
+        row.append(
+            label,
+            start,
+            makeText("span", "office-day-to", "to"),
+            end,
+            makeButton("office-break-remove", "Remove", "remove-break", "Remove " + what + " on " + dayName)
+        );
+        return row;
+    }
+
+    function dayRow(day, range) {
+        const dayName = dayNames[day.day - 1];
+        const row = makeText("div", "office-schedule-row");
+        row.dataset.day = String(day.day);
+        row.classList.toggle("is-closed", !day.enabled);
+
+        const main = makeText("div", "office-day-main");
+        const toggle = makeText("label", "office-day-toggle");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.className = "office-day-enabled";
+        checkbox.dataset.field = "enabled";
+        checkbox.checked = day.enabled;
+        toggle.append(checkbox, makeText("strong", "", dayName));
+        const start = makeInput("time", "office-day-start", day.start, dayName + " opens");
+        start.dataset.field = "start";
+        start.disabled = !day.enabled;
+        const end = makeInput("time", "office-day-end", day.end, dayName + " closes");
+        end.dataset.field = "end";
+        end.disabled = !day.enabled;
+        main.append(toggle, start, makeText("span", "office-day-to", "to"), end,
+            makeText("span", "office-day-summary"), makeText("span", "office-day-state"));
+        row.appendChild(main);
+
+        if (day.enabled) {
+            // In time order whenever the day is drawn (not while a time is being typed).
+            day.breaks.sort(function (left, right) {
+                const leftStart = minutesOf(left.start);
+                const rightStart = minutesOf(right.start);
+                return (leftStart === null ? 1e9 : leftStart) - (rightStart === null ? 1e9 : rightStart);
+            });
+            const breaks = makeText("div", "office-day-breaks");
+            day.breaks.forEach(function (item) { breaks.appendChild(breakRow(day, item)); });
+            const tools = makeText("div", "office-day-tools");
+            const add = makeButton("office-link-button", "+ Add break", "add-break", "Add a break on " + dayName);
+            add.disabled = day.breaks.length >= MAX_BREAKS;
+            tools.append(add, makeButton("office-link-button", "Copy to other open days", "copy-day",
+                "Copy " + dayName + "'s hours and breaks to the other open days"));
+            const error = makeText("p", "office-day-error");
+            error.setAttribute("role", "alert");
+            row.append(breaks, tools, makeText("div", "office-day-timeline"), makeText("p", "office-day-note"), error);
+        }
+        refreshRow(row, day, range);
+        return row;
+    }
+
+    /** Updates what a day row shows about its hours: slots, timeline, notes, problems. */
+    function refreshRow(row, day, range) {
+        row.querySelector(".office-day-state").textContent = day.enabled ? "Open" : "Closed";
+        const summary = row.querySelector(".office-day-summary");
+        if (!day.enabled) {
+            summary.textContent = "";
+            return;
+        }
+        const problem = dayProblem(day);
+        const error = row.querySelector(".office-day-error");
+        error.textContent = problem;
+        error.hidden = !problem;
+        row.classList.toggle("has-problem", Boolean(problem));
+        const length = slotLength();
+        const slots = problem ? [] : daySlots(day, length);
+        summary.textContent = problem ? "" : (slots.length === 1 ? "1 slot" : slots.length + " slots");
+        renderTimeline(row.querySelector(".office-day-timeline"), day, range, slots);
+        const leftovers = problem ? [] : dayLeftovers(day, length);
+        const note = row.querySelector(".office-day-note");
+        note.textContent = leftovers.length ? "Too short for a " + length + "-min slot: " + leftovers.join(", ") + "." : "";
+        note.hidden = leftovers.length === 0;
+    }
+
+    function renderWeek() {
+        const range = timelineRange();
+        const wrap = byId("officeWeeklySchedule");
+        wrap.replaceChildren(scaleElement(range));
+        state.week.forEach(function (day) { wrap.appendChild(dayRow(day, range)); });
+        renderPreview();
+    }
+
+    /** After an edit: every row's slots and timeline (the shared hour scale may change too). */
+    function refreshWeek() {
+        const range = timelineRange();
+        const wrap = byId("officeWeeklySchedule");
+        const scale = wrap.querySelector(".office-timeline-scale");
+        if (scale) {
+            scale.replaceWith(scaleElement(range));
+        }
+        wrap.querySelectorAll(".office-schedule-row").forEach(function (row) {
+            refreshRow(row, state.week[Number(row.dataset.day) - 1], range);
+        });
+        renderPreview();
+    }
+
+    /** Rebuilds one day after its breaks or open/closed state changed, keeping keyboard focus. */
+    function replaceRow(row, day, focusSelector) {
+        const fresh = dayRow(day, timelineRange());
+        row.replaceWith(fresh);
+        const target = focusSelector ? fresh.querySelector(focusSelector) : null;
+        if (target) {
+            target.focus();
+        }
+        refreshWeek();
+    }
+
+    function renderPreview() {
+        const days = byId("officePreviewDays");
+        days.replaceChildren();
+        state.week.forEach(function (day) {
+            const button = makeText("button", "office-preview-day" + (day.enabled ? "" : " is-closed"), dayNames[day.day - 1].slice(0, 3));
+            button.type = "button";
+            button.dataset.previewDay = String(day.day);
+            button.title = dayNames[day.day - 1] + (day.enabled ? "" : " (closed)");
+            button.setAttribute("aria-pressed", String(day.day === state.previewDay));
+            days.appendChild(button);
+        });
+        const day = state.week[state.previewDay - 1];
+        const dayName = dayNames[day.day - 1];
+        const list = byId("officeSlotPreview");
+        list.replaceChildren();
+        const summary = byId("officeSlotPreviewSummary");
+        if (!day.enabled) {
+            summary.textContent = dayName + " is closed, so visitors can't book it.";
+            return;
+        }
+        const problem = dayProblem(day);
+        if (problem) {
+            summary.textContent = "Fix " + dayName + " above to see its times.";
+            return;
+        }
+        const length = slotLength();
+        const capacity = Math.max(1, Number(byId("officeSlotCapacity").value) || 1);
+        const slots = daySlots(day, length);
+        summary.textContent = dayName + ": " + (slots.length === 1 ? "1 time" : slots.length + " times") + " of " + length
+            + " min, up to " + capacity + (capacity === 1 ? " visitor" : " visitors") + " each. Visitors don't see times that are full or covered by a temporary change.";
+        const items = slots.map(function (start) { return { at: start }; });
+        breakSpans(day).forEach(function (span) { items.push({ at: span.start, span: span }); });
+        items.sort(function (left, right) { return left.at - right.at || (left.span ? -1 : 1); });
+        items.forEach(function (item) {
+            list.appendChild(item.span
+                ? makeText("span", "office-preview-break", item.span.label + " · " + clockText(item.span.start) + " – " + clockText(item.span.end))
+                : makeText("span", "office-preview-slot", clockText(item.at)));
+        });
+        if (!slots.length) {
+            list.appendChild(makeText("span", "office-preview-empty", "No part of the day is long enough for a " + length + "-min slot."));
+        }
+    }
+
+    function markDirty() {
+        state.weekDirty = true;
+        byId("officeUnsavedNote").hidden = false;
+        // A refused save's message is out of date once something changes; rows show their own.
+        showError("officeAvailabilityError", "");
+    }
+
+    function markClean() {
+        state.weekDirty = false;
+        byId("officeUnsavedNote").hidden = true;
+    }
+
+    /** A break that fits the day: lunch at 12:00 if free, else the first free half hour. */
+    function suggestBreak(day) {
+        if (day.breaks.length >= MAX_BREAKS) {
+            return null;
+        }
+        const candidates = [[LUNCH.start, LUNCH.end, LUNCH.label]];
+        const open = minutesOf(day.start);
+        const close = minutesOf(day.end);
+        if (open !== null && close !== null) {
+            for (let start = Math.ceil(open / 30) * 30; start + 30 <= close; start += 30) {
+                candidates.push([timeValue(start), timeValue(start + 30), ""]);
+            }
+        }
+        for (let index = 0; index < candidates.length; index += 1) {
+            const item = newBreak(candidates[index][0], candidates[index][1], candidates[index][2]);
+            if (dayProblem(Object.assign({}, day, { breaks: day.breaks.concat([item]) })) === "") {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    function copyDay(source) {
+        const targets = state.week.filter(function (day) { return day.enabled && day.day !== source.day; });
+        const sourceName = dayNames[source.day - 1];
+        if (!targets.length) {
+            toast("Turn on the other days first: " + sourceName + " is copied to open days only.", "error");
+            return;
+        }
+        targets.forEach(function (day) {
+            day.start = source.start;
+            day.end = source.end;
+            day.breaks = source.breaks.map(function (item) { return newBreak(item.start, item.end, item.label); });
+        });
+        markDirty();
+        renderWeek();
+        toast("Copied " + sourceName + "'s hours and breaks to " + targets.length + (targets.length === 1 ? " day" : " days") + ". Save to apply.");
+    }
+
+    function addLunchEverywhere() {
+        let added = 0;
+        let already = 0;
+        const skipped = [];
+        state.week.forEach(function (day) {
+            if (!day.enabled) {
+                return;
+            }
+            if (day.breaks.some(function (item) { return item.start === LUNCH.start && item.end === LUNCH.end; })) {
+                already += 1;
+                return;
+            }
+            const item = newBreak(LUNCH.start, LUNCH.end, LUNCH.label);
+            if (day.breaks.length < MAX_BREAKS && dayProblem(Object.assign({}, day, { breaks: day.breaks.concat([item]) })) === "") {
+                day.breaks.push(item);
+                added += 1;
+            } else {
+                skipped.push(dayNames[day.day - 1]);
+            }
+        });
+        if (added) {
+            markDirty();
+            renderWeek();
+        }
+        const notAdded = skipped.length ? " " + skipped.join(", ") + (skipped.length === 1 ? " was" : " were") + " skipped: the time overlaps a break or is outside the hours." : "";
+        if (added) {
+            toast("Added a 12–1 PM lunch break to " + added + (added === 1 ? " day" : " days") + ". Save to apply." + notAdded);
+        } else if (already && !skipped.length) {
+            toast("Every open day already has a 12–1 PM lunch break.");
+        } else {
+            toast("No open day had room for a 12–1 PM lunch break." + notAdded, "error");
+        }
+    }
+
+    function dayOf(element) {
+        const row = element.closest(".office-schedule-row");
+        return row ? { row: row, day: state.week[Number(row.dataset.day) - 1] } : null;
+    }
+
+    function onWeekEdit(event) {
+        const field = event.target.dataset.field;
+        const found = field ? dayOf(event.target) : null;
+        if (!found) {
+            return;
+        }
+        if (field === "enabled") {
+            if (event.type === "change") {
+                found.day.enabled = event.target.checked;
+                markDirty();
+                replaceRow(found.row, found.day, ".office-day-enabled");
+            }
+            return;
+        }
+        const breakElement = event.target.closest(".office-break-row");
+        if (breakElement) {
+            const item = found.day.breaks.find(function (entry) { return entry.key === breakElement.dataset.breakKey; });
+            if (!item) {
+                return;
+            }
+            item[field] = event.target.value;
+        } else {
+            found.day[field] = event.target.value;
+        }
+        markDirty();
+        refreshWeek();
+    }
+
+    function onWeekClick(event) {
+        const button = event.target.closest("button[data-action]");
+        const found = button ? dayOf(button) : null;
+        if (!found) {
+            return;
+        }
+        if (button.dataset.action === "add-break") {
+            const item = suggestBreak(found.day);
+            if (!item) {
+                toast("There's no free time left on " + dayNames[found.day.day - 1] + " for another break.", "error");
+                return;
+            }
+            found.day.breaks.push(item);
+            markDirty();
+            replaceRow(found.row, found.day, '[data-break-key="' + item.key + '"] .office-break-label');
+        } else if (button.dataset.action === "remove-break") {
+            const key = button.closest(".office-break-row").dataset.breakKey;
+            found.day.breaks = found.day.breaks.filter(function (item) { return item.key !== key; });
+            markDirty();
+            replaceRow(found.row, found.day, '[data-action="add-break"]');
+        } else if (button.dataset.action === "copy-day") {
+            copyDay(found.day);
+        }
+    }
+
+    // ---------- Live status and unplanned breaks ----------
+
+    function renderStatus(status) {
+        state.status = status || null;
+        const info = status || { state: "open", label: "Open" };
+        let text = "Open now";
+        let tone = "is-open";
+        if (info.state === "open") {
+            if (info.label && info.label !== "Open") {
+                text = info.label + (info.until ? " · until " + serverClock(info.until) : "");
+            } else if (info.until && info.next === "Closing") {
+                text = "Open now · closes at " + serverClock(info.until);
+            } else if (info.until && info.next) {
+                text = "Open now · " + info.next + " at " + serverClock(info.until);
+            } else if (info.until) {
+                text = "Open now · until " + serverClock(info.until);
+            }
+        } else if (info.state === "break") {
+            tone = "is-break";
+            text = (info.label === "Break" ? "On a break" : info.label) + (info.until ? " · back " + whenText(info.until) : "");
+        } else if (info.state === "closed") {
+            tone = "is-off";
+            text = "Closed now" + (info.until ? " · opens " + whenText(info.until) : "");
+        } else if (info.state === "paused") {
+            tone = "is-paused";
+            text = "Paused · " + info.label + (info.until ? " · until " + serverClock(info.until) : "");
+        } else if (info.state === "not_accepting") {
+            tone = "is-closed";
+            text = "Not accepting visitors";
+        }
         const chip = byId("officeAvailabilityChip");
-        chip.textContent = accepting ? "Accepting visitors" : "Not accepting visitors";
-        chip.classList.toggle("is-closed", !accepting);
-        renderWeeklySchedule(data.rules || []);
+        chip.textContent = text;
+        chip.className = "office-availability-chip " + tone;
+        const pause = byId("officePauseBtn");
+        pause.hidden = info.state === "not_accepting";
+        pause.dataset.mode = info.state === "paused" && info.pause_id ? "resume" : "pause";
+        pause.textContent = pause.dataset.mode === "resume" ? "Resume now" : "Pause visits";
+    }
+
+    async function refreshStatus() {
+        if (document.hidden) {
+            return;
+        }
+        try {
+            const data = await fetchJson("office_availability.php?status=1");
+            if (data && data.success) {
+                renderStatus(data.status);
+            }
+        } catch (error) {
+            // Keep showing the last status; the next refresh tries again.
+        }
+    }
+
+    function setStatusRefresh(active) {
+        if (state.statusTimer) {
+            window.clearInterval(state.statusTimer);
+            state.statusTimer = null;
+        }
+        if (active) {
+            state.statusTimer = window.setInterval(refreshStatus, 60000);
+        }
+    }
+
+    /**
+     * Shows what the server sent. With [keepEdits], unsaved changes to the weekly hours stay
+     * on screen (after a pause, or a temporary change was added) and only the rest updates.
+     */
+    function renderAvailability(data, keepEdits) {
+        const settings = data.settings || {};
+        if (!(keepEdits && state.weekDirty)) {
+            const accepting = Number(settings.accepting_visitors) === 1;
+            byId("officeAcceptingVisitors").checked = accepting;
+            byId("officeClosureFields").hidden = accepting;
+            byId("officeUnavailableReason").value = settings.unavailable_reason || "";
+            byId("officeAvailableAgain").value = settings.available_again_at ? String(settings.available_again_at).replace(" ", "T").slice(0, 16) : "";
+            byId("officeSlotDuration").value = String(settings.slot_duration_minutes || 30);
+            byId("officeSlotCapacity").value = String(settings.maximum_visitors_per_slot || 1);
+            state.week = weekFromPayload(data);
+            renderWeek();
+            markClean();
+        }
         renderExceptions(data.exceptions || []);
+        renderStatus(data.status || {
+            state: Number(settings.accepting_visitors) === 1 ? "open" : "not_accepting",
+            label: "Open",
+        });
     }
 
     function renderExceptions(exceptions) {
@@ -765,17 +1393,46 @@
         }
     }
 
-    async function saveAvailability(event) {
-        event.preventDefault();
-        showError("officeAvailabilityError", "");
-        const schedules = Array.from(document.querySelectorAll(".office-schedule-row")).map(function (row) {
-            return {
-                day_of_week: Number(row.dataset.day),
-                enabled: row.querySelector(".office-day-enabled").checked,
-                start_time: row.querySelector(".office-day-start").value,
-                end_time: row.querySelector(".office-day-end").value,
-            };
+    function showConflicts(data) {
+        const list = byId("officeConflictList");
+        list.replaceChildren();
+        (data.conflicts || []).forEach(function (conflict) {
+            const item = makeText("li", "office-conflict-item");
+            const copy = document.createElement("div");
+            copy.append(
+                makeText("strong", "", formatDateTime(conflict.starts_at)),
+                makeText("span", "", [conflict.visitor, conflict.code, statusMeta(conflict.status).label].filter(Boolean).join(" · ")),
+                makeText("small", "", conflict.reason)
+            );
+            const open = makeText("button", "office-secondary-button", "Open");
+            open.type = "button";
+            open.dataset.appointmentId = String(conflict.id);
+            open.setAttribute("aria-label", "Open " + conflict.visitor + "'s visit on " + formatDateTime(conflict.starts_at));
+            item.append(copy, open);
+            list.appendChild(item);
         });
+        const more = Number(data.conflict_total || 0) - (data.conflicts || []).length;
+        if (more > 0) {
+            list.appendChild(makeText("li", "office-conflict-more", "…and " + more + " more."));
+        }
+        setText("officeConflictTitle", data.message || "Booked visits fall outside the new schedule");
+        byId("officeConflictDialog").showModal();
+    }
+
+    async function saveAvailability(event, confirmConflicts) {
+        if (event) {
+            event.preventDefault();
+        }
+        showError("officeAvailabilityError", "");
+        const broken = state.week.find(function (day) { return dayProblem(day) !== ""; });
+        if (broken) {
+            showError("officeAvailabilityError", dayNames[broken.day - 1] + ": " + dayProblem(broken));
+            const row = document.querySelector('.office-schedule-row[data-day="' + broken.day + '"]');
+            if (row) {
+                row.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+            return;
+        }
         const button = byId("saveOfficeAvailabilityBtn");
         button.disabled = true;
         try {
@@ -786,11 +1443,27 @@
                 maximum_visitors_per_slot: Number(byId("officeSlotCapacity").value),
                 unavailable_reason: byId("officeUnavailableReason").value.trim(),
                 available_again_at: byId("officeAvailableAgain").value,
-                schedules: schedules,
+                schedules: state.week.map(function (day) {
+                    return {
+                        day_of_week: day.day,
+                        enabled: day.enabled,
+                        start_time: day.start,
+                        end_time: day.end,
+                        breaks: day.breaks.map(function (item) {
+                            return { start_time: item.start, end_time: item.end, label: item.label.trim() };
+                        }),
+                    };
+                }),
+                confirm_conflicts: Boolean(confirmConflicts),
             });
+            if (data && data.code === "schedule_conflicts") {
+                showConflicts(data);
+                return;
+            }
             if (!data || !data.success) {
                 throw new Error((data && data.message) || "Could not save availability.");
             }
+            markClean();
             renderAvailability(data);
             toast(data.message || "Availability saved.");
         } catch (error) {
@@ -913,8 +1586,97 @@
 
     byId("officeAcceptingVisitors").addEventListener("change", function (event) {
         byId("officeClosureFields").hidden = event.target.checked;
+        markDirty();
     });
-    byId("officeAvailabilityForm").addEventListener("submit", saveAvailability);
+    byId("officeAvailabilityForm").addEventListener("submit", function (event) { saveAvailability(event, false); });
+    byId("officeWeeklySchedule").addEventListener("input", onWeekEdit);
+    byId("officeWeeklySchedule").addEventListener("change", onWeekEdit);
+    byId("officeWeeklySchedule").addEventListener("click", onWeekClick);
+    byId("officeAddLunchBtn").addEventListener("click", addLunchEverywhere);
+    byId("officePreviewDays").addEventListener("click", function (event) {
+        const button = event.target.closest("[data-preview-day]");
+        if (button) {
+            state.previewDay = Number(button.dataset.previewDay);
+            renderPreview();
+        }
+    });
+    byId("officeSlotDuration").addEventListener("change", function () { markDirty(); refreshWeek(); });
+    byId("officeSlotCapacity").addEventListener("input", function () { markDirty(); renderPreview(); });
+    byId("officeUnavailableReason").addEventListener("input", markDirty);
+    byId("officeAvailableAgain").addEventListener("change", markDirty);
+    window.addEventListener("beforeunload", function (event) {
+        if (state.weekDirty) {
+            event.preventDefault();
+            event.returnValue = "";
+        }
+    });
+
+    byId("officeConflictList").addEventListener("click", function (event) {
+        const button = event.target.closest("button[data-appointment-id]");
+        if (button) {
+            byId("officeConflictDialog").close();
+            openAppointment(Number(button.dataset.appointmentId));
+        }
+    });
+    byId("closeOfficeConflictBtn").addEventListener("click", function () { byId("officeConflictDialog").close(); });
+    byId("cancelOfficeConflictBtn").addEventListener("click", function () { byId("officeConflictDialog").close(); });
+    byId("confirmOfficeConflictBtn").addEventListener("click", function () {
+        byId("officeConflictDialog").close();
+        saveAvailability(null, true);
+    });
+
+    byId("officePauseBtn").addEventListener("click", async function () {
+        const button = byId("officePauseBtn");
+        if (button.dataset.mode !== "resume") {
+            byId("officePauseForm").reset();
+            showError("officePauseError", "");
+            byId("officePauseDialog").showModal();
+            return;
+        }
+        if (!window.confirm("Resume visits now? Visitors can book and walk in again.")) {
+            return;
+        }
+        button.disabled = true;
+        try {
+            const data = await postJson("office_availability.php", { action: "resume_now", exception_id: state.status ? state.status.pause_id : 0 });
+            if (!data || !data.success) {
+                throw new Error((data && data.message) || "Could not resume visits.");
+            }
+            renderAvailability(data, true);
+            toast(data.message || "Visits resumed.");
+        } catch (error) {
+            toast(error.message || "Could not reach the server.", "error");
+            refreshStatus();
+        } finally {
+            button.disabled = false;
+        }
+    });
+    byId("closeOfficePauseBtn").addEventListener("click", function () { byId("officePauseDialog").close(); });
+    byId("cancelOfficePauseBtn").addEventListener("click", function () { byId("officePauseDialog").close(); });
+    byId("officePauseForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        showError("officePauseError", "");
+        const button = byId("confirmOfficePauseBtn");
+        const length = byId("officePauseForm").querySelector('input[name="officePauseLength"]:checked');
+        button.disabled = true;
+        try {
+            const data = await postJson("office_availability.php", {
+                action: "pause_now",
+                length: length ? length.value : "30",
+                reason: byId("officePauseReason").value.trim(),
+            });
+            if (!data || !data.success) {
+                throw new Error((data && data.message) || "Could not pause visits.");
+            }
+            renderAvailability(data, true);
+            byId("officePauseDialog").close();
+            toast(data.message || "Visits paused.");
+        } catch (error) {
+            showError("officePauseError", error.message || "Could not reach the server.");
+        } finally {
+            button.disabled = false;
+        }
+    });
     byId("addOfficeExceptionBtn").addEventListener("click", function () {
         byId("officeExceptionForm").reset();
         setFutureMinimums();
@@ -950,7 +1712,7 @@
             if (!data || !data.success) {
                 throw new Error((data && data.message) || "Could not add the schedule change.");
             }
-            renderAvailability(data);
+            renderAvailability(data, true);
             byId("officeExceptionDialog").close();
             toast(data.message || "Schedule change added.");
         } catch (error) {
@@ -967,7 +1729,7 @@
         button.disabled = true;
         const data = await postJson("office_availability.php", { action: "delete_exception", exception_id: Number(button.dataset.exceptionId) });
         if (data && data.success) {
-            renderAvailability(data);
+            renderAvailability(data, true);
             toast(data.message || "Schedule change removed.");
         } else {
             toast((data && data.message) || "Could not remove the schedule change.", "error");

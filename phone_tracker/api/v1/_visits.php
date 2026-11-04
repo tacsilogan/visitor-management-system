@@ -262,6 +262,15 @@ function mobile_prepare_walk_in_stops(mysqli $conn, array &$stops, DateTime $now
                 . ($reason !== "" ? $reason : "This office is not accepting visitors right now")
             );
         }
+        $blocked = office_walk_in_block_reason(
+            $conn,
+            $stop["office_code"],
+            appointment_office_label($stop["office_code"]),
+            DateTimeImmutable::createFromMutable($now)
+        );
+        if ($blocked !== null) {
+            throw new DomainException($blocked);
+        }
         $stop["start"] = clone $now;
         $stop["end"] = (clone $now)->modify("+60 minutes");
     }

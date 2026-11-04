@@ -58,6 +58,9 @@ jobs:
           echo "::error title=Server check failed::The server did not answer its health check within 3 minutes. See the Startup log step."
           exit 1
 
+      - name: Weekly break rules
+        run: docker exec web php /var/www/html/phone_tracker/tools/office_breaks_test.php
+
       # Each failed check is written as an error note, which shows on the pull request
       # without opening the log.
       - name: Pages, privacy rules, uploads, and sign-in

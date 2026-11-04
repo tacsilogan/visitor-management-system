@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISATU Office Personnel Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261006-4">
+    <link rel="stylesheet" href="style.css?v=20261103-1">
 </head>
 <body class="admin-page office-page">
     <header class="admin-topbar">
@@ -152,7 +152,10 @@
             <section class="admin-view" id="officeAvailabilityView" data-office-panel="availability" hidden>
                 <header class="office-view-heading">
                     <div><p class="admin-eyebrow">Appointment Controls</p><h1>Availability</h1><p>Publish when your office can receive visitors so they only request workable schedules.</p></div>
-                    <span class="office-availability-chip" id="officeAvailabilityChip">Loading…</span>
+                    <div class="office-status-group">
+                        <span class="office-availability-chip" id="officeAvailabilityChip" role="status">Loading…</span>
+                        <button class="office-secondary-button" id="officePauseBtn" type="button" hidden>Pause visits</button>
+                    </div>
                 </header>
 
                 <form id="officeAvailabilityForm">
@@ -169,15 +172,35 @@
 
                     <section class="office-settings-card">
                         <header class="office-settings-heading">
-                            <div><h2>Weekly visitor hours</h2><p>Requests outside these hours are blocked automatically.</p></div>
+                            <div><h2>Weekly visitor hours</h2><p>Set when visitors may come each day, with breaks such as lunch. Requests outside these hours or during a break are blocked automatically.</p></div>
                             <div class="office-compact-fields">
                                 <label><span>Slot length</span><select id="officeSlotDuration"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="90">90 min</option><option value="120">120 min</option></select></label>
                                 <label><span>Visitors per slot</span><input id="officeSlotCapacity" type="number" min="1" max="50" value="1"></label>
                             </div>
                         </header>
+                        <div class="office-schedule-toolbar">
+                            <button class="office-secondary-button" id="officeAddLunchBtn" type="button">Add a 12–1 PM lunch break to every open day</button>
+                            <p>Breaks repeat every week. For a one-time change, such as a holiday, use Temporary schedule changes below.</p>
+                        </div>
                         <div class="office-weekly-schedule" id="officeWeeklySchedule"></div>
+                        <datalist id="officeBreakNames">
+                            <option value="Lunch break"></option>
+                            <option value="Flag ceremony"></option>
+                            <option value="Staff meeting"></option>
+                            <option value="Snack break"></option>
+                        </datalist>
+                        <section class="office-slot-preview" aria-labelledby="officeSlotPreviewTitle">
+                            <header>
+                                <div><h3 id="officeSlotPreviewTitle">What visitors can book</h3><p id="officeSlotPreviewSummary"></p></div>
+                                <div class="office-preview-days" id="officePreviewDays" role="group" aria-label="Day to preview"></div>
+                            </header>
+                            <div class="office-preview-slots" id="officeSlotPreview"></div>
+                        </section>
                         <p class="admin-message is-error" id="officeAvailabilityError" role="alert" hidden></p>
-                        <div class="office-settings-actions"><button class="admin-primary-button" id="saveOfficeAvailabilityBtn" type="submit">Save availability</button></div>
+                        <div class="office-settings-actions">
+                            <span class="office-unsaved-note" id="officeUnsavedNote" hidden>Unsaved changes</span>
+                            <button class="admin-primary-button" id="saveOfficeAvailabilityBtn" type="submit">Save availability</button>
+                        </div>
                     </section>
                 </form>
 
@@ -252,6 +275,33 @@
         </form>
     </dialog>
 
+    <dialog class="admin-dialog office-small-dialog" id="officeConflictDialog" aria-labelledby="officeConflictTitle">
+        <form id="officeConflictForm">
+            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Before you save</p><h2 id="officeConflictTitle">Booked visits fall outside the new schedule</h2></div><button class="admin-dialog-close" id="closeOfficeConflictBtn" type="button" aria-label="Close">×</button></header>
+            <p class="office-dialog-help">These visits stay booked if you save. Open one to suggest another time, or go back and change the schedule.</p>
+            <ul class="office-conflict-list" id="officeConflictList"></ul>
+            <div class="admin-dialog-actions"><button class="admin-cancel-button" id="cancelOfficeConflictBtn" type="button">Go back</button><button class="admin-primary-button" id="confirmOfficeConflictBtn" type="button">Save anyway</button></div>
+        </form>
+    </dialog>
+
+    <dialog class="admin-dialog office-small-dialog" id="officePauseDialog" aria-labelledby="officePauseTitle">
+        <form id="officePauseForm">
+            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Unplanned break</p><h2 id="officePauseTitle">Pause new visits</h2></div><button class="admin-dialog-close" id="closeOfficePauseBtn" type="button" aria-label="Close">×</button></header>
+            <p class="office-dialog-help">Until the pause ends, visitors can't book your office or create walk-in passes for it. Visits already booked stay booked.</p>
+            <fieldset class="office-pause-lengths">
+                <legend>Pause for</legend>
+                <label><input type="radio" name="officePauseLength" value="15"><span>15 min</span></label>
+                <label><input type="radio" name="officePauseLength" value="30" checked><span>30 min</span></label>
+                <label><input type="radio" name="officePauseLength" value="60"><span>1 hour</span></label>
+                <label><input type="radio" name="officePauseLength" value="120"><span>2 hours</span></label>
+                <label><input type="radio" name="officePauseLength" value="end_of_day"><span>Rest of today</span></label>
+            </fieldset>
+            <label class="office-field office-full-field"><span>Reason shown to visitors (optional)</span><input id="officePauseReason" maxlength="120" placeholder="Example: Staff stepped out for a meeting"></label>
+            <p class="admin-message is-error" id="officePauseError" role="alert" hidden></p>
+            <div class="admin-dialog-actions"><button class="admin-cancel-button" id="cancelOfficePauseBtn" type="button">Cancel</button><button class="admin-primary-button" id="confirmOfficePauseBtn" type="submit">Pause visits</button></div>
+        </form>
+    </dialog>
+
     <dialog class="admin-dialog office-small-dialog office-profile-dialog" id="officeProfileDialog">
         <form id="officeProfileForm" enctype="multipart/form-data">
             <header class="admin-dialog-header">
@@ -285,6 +335,6 @@
     <script src="auth.js?v=20261004-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261004-1"></script>
-    <script src="offices.js?v=20261005-1"></script>
+    <script src="offices.js?v=20261103-1"></script>
 </body>
 </html>

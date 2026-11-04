@@ -115,7 +115,9 @@ function department_usage(mysqli $conn, string $code): array
         "personnel" => $count("SELECT COUNT(*) FROM app_users WHERE role = 'offices' AND office_code = ?"),
         "active_personnel" => $count("SELECT COUNT(*) FROM app_users WHERE role = 'offices' AND office_code = ? AND is_active = 1"),
         "schedule_entries" => $count("SELECT COUNT(*) FROM office_availability_rules WHERE office_code = ?")
-            + $count("SELECT COUNT(*) FROM office_availability_exceptions WHERE office_code = ?"),
+            + $count("SELECT COUNT(*) FROM office_availability_exceptions WHERE office_code = ?")
+            + (department_table_exists($conn, "office_availability_breaks")
+                ? $count("SELECT COUNT(*) FROM office_availability_breaks WHERE office_code = ?") : 0),
     ];
 }
 
