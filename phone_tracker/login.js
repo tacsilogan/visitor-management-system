@@ -1,7 +1,7 @@
 /*
  * Sign-in page: username/password, then any extra steps the server asks for
  * (two-step code, new password, two-step setup, backup codes), with a
- * 5-second "authenticating" sequence: four checks of 1.1 s and a 0.6 s finish.
+ * 3-second logo animation while it signs in (see "The sign-in animation").
  * The server decides everything; this file only presents each step.
  */
 (function () {
@@ -19,20 +19,26 @@
         offices: "the Office dashboard",
         visitor: "your visitor page",
     };
-    const STEP_MS = 1100;
-    const SUCCESS_MS = 600;
+    // The animation's timeline, in ms from the moment the user signs in.
+    const CHECK_BEATS = [560, 1000, 1440, 1880];
+    const LEAVE_AT = 2600;
+    const OPEN_MS = 420;
+    const LEAVE_MS = 400;
+    const CLOSE_MS = 340;
+    // A slow server shortens what comes after it, but never below these.
+    const MIN_CHECK_MS = 240;
+    const MIN_WELCOME_MS = 420;
+    // How long a refusal, or word of a further step, shows before the animation closes.
     const FAIL_MS = 950;
-    const RING_LENGTH = 2 * Math.PI * 52;
+    const STEP_NOTICE_MS = 700;
 
     const UI = window.PhoneTrackerAuthUI;
     const Auth = window.PhoneTrackerAuth;
     const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     const $ = function (id) { return document.getElementById(id); };
-    const card = $("authCard");
     const panels = {
         signin: $("signInPanel"),
-        progress: $("progressPanel"),
         twoFactor: $("twoFactorPanel"),
         password: $("passwordPanel"),
         setup: $("setupPanel"),
@@ -88,6 +94,7 @@
     }
 
     function showPanel(name) {
+        progress.close();
         Object.keys(panels).forEach(function (key) {
             panels[key].hidden = key !== name;
         });
@@ -101,78 +108,237 @@
         }
     }
 
-    /* ---------- The authenticating sequence ---------- */
+    /* ---------- The sign-in animation ----------
+       The seal in the header comes to the middle of the screen wound back: its gear four teeth
+       behind and its centre closed, while the same gear grows behind it to fill the window.
+       Each check that passes turns the gear one tooth and opens the centre further. The fourth
+       brings the gear upright, the torch lights, and everything returns to the header. */
 
     const progress = (function () {
-        const ring = $("progressRing");
-        const bar = $("progressBar");
-        const title = $("progressTitle");
-        const subtitle = $("progressSubtitle");
-        const live = $("progressLive");
-        const steps = Array.from(document.querySelectorAll("#progressSteps li"));
-        const defaults = steps.map(function (step) { return step.querySelector("small").textContent; });
-        bar.style.strokeDasharray = String(RING_LENGTH);
+        const CHECKS = ["Checking your password", "Checking account security", "Securing your session"];
+        const TEETH = 16;
+        const WOUND_BACK_DEGREES = -90;
+        const FLIGHT_FRAMES = 30;
 
-        function setRing(fraction, duration) {
-            bar.style.transitionDuration = (reduceMotion ? 0 : duration) + "ms";
-            bar.style.strokeDashoffset = String(RING_LENGTH * (1 - fraction));
+        const splash = $("splash");
+        const seal = $("splashSeal");
+        const field = $("splashField");
+        const gear = $("splashGear");
+        const title = $("splashTitle");
+        const note = $("splashNote");
+        const live = $("splashLive");
+        const mark = document.querySelector(".auth-brand-mark");
+        const outside = [document.querySelector(".auth-header"), document.querySelector(".auth-main")];
+
+        let isOpen = false;
+        let startedAt = 0;
+        let clicks = 4;
+        let flights = [];
+        let hideTimer = 0;
+        let wordsFrom = 0;
+
+        // The seal's own teeth, measured from the logo, a little inside it so they stay hidden
+        // behind the seal when both are back in the header. Percent of the seal's box.
+        const ROOT = 44.1;
+        const TIP = 48.8;
+        const outline = [];
+        for (let tooth = 0; tooth < TEETH; tooth += 1) {
+            [[-8.5, ROOT], [-4.2, TIP], [4.2, TIP], [8.5, ROOT]].forEach(function (corner) {
+                const angle = (tooth * 360 / TEETH + corner[0]) * Math.PI / 180;
+                outline.push((50 + corner[1] * Math.cos(angle)).toFixed(2) + "% " + (50 + corner[1] * Math.sin(angle)).toFixed(2) + "%");
+            });
+        }
+        field.style.clipPath = "polygon(" + outline.join(",") + ")";
+
+        function easeOut(t) {
+            return 1 - Math.pow(1 - t, 3);
         }
 
-        function setStep(index, state, detail) {
-            const step = steps[index];
-            step.dataset.state = state;
-            if (detail) {
-                step.querySelector("small").textContent = detail;
+        function easeInOut(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
+
+        /* Moves the seal between the middle of the screen and the header, with the field gear
+           in step. 0 is the middle of the screen; 1 is the header. Its curve meets the header
+           from below, so it doesn't cross the name beside the logo. */
+        function fly(from, to, duration, ease) {
+            flights.forEach(function (flight) { flight.cancel(); });
+            const box = seal.getBoundingClientRect();
+            const home = mark.getBoundingClientRect();
+            const sealX = box.left + box.width / 2;
+            const sealY = box.top + box.height / 2;
+            const x = home.left + home.width / 2 - sealX;
+            const y = home.top + home.height / 2 - sealY;
+            const shrink = home.height / box.height;
+            const farthest = Math.hypot(Math.max(sealX, window.innerWidth - sealX), Math.max(sealY, window.innerHeight - sealY));
+            const cover = 1.04 * farthest / (box.width * ROOT / 100);
+            const sealFrames = [];
+            const fieldFrames = [];
+            for (let frame = 0; frame <= FLIGHT_FRAMES; frame += 1) {
+                const p = from + (to - from) * ease(frame / FLIGHT_FRAMES);
+                sealFrames.push({ transform: "translate(" + (x * Math.pow(p, 0.8)) + "px," + (y * Math.pow(p, 1.3)) + "px) scale(" + Math.pow(shrink, p) + ")" });
+                fieldFrames.push({ transform: "rotate(" + (WOUND_BACK_DEGREES * (1 - p)) + "deg) scale(" + Math.pow(cover, 1 - p) + ")" });
+            }
+            const timing = { duration: duration, fill: "both" };
+            flights = [seal.animate(sealFrames, timing), field.animate(fieldFrames, timing)];
+        }
+
+        function setClicks(count) {
+            clicks = count;
+            seal.dataset.clicks = String(count);
+        }
+
+        function say(text) {
+            title.textContent = text;
+            live.textContent = text;
+            if (!reduceMotion) {
+                title.animate(
+                    [{ opacity: 0, transform: "translateY(6px)" }, { opacity: 1, transform: "none" }],
+                    { duration: 220, delay: Math.max(0, wordsFrom - performance.now()), easing: "cubic-bezier(0.2, 0.7, 0.2, 1)", fill: "backwards" }
+                );
+            }
+        }
+
+        function fadeWords() {
+            if (!reduceMotion) {
+                [title, note].forEach(function (element) {
+                    element.animate({ opacity: [1, 0] }, { duration: 140, fill: "forwards" });
+                });
+            }
+        }
+
+        function clearWords() {
+            [title, note].forEach(function (element) {
+                element.getAnimations().forEach(function (animation) { animation.cancel(); });
+                element.textContent = "";
+            });
+        }
+
+        // Waits for a moment on the timeline; if that has passed, for the shortest pause allowed.
+        function until(moment, shortest) {
+            return wait(Math.max(startedAt + moment - performance.now(), shortest));
+        }
+
+        /* Back to the header, whole again. The caller decides what is under the splash. */
+        function goHome(duration, ease) {
+            if (reduceMotion) {
+                splash.animate({ opacity: [1, 0] }, { duration: 160, fill: "forwards" });
+            } else {
+                splash.classList.remove("is-covered");
+                fly(0, 1, duration, ease);
             }
         }
 
         return {
-            reset: function (completed) {
-                ring.dataset.state = "working";
-                steps.forEach(function (step, index) {
-                    step.dataset.state = index < (completed || 0) ? "done" : "pending";
-                    step.querySelector("small").textContent = defaults[index];
-                });
-                setRing((completed || 0) / steps.length, 0);
-                title.textContent = "Authenticating";
-                subtitle.textContent = "Hold on while we secure your sign-in";
+            /* Starts the animation with this many checks already passed. */
+            open: function (passed) {
+                window.clearTimeout(hideTimer);
+                isOpen = true;
+                startedAt = performance.now() - (passed ? CHECK_BEATS[passed - 1] : 0);
+                wordsFrom = performance.now() + OPEN_MS / 2;
+                clearWords();
+                seal.dataset.state = "working";
+                splash.getAnimations().forEach(function (animation) { animation.cancel(); });
+                splash.classList.remove("is-covered");
+                splash.hidden = false;
+                document.body.classList.add("auth-splash-open");
+                outside.forEach(function (element) { element.inert = true; });
+
+                // It leaves the header looking like the logo there, then winds back on the way.
+                seal.classList.add("is-jumping");
+                seal.classList.remove("is-lighting");
+                seal.dataset.lit = "true";
+                setClicks(4);
+                void seal.offsetWidth;
+                seal.classList.remove("is-jumping");
+                seal.classList.add("is-winding");
+                setClicks(passed || 0);
+
+                if (reduceMotion) {
+                    splash.classList.add("is-covered");
+                    splash.animate({ opacity: [0, 1] }, { duration: 160 });
+                    seal.dataset.lit = "false";
+                } else {
+                    document.body.classList.add("auth-seal-away");
+                    fly(1, 0, OPEN_MS, easeOut);
+                    window.setTimeout(function () {
+                        if (isOpen) {
+                            splash.classList.add("is-covered");
+                            seal.classList.remove("is-winding");
+                            seal.dataset.lit = "false";
+                        }
+                    }, OPEN_MS);
+                }
+                say(CHECKS[passed || 0]);
+                title.focus({ preventScroll: true });
             },
-            run: function (index, detail) {
-                setStep(index, "active", detail);
-                live.textContent = steps[index].querySelector("strong").textContent;
-                setRing((index + 1) / steps.length, STEP_MS);
-                return wait(STEP_MS);
+            /* Announces a check; resolves when its beat comes. */
+            run: function (index, text) {
+                const words = text || CHECKS[index];
+                if (title.textContent !== words) {
+                    say(words);
+                }
+                return until(CHECK_BEATS[index], MIN_CHECK_MS);
             },
-            done: function (index, detail) {
-                setStep(index, "done", detail);
+            /* A check passed: the gear turns one tooth. */
+            pass: function () {
+                setClicks(clicks + 1);
             },
-            info: function (index, detail) {
-                setStep(index, "info", detail);
-                live.textContent = detail;
+            info: function (text) {
+                say(text);
             },
-            subtitle: function (text) {
-                subtitle.textContent = text;
-            },
-            fail: function (index, kind, heading, detail) {
-                setStep(index, "failed", detail);
-                ring.dataset.state = kind;
-                title.textContent = heading;
-                subtitle.textContent = detail;
-                live.textContent = heading + ". " + detail;
-                card.classList.remove("is-shaking");
-                void card.offsetWidth;
+            note: function (text) {
+                note.textContent = text;
                 if (!reduceMotion) {
-                    card.classList.add("is-shaking");
+                    note.animate({ opacity: [0, 1] }, { duration: 300 });
                 }
             },
-            success: function (heading, detail) {
-                ring.dataset.state = "success";
-                setRing(1, 200);
-                title.textContent = heading;
-                if (detail) {
-                    subtitle.textContent = detail;
+            /* The check is refused: the gear jams and the centre turns red. */
+            fail: function (text) {
+                seal.dataset.state = "failed";
+                say(text);
+                if (!reduceMotion) {
+                    gear.animate(
+                        { rotate: ["0deg", "-5deg", "3.5deg", "-2deg", "1deg", "0deg"] },
+                        { duration: 460, easing: "ease-out" }
+                    );
                 }
-                live.textContent = heading;
+            },
+            /* The torch lights. */
+            success: function (heading) {
+                say(heading);
+                seal.dataset.lit = "true";
+                seal.classList.add("is-lighting");
+            },
+            /* Holds the welcome, then returns to the header. Resolves when it has landed. */
+            leave: function () {
+                return until(LEAVE_AT, MIN_WELCOME_MS).then(function () {
+                    fadeWords();
+                    goHome(LEAVE_MS, easeInOut);
+                    return wait(LEAVE_MS);
+                });
+            },
+            /* Back to the form or a further step, which is already showing underneath. */
+            close: function () {
+                if (!isOpen) {
+                    return;
+                }
+                isOpen = false;
+                document.body.classList.remove("auth-splash-open");
+                outside.forEach(function (element) { element.inert = false; });
+                fadeWords();
+                seal.dataset.state = "working";
+                seal.dataset.lit = "true";
+                seal.classList.add("is-winding");
+                setClicks(4);
+                goHome(CLOSE_MS, easeInOut);
+                hideTimer = window.setTimeout(function () {
+                    splash.hidden = true;
+                    document.body.classList.remove("auth-seal-away");
+                    seal.classList.remove("is-winding");
+                    flights.forEach(function (flight) { flight.cancel(); });
+                    clearWords();
+                }, reduceMotion ? 160 : CLOSE_MS);
             },
         };
     })();
@@ -241,7 +407,6 @@
 
     function returnToSignIn() {
         showPanel("signin");
-        progress.reset(0);
         resetStepPanels();
         passwordInput.value = "";
         window.setTimeout(function () {
@@ -266,8 +431,7 @@
 
         busy = true;
         showNotice("");
-        showPanel("progress");
-        progress.reset(0);
+        progress.open(0);
         const outcome = await Promise.all([api("login.php", { username: username, password: password }), progress.run(0)]);
         await route(outcome[0], "signin");
         busy = false;
@@ -287,9 +451,9 @@
         };
         if (steps[data.status]) {
             if (origin === "signin") {
-                progress.done(0, "Credentials accepted");
-                progress.info(1, steps[data.status][1]);
-                await wait(reduceMotion ? 350 : 850);
+                progress.pass();
+                progress.info(steps[data.status][1]);
+                await wait(STEP_NOTICE_MS);
             }
             openStep(steps[data.status][0], data);
             return undefined;
@@ -307,7 +471,7 @@
             network: "Can't reach the server",
             migration_required: "The database needs an update",
         };
-        progress.fail(0, code === "locked" ? "locked" : "error", code === "locked" ? "Sign-in paused" : "Sign-in failed", short[code] || "Please try again");
+        progress.fail(short[code] || "Sign-in failed");
         await wait(FAIL_MS);
         returnToSignIn();
         if (code === "locked") {
@@ -354,19 +518,13 @@
             await showBackupCodes(data.backup_codes, data.username);
             origin = "step";
         }
-        if (origin !== "signin") {
-            showPanel("progress");
-            progress.reset(1);
+        if (origin === "signin") {
+            progress.pass();
+        } else {
+            progress.open(1);
         }
-        progress.done(0, "Credentials accepted");
 
-        const methodDetail = {
-            "password+authenticator": "Two-step verification passed",
-            "password+backup_code": "Verified with a backup code",
-            "password+trusted_device": "Trusted browser recognized",
-        };
-        await progress.run(1);
-        progress.done(1, methodDetail[data.auth_method] || "No lockouts on this account");
+        const checked = progress.run(1);
         const notes = [];
         if (data.previous_login && data.previous_login.at) {
             notes.push("Last sign-in " + UI.formatDateTime(data.previous_login.at) + (data.previous_login.ip ? " from " + UI.formatIp(data.previous_login.ip) : ""));
@@ -375,15 +533,17 @@
             notes.push(data.backup_codes_remaining + (data.backup_codes_remaining === 1 ? " backup code left" : " backup codes left"));
         }
         if (notes.length) {
-            progress.subtitle(notes.join(" · "));
+            progress.note(notes.join(". ") + ".");
         }
 
+        await checked;
+        progress.pass();
         await progress.run(2);
-        progress.done(2, "Protected session created");
+        progress.pass();
         await progress.run(3, "Opening " + (ROLE_PLACE[data.role] || "your dashboard"));
-        progress.done(3, "Ready");
-        progress.success("Welcome back, " + (data.display_name || data.username), notes.length ? "" : "Signing you in");
-        await wait(SUCCESS_MS);
+        progress.pass();
+        progress.success("Welcome back, " + (data.display_name || data.username));
+        await progress.leave();
         window.location.replace(ROLE_HOME[data.role] || data.redirect || "index.html");
     }
 

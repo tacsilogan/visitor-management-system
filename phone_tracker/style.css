@@ -3024,18 +3024,14 @@ body.auth-page {
 /* Sign-in flow: notices, lockout banner, the authenticating sequence, and the extra steps. */
 .auth-card {
     position: relative;
-}
-
-.auth-card.is-shaking {
-    animation: authShake 0.42s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+    transition: opacity 0.24s ease;
 }
 
 .auth-panel.is-entering {
     animation: authPanelIn 0.32s ease both;
 }
 
-.auth-panel-title:focus,
-.auth-progress-title:focus {
+.auth-panel-title:focus {
     outline: none;
 }
 
@@ -3192,285 +3188,209 @@ body.auth-page {
     color: #087443;
 }
 
-/* The authenticating sequence */
-.auth-progress {
-    padding: 4px 0 2px;
+/* The sign-in animation. Everything is the seal: its gear turns one tooth (22.5 degrees) for each
+   check that passes, and its centre opens further each time. The last check lights the torch. */
+.auth-splash {
+    --splash-field: #1336b8;
+    --click: cubic-bezier(0.5, -0.2, 0.2, 1.2);
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: clamp(18px, 3.4vmin, 30px);
+    padding: 24px;
+    box-sizing: border-box;
+    overflow: hidden;
+    color: #ffffff;
     text-align: center;
 }
 
-.auth-ring {
+.auth-splash[hidden] {
+    display: none;
+}
+
+.auth-splash.is-covered {
+    background: var(--splash-field);
+}
+
+body:not(.auth-splash-open) .auth-splash {
+    pointer-events: none;
+}
+
+.auth-splash-open .auth-card {
+    opacity: 0;
+    transition-duration: 0.14s;
+}
+
+/* The header's logo is the one that flies, so its place stays empty until it lands. */
+.auth-seal-away .auth-brand-mark img {
+    visibility: hidden;
+}
+
+.auth-seal {
+    --seal: clamp(176px, 36vmin, 280px);
+    --turn: 0deg;
+    --aperture: 0.35;
     position: relative;
-    width: 132px;
-    height: 132px;
-    margin: 2px auto 18px;
+    width: var(--seal);
+    height: var(--seal);
 }
 
-.auth-ring::after {
-    position: absolute;
-    inset: 16px;
-    z-index: 0;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(7, 85, 181, 0.14), rgba(7, 85, 181, 0) 70%);
-    content: "";
-    animation: authPulse 1.6s ease-in-out infinite;
-}
+.auth-seal[data-clicks="0"] { --turn: -90deg; --aperture: 0; }
+.auth-seal[data-clicks="1"] { --turn: -67.5deg; --aperture: 0.14; }
+.auth-seal[data-clicks="2"] { --turn: -45deg; --aperture: 0.225; }
+.auth-seal[data-clicks="3"] { --turn: -22.5deg; --aperture: 0.29; }
 
-.auth-ring[data-state="success"]::after {
-    background: radial-gradient(circle, rgba(18, 161, 80, 0.18), rgba(18, 161, 80, 0) 70%);
-    animation: none;
-}
-
-.auth-ring[data-state="error"]::after {
-    background: radial-gradient(circle, rgba(217, 45, 32, 0.14), rgba(217, 45, 32, 0) 70%);
-    animation: none;
-}
-
-.auth-ring[data-state="locked"]::after {
-    background: radial-gradient(circle, rgba(220, 104, 3, 0.16), rgba(220, 104, 3, 0) 70%);
-    animation: none;
-}
-
-.auth-ring-svg {
-    position: relative;
-    z-index: 1;
-    width: 100%;
-    height: 100%;
-    overflow: visible;
-    transform: rotate(-90deg);
-}
-
-.auth-ring-track,
-.auth-ring-bar {
-    fill: none;
-    stroke-width: 8;
-}
-
-.auth-ring-track {
-    stroke: #e6edf6;
-}
-
-.auth-ring-bar {
-    stroke: url(#authRingGradient);
-    stroke-dasharray: 326.73;
-    stroke-dashoffset: 326.73;
-    stroke-linecap: round;
-    transition-property: stroke-dashoffset;
-    transition-timing-function: linear;
-}
-
-.auth-ring[data-state="success"] .auth-ring-bar {
-    stroke: #12a150;
-}
-
-.auth-ring[data-state="error"] .auth-ring-bar {
-    stroke: #d92d20;
-}
-
-.auth-ring[data-state="locked"] .auth-ring-bar {
-    stroke: #dc6803;
-}
-
-.auth-ring-icon {
+/* The same gear, grown to fill the window. Its outline comes from login.js. */
+.auth-seal-field {
     position: absolute;
     inset: 0;
-    z-index: 2;
-    display: grid;
-    place-items: center;
+    background: var(--splash-field);
 }
 
-.auth-ring-icon svg {
-    grid-area: 1 / 1;
-    width: 46px;
-    height: 46px;
-    fill: none;
-    opacity: 0;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 1.8;
-    transform: scale(0.6);
-    transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.34, 1.56, 0.64, 1);
+.auth-splash.is-covered .auth-seal-field {
+    visibility: hidden;
 }
 
-.auth-icon-shield {
-    stroke: #0755b5;
-}
-
-.auth-icon-check {
-    stroke: #12a150;
-    stroke-width: 2.6 !important;
-}
-
-.auth-icon-check path {
-    stroke-dasharray: 24;
-    stroke-dashoffset: 24;
-}
-
-.auth-icon-cross {
-    stroke: #d92d20;
-    stroke-width: 2.4 !important;
-}
-
-.auth-icon-lock {
-    stroke: #dc6803;
-}
-
-.auth-ring[data-state="working"] .auth-icon-shield,
-.auth-ring[data-state="success"] .auth-icon-check,
-.auth-ring[data-state="error"] .auth-icon-cross,
-.auth-ring[data-state="locked"] .auth-icon-lock {
-    opacity: 1;
-    transform: scale(1);
-}
-
-.auth-ring[data-state="working"] .auth-icon-shield {
-    animation: authBreathe 1.6s ease-in-out infinite;
-}
-
-.auth-ring[data-state="success"] .auth-icon-check path {
-    animation: authDraw 0.45s 0.08s ease forwards;
-}
-
-.auth-progress-title {
-    margin: 0;
-    color: #0b2545;
-    font-size: 22px;
-    font-weight: 700;
-}
-
-.auth-progress-subtitle {
-    min-height: 20px;
-    margin: 6px 0 0;
-    color: #667085;
-    font-size: 13.5px;
-    line-height: 1.45;
-}
-
-.auth-steps {
-    display: grid;
-    gap: 4px;
-    margin: 22px 0 0;
-    padding: 0;
-    list-style: none;
-    text-align: left;
-}
-
-.auth-steps li {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    transition: background 0.25s ease, opacity 0.25s ease;
-}
-
-.auth-steps li[data-state="pending"] {
-    opacity: 0.5;
-}
-
-.auth-steps li[data-state="active"],
-.auth-steps li[data-state="info"] {
-    background: #f0f6ff;
-}
-
-.auth-steps li[data-state="failed"] {
-    background: #fef3f2;
-}
-
-.auth-step-copy strong {
-    display: block;
-    color: #1d2939;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.auth-step-copy small {
-    display: block;
-    margin-top: 2px;
-    color: #667085;
-    font-size: 12.5px;
-}
-
-.auth-steps li[data-state="failed"] small {
-    color: #b42318;
-    font-weight: 600;
-}
-
-.auth-steps li[data-state="info"] small {
-    color: #0b4a8b;
-    font-weight: 600;
-}
-
-.auth-step-icon {
-    position: relative;
-    flex: 0 0 22px;
-    width: 22px;
-    height: 22px;
-    margin-top: 1px;
-    box-sizing: border-box;
-    border: 2px solid #c9d3df;
+.auth-seal-plate {
+    position: absolute;
+    inset: 15.6%;
     border-radius: 50%;
-    transition: background 0.2s ease, border-color 0.2s ease;
+    background: #000092;
 }
 
-.auth-steps li[data-state="active"] .auth-step-icon {
-    border-color: #cfe0f6;
-    border-top-color: #0755b5;
-    animation: authSpin 0.8s linear infinite;
-}
-
-.auth-steps li[data-state="done"] .auth-step-icon {
-    border-color: #12a150;
-    background: #12a150;
-}
-
-.auth-steps li[data-state="done"] .auth-step-icon::after {
+/* A refused check opens the centre as far as the first tooth would, onto red in place of the book. */
+.auth-seal-plate::after {
     position: absolute;
-    top: 2.5px;
-    left: 6px;
-    width: 5px;
-    height: 10px;
-    border: solid #ffffff;
-    border-width: 0 2px 2px 0;
+    inset: 29.65%;
+    border-radius: 50%;
+    background: #e2231a;
     content: "";
-    transform: rotate(45deg);
-    animation: authPop 0.3s ease both;
+    transform: scale(0);
+    transition: transform 0.3s var(--click);
 }
 
-.auth-steps li[data-state="info"] .auth-step-icon {
-    display: grid;
-    place-items: center;
-    border-color: #0755b5;
-    background: #0755b5;
+.auth-seal[data-state="failed"] .auth-seal-plate::after {
+    transform: none;
 }
 
-.auth-steps li[data-state="info"] .auth-step-icon::after {
-    color: #ffffff;
-    content: "i";
-    font-size: 12px;
-    font-weight: 800;
-    line-height: 1;
-}
-
-.auth-steps li[data-state="failed"] .auth-step-icon {
-    border-color: #d92d20;
-    background: #d92d20;
-}
-
-.auth-steps li[data-state="failed"] .auth-step-icon::before,
-.auth-steps li[data-state="failed"] .auth-step-icon::after {
+/* White behind the logo: its book pages and the torch's highlights are see-through. */
+.auth-seal-core {
     position: absolute;
-    top: 8px;
-    left: 4px;
-    width: 10px;
-    height: 2px;
-    border-radius: 2px;
+    inset: 0;
     background: #ffffff;
-    content: "";
-    transform: rotate(45deg);
+    clip-path: circle(calc(var(--seal) * var(--aperture)) at 50% 50%);
+    transition: clip-path 0.3s var(--click);
 }
 
-.auth-steps li[data-state="failed"] .auth-step-icon::after {
-    transform: rotate(-45deg);
+/* The logo image is wider than the seal: transparent on both sides, and centred here. */
+.auth-seal-core > img:first-child,
+.auth-seal-gear {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: calc(var(--seal) * 1.776);
+    height: var(--seal);
+    max-width: none;
+    margin-left: calc(var(--seal) * -0.888);
+}
+
+.auth-seal-gear {
+    -webkit-mask-image: radial-gradient(circle closest-side, transparent 68.5%, #000000 68.8%);
+    mask-image: radial-gradient(circle closest-side, transparent 68.5%, #000000 68.8%);
+    transform: rotate(var(--turn));
+    transition: transform 0.3s var(--click);
+}
+
+/* Wind-up and wind-down use one long move in place of a click. */
+.auth-seal.is-winding .auth-seal-core,
+.auth-seal.is-winding .auth-seal-gear {
+    transition-duration: 0.42s;
+    transition-timing-function: cubic-bezier(0.3, 0, 0.1, 1);
+}
+
+.auth-seal.is-jumping .auth-seal-core,
+.auth-seal.is-jumping .auth-seal-gear {
+    transition: none;
+}
+
+/* A slow server: the gear strains at the first tooth. Past the normal first beat only. */
+.auth-seal[data-clicks="0"]:not([data-state="failed"]) .auth-seal-gear {
+    animation: authGearStrain 1.3s ease-in-out 0.72s infinite;
+}
+
+/* The flame's patch of the logo, painted over until the torch lights. */
+.auth-seal-unlit,
+.auth-seal-flame,
+.auth-seal-glow {
+    position: absolute;
+    top: 18.13%;
+    left: 41.2%;
+    width: 16.53%;
+    height: 12.27%;
+}
+
+.auth-seal-unlit {
+    background: #ffcc00;
+}
+
+.auth-seal-flame {
+    max-width: none;
+    transform-origin: 51.6% 97.8%;
+}
+
+.auth-seal[data-lit="false"] .auth-seal-flame {
+    visibility: hidden;
+}
+
+.auth-seal-glow {
+    top: 7.5%;
+    left: 35%;
+    width: 30%;
+    height: 30%;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(255, 246, 196, 0.95), rgba(255, 232, 130, 0.5) 38%, rgba(255, 214, 60, 0.12) 72%, rgba(255, 204, 0, 0));
+    opacity: 0;
+}
+
+.auth-seal.is-lighting .auth-seal-flame {
+    animation: authFlameLight 0.46s 0.12s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.auth-seal.is-lighting .auth-seal-glow {
+    animation: authFlameGlow 0.8s 0.12s ease-out both;
+}
+
+.auth-splash-title {
+    position: relative;
+    z-index: 1;
+    max-width: 26em;
+    min-height: 2.5em;
+    margin: 0;
+    color: #ffffff;
+    font-family: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    font-size: clamp(22px, 3.7vmin, 30px);
+    font-weight: 400;
+    line-height: 1.25;
+    text-wrap: balance;
+}
+
+.auth-splash-title:focus {
+    outline: none;
+}
+
+.auth-splash-note {
+    position: absolute;
+    right: 24px;
+    bottom: max(24px, env(safe-area-inset-bottom));
+    left: 24px;
+    z-index: 1;
+    margin: 0;
+    color: #dbe3ff;
+    font-size: 13px;
+    line-height: 1.5;
 }
 
 /* Extra steps: two-step code, new password, setup, backup codes */
@@ -3925,23 +3845,23 @@ body.auth-page {
     to { transform: rotate(360deg); }
 }
 
-@keyframes authPulse {
-    0%, 100% { opacity: 0.55; transform: scale(0.92); }
-    50% { opacity: 1; transform: scale(1.06); }
+@keyframes authGearStrain {
+    0%, 100% { rotate: 0deg; }
+    50% { rotate: 2.5deg; }
 }
 
-@keyframes authBreathe {
-    0%, 100% { transform: scale(1); }
-    50% { transform: scale(1.07); }
+@keyframes authFlameLight {
+    0% { opacity: 0; transform: scale(0.3, 0); }
+    30% { opacity: 1; transform: scale(0.84, 1.24); }
+    56% { transform: scale(1.07, 0.93); }
+    78% { transform: scale(0.98, 1.04); }
+    100% { transform: none; }
 }
 
-@keyframes authDraw {
-    to { stroke-dashoffset: 0; }
-}
-
-@keyframes authPop {
-    from { opacity: 0; transform: rotate(45deg) scale(0.4); }
-    to { opacity: 1; transform: rotate(45deg) scale(1); }
+@keyframes authFlameGlow {
+    0% { opacity: 0; }
+    26% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
 @keyframes authBlink {
@@ -3958,10 +3878,6 @@ body.auth-page {
         font-size: 21px;
     }
 
-    .auth-steps li {
-        padding: 9px 10px;
-    }
-
     .auth-backup-grid {
         padding: 10px;
     }
@@ -3969,26 +3885,21 @@ body.auth-page {
 
 @media (prefers-reduced-motion: reduce) {
     .auth-panel.is-entering,
-    .auth-card.is-shaking,
     .auth-otp.is-invalid .auth-otp-slots,
-    .auth-ring::after,
-    .auth-ring[data-state="working"] .auth-icon-shield,
-    .auth-steps li[data-state="done"] .auth-step-icon::after {
+    .auth-seal .auth-seal-gear,
+    .auth-seal.is-lighting .auth-seal-flame,
+    .auth-seal.is-lighting .auth-seal-glow {
         animation: none;
     }
 
-    .auth-steps li[data-state="active"] .auth-step-icon {
-        border-color: #0755b5;
-        animation: none;
-    }
-
-    .auth-ring[data-state="success"] .auth-icon-check path {
-        stroke-dashoffset: 0;
-        animation: none;
-    }
-
-    .auth-ring-icon svg {
+    .auth-seal .auth-seal-core,
+    .auth-seal .auth-seal-gear,
+    .auth-seal .auth-seal-plate::after {
         transition: none;
+    }
+
+    .auth-seal .auth-seal-gear {
+        transform: none;
     }
 }
 

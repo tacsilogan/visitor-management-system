@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | ISATU Visitor Management System</title>
-    <link rel="stylesheet" href="style.css?v=20261006-4">
+    <link rel="stylesheet" href="style.css?v=20261105-1">
 </head>
 <body class="auth-page">
     <header class="auth-header">
@@ -65,50 +65,7 @@
                 </p>
             </div>
 
-            <!-- 2. Authenticating animation -->
-            <div class="auth-panel auth-progress" id="progressPanel" hidden>
-                <div class="auth-ring" id="progressRing" data-state="working">
-                    <svg class="auth-ring-svg" viewBox="0 0 120 120" aria-hidden="true">
-                        <defs>
-                            <linearGradient id="authRingGradient" x1="0" y1="0" x2="1" y2="1">
-                                <stop offset="0%" stop-color="#3b8cf5"/>
-                                <stop offset="100%" stop-color="#0548a0"/>
-                            </linearGradient>
-                        </defs>
-                        <circle class="auth-ring-track" cx="60" cy="60" r="52"/>
-                        <circle class="auth-ring-bar" id="progressBar" cx="60" cy="60" r="52"/>
-                    </svg>
-                    <div class="auth-ring-icon" aria-hidden="true">
-                        <svg class="auth-icon-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><circle cx="12" cy="11" r="2"/><path d="M12 13v3"/></svg>
-                        <svg class="auth-icon-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
-                        <svg class="auth-icon-cross" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></svg>
-                        <svg class="auth-icon-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-                    </div>
-                </div>
-                <h2 class="auth-progress-title" id="progressTitle" tabindex="-1">Authenticating</h2>
-                <p class="auth-progress-subtitle" id="progressSubtitle">Hold on while we secure your sign-in</p>
-                <ol class="auth-steps" id="progressSteps">
-                    <li data-state="pending">
-                        <span class="auth-step-icon" aria-hidden="true"></span>
-                        <span class="auth-step-copy"><strong>Verifying your credentials</strong><small>Checking your username and password</small></span>
-                    </li>
-                    <li data-state="pending">
-                        <span class="auth-step-icon" aria-hidden="true"></span>
-                        <span class="auth-step-copy"><strong>Checking account security</strong><small>Lockout status and two-step verification</small></span>
-                    </li>
-                    <li data-state="pending">
-                        <span class="auth-step-icon" aria-hidden="true"></span>
-                        <span class="auth-step-copy"><strong>Securing your session</strong><small>Creating a protected session for this browser</small></span>
-                    </li>
-                    <li data-state="pending">
-                        <span class="auth-step-icon" aria-hidden="true"></span>
-                        <span class="auth-step-copy"><strong>Preparing your dashboard</strong><small id="dashboardStepDetail">Loading your workspace</small></span>
-                    </li>
-                </ol>
-                <p class="sr-only" id="progressLive" role="status" aria-live="polite"></p>
-            </div>
-
-            <!-- 3. Two-step verification -->
+            <!-- 2. Two-step verification -->
             <div class="auth-panel auth-panel-step" id="twoFactorPanel" hidden>
                 <span class="auth-step-badge" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2M9.5 9.5l1.8 1.8 3.2-3.3"/></svg>
@@ -139,7 +96,7 @@
                 </div>
             </div>
 
-            <!-- 4. New password -->
+            <!-- 3. New password -->
             <div class="auth-panel auth-panel-step" id="passwordPanel" hidden>
                 <span class="auth-step-badge" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>
@@ -181,7 +138,7 @@
                 </div>
             </div>
 
-            <!-- 5. Two-step verification setup -->
+            <!-- 4. Two-step verification setup -->
             <div class="auth-panel auth-panel-step" id="setupPanel" hidden>
                 <span class="auth-step-badge" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><path d="M12 9v4M12 16h.01"/></svg>
@@ -221,7 +178,7 @@
                 </div>
             </div>
 
-            <!-- 6. Backup codes -->
+            <!-- 5. Backup codes -->
             <div class="auth-panel auth-panel-step" id="backupPanel" hidden>
                 <span class="auth-step-badge is-success" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
@@ -242,8 +199,26 @@
         </section>
     </main>
 
+    <!-- The sign-in animation: the header's seal, taken apart so each piece can move. -->
+    <div class="auth-splash" id="splash" hidden>
+        <div class="auth-seal" id="splashSeal" data-clicks="4" data-lit="true" aria-hidden="true">
+            <span class="auth-seal-field" id="splashField"></span>
+            <span class="auth-seal-plate"></span>
+            <span class="auth-seal-core">
+                <img src="assets/images/isatu-logo.png" alt="" decoding="sync">
+                <span class="auth-seal-unlit"></span>
+                <span class="auth-seal-glow"></span>
+                <img class="auth-seal-flame" src="assets/images/isatu-seal-flame.png" alt="" decoding="sync">
+            </span>
+            <img class="auth-seal-gear" id="splashGear" src="assets/images/isatu-logo.png" alt="" decoding="sync">
+        </div>
+        <h2 class="auth-splash-title" id="splashTitle" tabindex="-1"></h2>
+        <p class="auth-splash-note" id="splashNote"></p>
+        <p class="sr-only" id="splashLive" role="status" aria-live="polite"></p>
+    </div>
+
     <script src="auth.js?v=20261004-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
-    <script src="login.js?v=20261004-1"></script>
+    <script src="login.js?v=20261105-1"></script>
 </body>
 </html>

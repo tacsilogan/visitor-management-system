@@ -18,9 +18,10 @@ for any remaining steps in this order:
 3. **Two-step setup** (`login_two_factor_setup.php`) if the role requires it and it is
    not set up yet. Ends by showing 10 backup codes once.
 
-Only then does the server create the session. The page shows a 5-second sequence (four
-checks of 1.1 s and a 0.6 s finish) while this happens; a wrong password returns to the
-form after about 2 seconds instead.
+Only then does the server create the session. The page plays a 3-second logo animation
+while this happens ("The sign-in animation" in `login.js`). The four checks end at fixed
+moments counted from the sign-in, so a slow server shortens the later ones and does not
+lengthen the whole. A wrong password returns to the form after about 2 seconds instead.
 
 ## Lockout rules
 
