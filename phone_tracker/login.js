@@ -1,7 +1,7 @@
 /*
  * Sign-in page: username/password, then any extra steps the server asks for
  * (two-step code, new password, two-step setup, backup codes), with a
- * 3-second logo animation while it signs in (see "The sign-in animation").
+ * 4-second logo animation while it signs in (see "The sign-in animation").
  * The server decides everything; this file only presents each step.
  */
 (function () {
@@ -21,13 +21,13 @@
     };
     // The animation's timeline, in ms from the moment the user signs in.
     const CHECK_BEATS = [560, 1000, 1440, 1880];
-    const LEAVE_AT = 2600;
+    const LEAVE_AT = 3600;
     const OPEN_MS = 420;
     const LEAVE_MS = 400;
     const CLOSE_MS = 340;
     // A slow server shortens what comes after it, but never below these.
     const MIN_CHECK_MS = 240;
-    const MIN_WELCOME_MS = 420;
+    const MIN_WELCOME_MS = 1420;
     // How long a refusal, or word of a further step, shows before the animation closes.
     const FAIL_MS = 950;
     const STEP_NOTICE_MS = 700;
