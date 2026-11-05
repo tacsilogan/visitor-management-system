@@ -18,6 +18,7 @@ class GuidanceEngineTest {
         detail = "CCI building, room 201",
         appointmentId = 1,
     )
+    private val mainGate = GuidanceTarget("gate:Main Gate", "Main Gate", TargetKind.GATE, office)
 
     /** A point [north] and [east] meters away from the office. */
     private fun at(north: Double, east: Double = 0.0) = GeoPoint(
@@ -45,40 +46,67 @@ class GuidanceEngineTest {
     }
 
     @Test
-    fun milestonesLeadToAnExactArrival() {
+    fun milestonesLeadToTheBuildingAndThenOnlyTheVisitorDecides() {
         val engine = GuidanceEngine()
         engine.step(fix(-150.0, 0))
         assertTrue(engine.step(fix(-120.0, 10)).prompts.isEmpty())
         assertEquals(listOf("IT Department is 100 meters away, straight ahead."), engine.step(fix(-98.0, 20)).prompts.map { it.text })
         assertTrue("GPS jitter must not repeat a milestone", engine.step(fix(-99.0, 27)).prompts.isEmpty())
         assertEquals(listOf("IT Department is 50 meters away, straight ahead."), engine.step(fix(-49.0, 40)).prompts.map { it.text })
-        assertEquals(listOf("IT Department is just ahead."), engine.step(fix(-24.0, 50)).prompts.map { it.text })
-        assertEquals(listOf("IT Department is 10 meters away, straight ahead."), engine.step(fix(-9.6, 60)).prompts.map { it.text })
 
-        // Inside the reading's own uncertainty but not yet within 3 m: very close, not arrived.
-        val close = engine.step(fix(-4.0, 70))
-        assertEquals(GuidancePhase.VERY_CLOSE, close.snapshot.phase)
-        assertTrue(close.prompts.isEmpty())
-        assertEquals(GuidancePhase.VERY_CLOSE, engine.step(fix(-2.5, 71)).snapshot.phase)
-        val confirming = engine.step(fix(-2.0, 72))
-        assertEquals("two readings within 3 m are not enough", GuidancePhase.VERY_CLOSE, confirming.snapshot.phase)
-        assertTrue("no 'very close' prompt while GPS is confirming the arrival", confirming.prompts.isEmpty())
+        val near = engine.step(fix(-24.0, 50))
+        assertEquals(GuidancePhase.AT_BUILDING, near.snapshot.phase)
+        assertEquals(listOf("IT Department is just ahead. It's at CCI building, room 201."), near.prompts.map { it.text })
+        assertNull(near.arrival)
 
-        val arrival = engine.step(fix(-1.5, 73))
-        assertEquals(GuidancePhase.ARRIVED, arrival.snapshot.phase)
-        assertEquals(ArrivalMethod.GPS, arrival.snapshot.arrivedBy)
-        assertEquals(listOf("You have arrived at IT Department. It's at CCI building, room 201."), arrival.prompts.map { it.text })
-        assertTrue(arrival.prompts.single().urgent)
-        val event = arrival.arrival!!
-        assertEquals(ArrivalMethod.GPS, event.method)
-        assertEquals(1L, event.target.appointmentId)
-        assertEquals(1.5, event.distanceMeters!!, 0.05)
-        assertEquals(5.0, event.accuracyMeters!!, 0.0001)
+        // Standing right on the pin with perfect GPS still only asks: the office may be upstairs.
+        repeat(6) { second ->
+            val onThePin = engine.step(fix(-0.5, 60L + second, accuracy = 3.0))
+            assertEquals(GuidancePhase.AT_BUILDING, onThePin.snapshot.phase)
+            assertTrue("said once", onThePin.prompts.isEmpty())
+            assertNull("GPS never reports an arrival at an office", onThePin.arrival)
+        }
+
+        val tapped = engine.confirmArrival(fix(-0.5, 70), itOffice, 70_000)!!
+        assertEquals(GuidancePhase.ARRIVED, tapped.snapshot.phase)
+        assertEquals(ArrivalMethod.VISITOR, tapped.arrival!!.method)
 
         val drift = engine.step(fix(-80.0, 90))
         assertEquals("indoor drift never restarts directions", GuidancePhase.ARRIVED, drift.snapshot.phase)
         assertTrue(drift.prompts.isEmpty())
         assertNull(drift.arrival)
+    }
+
+    @Test
+    fun anOfficeInABuildingIsReachedAtTheBuilding() {
+        val upstairs = itOffice.copy(
+            place = "CCI Building",
+            startLine = "Heading to IT Department, in the CCI Building, 2nd floor",
+            nearLine = "CCI Building is just ahead. IT Department is on the 2nd floor, Room 201. Take the stairs.",
+        )
+        val engine = GuidanceEngine()
+        assertEquals(
+            listOf("Heading to IT Department, in the CCI Building, 2nd floor. It's 150 meters away, straight ahead."),
+            engine.step(fix(-150.0, 0), target = upstairs).prompts.map { it.text },
+        )
+        assertEquals(listOf("CCI Building is 100 meters away, straight ahead."), engine.step(fix(-98.0, 20), target = upstairs).prompts.map { it.text })
+        assertEquals(
+            listOf("CCI Building is just ahead. IT Department is on the 2nd floor, Room 201. Take the stairs."),
+            engine.step(fix(-20.0, 40), target = upstairs).prompts.map { it.text },
+        )
+    }
+
+    @Test
+    fun theQuestionStaysThroughWeakGpsAtTheDoor() {
+        val engine = GuidanceEngine()
+        assertEquals(GuidancePhase.AT_BUILDING, engine.step(fix(-20.0, 0)).snapshot.phase)
+        // Indoors: readings get rough, then very rough. The visitor is not sent back to the map.
+        assertEquals(GuidancePhase.AT_BUILDING, engine.step(fix(-40.0, 5, accuracy = 35.0)).snapshot.phase)
+        assertEquals(GuidancePhase.AT_BUILDING, engine.step(fix(-90.0, 10, accuracy = 70.0)).snapshot.phase)
+        assertEquals("a rough reading far away proves nothing", GuidancePhase.AT_BUILDING, engine.step(fix(-90.0, 15, accuracy = 30.0)).snapshot.phase)
+        // A clear reading well away means they really walked off: directions come back.
+        assertEquals(GuidancePhase.NAVIGATING, engine.step(fix(-60.0, 20)).snapshot.phase)
+        assertEquals("and the door is announced only once", 0, engine.step(fix(-20.0, 40)).prompts.size)
     }
 
     @Test
@@ -95,49 +123,46 @@ class GuidanceEngineTest {
     }
 
     @Test
-    fun gpsThatCannotConfirmSaysVeryCloseOnce() {
+    fun gpsThatCannotConfirmAGateSaysVeryCloseOnce() {
         val engine = GuidanceEngine()
-        assertTrue(engine.step(fix(-2.0, 0, accuracy = 10.0)).prompts.isEmpty())
-        assertTrue(engine.step(fix(-2.0, 1, accuracy = 10.0)).prompts.isEmpty())
-        val third = engine.step(fix(-2.0, 2, accuracy = 10.0))
+        assertTrue(engine.step(fix(-2.0, 0, accuracy = 10.0), target = mainGate).prompts.isEmpty())
+        assertTrue(engine.step(fix(-2.0, 1, accuracy = 10.0), target = mainGate).prompts.isEmpty())
+        val third = engine.step(fix(-2.0, 2, accuracy = 10.0), target = mainGate)
         assertEquals(GuidancePhase.VERY_CLOSE, third.snapshot.phase)
-        assertEquals(
-            listOf("You're very close to IT Department. It's at CCI building, room 201. Tap I'm here when you reach it."),
-            third.prompts.map { it.text },
-        )
+        assertEquals(listOf("You're very close to Main Gate."), third.prompts.map { it.text })
         assertNull("±10 m can't confirm a 3 m arrival", third.arrival)
-        assertTrue(engine.step(fix(-2.0, 10, accuracy = 10.0)).prompts.isEmpty())
+        assertTrue(engine.step(fix(-2.0, 10, accuracy = 10.0), target = mainGate).prompts.isEmpty())
     }
 
     @Test
-    fun arrivalNeedsThreeReadingsInARow() {
+    fun gateArrivalNeedsThreeReadingsInARow() {
         val engine = GuidanceEngine()
-        engine.step(fix(-2.0, 0))
-        engine.step(fix(-2.0, 1))
-        assertNotEquals(GuidancePhase.ARRIVED, engine.step(fix(-6.0, 2)).snapshot.phase)
-        assertNotEquals(GuidancePhase.ARRIVED, engine.step(fix(-2.0, 3)).snapshot.phase)
-        assertNotEquals(GuidancePhase.ARRIVED, engine.step(fix(-2.0, 4)).snapshot.phase)
-        assertEquals(GuidancePhase.ARRIVED, engine.step(fix(-2.0, 5)).snapshot.phase)
+        engine.step(fix(-2.0, 0), target = mainGate)
+        engine.step(fix(-2.0, 1), target = mainGate)
+        assertNotEquals(GuidancePhase.ARRIVED, engine.step(fix(-6.0, 2), target = mainGate).snapshot.phase)
+        assertNotEquals(GuidancePhase.ARRIVED, engine.step(fix(-2.0, 3), target = mainGate).snapshot.phase)
+        assertNotEquals(GuidancePhase.ARRIVED, engine.step(fix(-2.0, 4), target = mainGate).snapshot.phase)
+        assertEquals(GuidancePhase.ARRIVED, engine.step(fix(-2.0, 5), target = mainGate).snapshot.phase)
     }
 
     @Test
-    fun arrivalIsJudgedFromTheReadingNotTheSteadiedPosition() {
+    fun gateArrivalIsJudgedFromTheReadingNotTheSteadiedPosition() {
         val engine = GuidanceEngine()
         val rule = ArrivalRule(distanceMeters = 3.0, maxAccuracyMeters = 8.0)
         // The steadied position sits on the pin, but GPS itself still reads 9 m away.
         repeat(5) { second ->
             val update = engine.update(
-                fix(-1.0, second.toLong()), 0.0, itOffice, null, DistanceUnit.METERS, rule,
+                fix(-1.0, second.toLong()), 0.0, mainGate, null, DistanceUnit.METERS, rule,
                 reading = fix(-9.0, second.toLong()),
             )
             assertNotEquals(GuidancePhase.ARRIVED, update.snapshot.phase)
             assertNull(update.arrival)
         }
         // GPS itself within 3 m three times in a row: arrived, reported with the reading's own numbers.
-        engine.update(fix(-5.0, 10), 0.0, itOffice, null, DistanceUnit.METERS, rule, reading = fix(-2.0, 10))
-        engine.update(fix(-5.0, 11), 0.0, itOffice, null, DistanceUnit.METERS, rule, reading = fix(-2.0, 11))
+        engine.update(fix(-5.0, 10), 0.0, mainGate, null, DistanceUnit.METERS, rule, reading = fix(-2.0, 10))
+        engine.update(fix(-5.0, 11), 0.0, mainGate, null, DistanceUnit.METERS, rule, reading = fix(-2.0, 11))
         val arrival = engine.update(
-            fix(-5.0, 12), 0.0, itOffice, null, DistanceUnit.METERS, rule,
+            fix(-5.0, 12), 0.0, mainGate, null, DistanceUnit.METERS, rule,
             reading = fix(-2.0, 12, accuracy = 6.0),
         )
         assertEquals(GuidancePhase.ARRIVED, arrival.snapshot.phase)
@@ -146,12 +171,12 @@ class GuidanceEngineTest {
     }
 
     @Test
-    fun aRoughReadingNeverConfirmsAnArrivalWhateverTheSteadiedPositionSays() {
+    fun aRoughReadingNeverConfirmsAGateArrivalWhateverTheSteadiedPositionSays() {
         val engine = GuidanceEngine()
         val rule = ArrivalRule(distanceMeters = 3.0, maxAccuracyMeters = 8.0)
         repeat(6) { second ->
             val update = engine.update(
-                fix(-1.0, second.toLong(), accuracy = 5.0), 0.0, itOffice, null, DistanceUnit.METERS, rule,
+                fix(-1.0, second.toLong(), accuracy = 5.0), 0.0, mainGate, null, DistanceUnit.METERS, rule,
                 reading = fix(-1.0, second.toLong(), accuracy = 12.0),
             )
             assertNotEquals(GuidancePhase.ARRIVED, update.snapshot.phase)
@@ -166,7 +191,7 @@ class GuidanceEngineTest {
         val confirmed = engine.confirmArrival(fix(-40.0, 5), itOffice, 5_000)!!
         assertEquals(GuidancePhase.ARRIVED, confirmed.snapshot.phase)
         assertEquals(ArrivalMethod.VISITOR, confirmed.snapshot.arrivedBy)
-        assertEquals(listOf("Arrival confirmed at IT Department."), confirmed.prompts.map { it.text })
+        assertEquals(listOf("You have arrived at IT Department."), confirmed.prompts.map { it.text })
         assertEquals(ArrivalMethod.VISITOR, confirmed.arrival!!.method)
         assertEquals(40.0, confirmed.arrival!!.distanceMeters!!, 0.1)
 
@@ -258,11 +283,10 @@ class GuidanceEngineTest {
 
     @Test
     fun gateArrivalAsksForTheCheckOutScan() {
-        val gate = GuidanceTarget("gate:Main Gate", "Main Gate", TargetKind.GATE, office)
         val engine = GuidanceEngine()
-        engine.step(fix(-1.0, 0), target = gate)
-        engine.step(fix(-1.0, 1), target = gate)
-        val update = engine.step(fix(-1.0, 2), target = gate)
+        engine.step(fix(-1.0, 0), target = mainGate)
+        engine.step(fix(-1.0, 1), target = mainGate)
+        val update = engine.step(fix(-1.0, 2), target = mainGate)
         assertEquals(GuidancePhase.ARRIVED, update.snapshot.phase)
         assertEquals("You have arrived at Main Gate. Show your pass to the guard to check out.", update.prompts.single().text)
         assertNull("gates are not reported as office arrivals", update.arrival!!.target.appointmentId)

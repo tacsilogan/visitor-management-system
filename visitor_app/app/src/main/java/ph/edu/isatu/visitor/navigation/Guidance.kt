@@ -14,7 +14,7 @@ enum class RelativeSide { AHEAD, SLIGHT_LEFT, SLIGHT_RIGHT, LEFT, RIGHT, BEHIND 
 
 enum class TargetKind { OFFICE, GATE, ENTRY }
 
-/** How an arrival was confirmed: by the phone's GPS, or by the visitor tapping "I'm here". */
+/** How an arrival was confirmed: at a gate by the phone's GPS, or by the visitor tapping "I'm here". */
 enum class ArrivalMethod { GPS, VISITOR }
 
 /**
@@ -34,6 +34,12 @@ data class GuidanceTarget(
     val arrivedBy: ArrivalMethod? = null,
     /** The office code, so the walking path arrives along that office's own routes. */
     val officeCode: String? = null,
+    /** Where GPS leads, as said along the way: the building when the office is inside one. */
+    val place: String = name,
+    /** Said on reaching [place]: the floor, the room and the office's description. */
+    val nearLine: String? = null,
+    /** Shown once arrived: where this is, like "CCI Building, 2nd floor, Room 201". */
+    val whereLine: String = detail,
 )
 
 /** One position reading. [timeMillis] is when the app received it. */
@@ -67,6 +73,8 @@ enum class GuidancePhase {
     NAVIGATING,
     /** The pin is within GPS uncertainty: close, but GPS can't confirm the exact spot. */
     VERY_CLOSE,
+    /** At the door of an office's building. GPS can only ask: the visitor says when they are there. */
+    AT_BUILDING,
     ARRIVED,
     OUTSIDE_CAMPUS,
 }
@@ -123,13 +131,16 @@ data class GuidanceUpdate(
  * Turns position readings into walking directions and spoken prompts toward one pin.
  * It never claims more than GPS knows:
  *
- * - **Arrived** only when GPS places the visitor within the arrival distance (3 m by
+ * - **At an office, the visitor decides.** GPS leads to the pin at the building's door, says
+ *   the building is just ahead, and from then on only asks (`AT_BUILDING`). An office may be
+ *   upstairs, where GPS can't follow, so only the visitor's tap counts as arrived
+ *   (INDOOR_DIRECTIONS.md). Arrival is final for that target, so indoor GPS drift never
+ *   restarts directions during a meeting.
+ * - **At a gate**, arrived when GPS places the visitor within the arrival distance (3 m by
  *   default) of the pin, from a reading accurate to 8 m or better, for three readings in a
  *   row, or when the visitor taps "I'm here". The GPS accuracy circle is never used as an
- *   arrival radius. Arrival is final for that target, so indoor GPS drift never restarts
- *   directions during a meeting.
- * - **Very close** when the pin is inside the reading's own uncertainty: the app says the
- *   office is within about that distance and asks the visitor to look for it.
+ *   arrival radius. **Very close** when the pin is inside the reading's own uncertainty: the
+ *   app says the gate is within about that distance and asks the visitor to look for it.
  * - Distances are spoken only from readings accurate to 20 m: first the distance and side,
  *   then at 200, 100, 50, 25 ("just ahead"), and 10 m. Each is spoken once, never within
  *   6 s of another prompt. Readings worse than 50 m show a weak-signal notice.
@@ -141,7 +152,6 @@ data class GuidanceUpdate(
  *   the path instead of a straight line: distances are walking distances, each turn is
  *   announced ahead ("In 20 meters, turn left") and at the turn ("Turn left now"), and
  *   wandering more than about 20 m off the path or walking the wrong way is pointed out.
- *   Arrival is still judged at the pin itself.
  */
 class GuidanceEngine {
     private var targetKey: String? = null
@@ -150,6 +160,8 @@ class GuidanceEngine {
     private var arrivalStreak = 0
     private var veryCloseStreak = 0
     private var veryCloseAnnounced = false
+    private var atBuilding = false
+    private var atBuildingAnnounced = false
     private var nextMilestone = 0
     private var closestMeters = Double.MAX_VALUE
     private var noPinAnnounced = false
@@ -246,37 +258,57 @@ class GuidanceEngine {
             }
             return result(GuidancePhase.NO_PIN)
         }
+        val toOffice = target.kind == TargetKind.OFFICE
         if (accuracy != null && accuracy > WEAK_SIGNAL_METERS) {
             arrivalStreak = 0
             veryCloseStreak = 0
-            return result(GuidancePhase.WEAK_SIGNAL)
+            // Weak GPS is expected at a building's door and inside: the question stays.
+            return result(if (toOffice && atBuilding) GuidancePhase.AT_BUILDING else GuidancePhase.WEAK_SIGNAL)
         }
-
-        // Arrival: the exact spot, from accurate readings, held for a few seconds. It is judged
-        // from the readings themselves, never from a steadied position.
-        val readingDistance = if (reading != null && point != null) GeoMath.distanceMeters(reading.point, point) else null
-        val readingAccuracy = reading?.accuracyMeters
-        val confirmable = readingAccuracy != null && readingAccuracy <= arrival.maxAccuracyMeters
-        arrivalStreak = if (confirmable && readingDistance != null && readingDistance <= arrival.distanceMeters) arrivalStreak + 1 else 0
-        if (arrivalStreak >= ARRIVAL_READINGS) {
-            arrivedBy = ArrivalMethod.GPS
-            started = true
-            prompts += say(fix.timeMillis, arrivalLine(target), urgent = true)
-            return result(GuidancePhase.ARRIVED, ArrivalEvent(target, ArrivalMethod.GPS, readingDistance, readingAccuracy))
-        }
-
-        // Very close: the pin is inside this reading's uncertainty, so GPS can't say more.
         val trustworthy = accuracy == null || accuracy <= PROMPT_MAX_ACCURACY_METERS
-        if (trustworthy && accuracy != null && distance <= max(accuracy, arrival.distanceMeters)) {
-            veryCloseStreak += 1
-            if (veryCloseStreak >= ARRIVAL_READINGS && arrivalStreak == 0 && !veryCloseAnnounced) {
-                veryCloseAnnounced = true
-                started = true
-                prompts += say(fix.timeMillis, veryCloseLine(target))
+
+        if (toOffice) {
+            // At the building: said once, and the visitor answers. GPS never decides.
+            val toGo = route?.remainingMeters ?: distance
+            if (atBuilding) {
+                if (trustworthy && toGo > AT_BUILDING_LEFT_METERS) atBuilding = false
+            } else if (trustworthy && toGo <= AT_BUILDING_METERS) {
+                atBuilding = true
             }
-            return result(GuidancePhase.VERY_CLOSE)
+            if (atBuilding) {
+                if (!atBuildingAnnounced) {
+                    atBuildingAnnounced = true
+                    started = true
+                    prompts += say(fix.timeMillis, atBuildingLine(target))
+                }
+                return result(GuidancePhase.AT_BUILDING)
+            }
+        } else {
+            // Arrival at a gate: the exact spot, from accurate readings, held for a few seconds.
+            // It is judged from the readings themselves, never from a steadied position.
+            val readingDistance = if (reading != null && point != null) GeoMath.distanceMeters(reading.point, point) else null
+            val readingAccuracy = reading?.accuracyMeters
+            val confirmable = readingAccuracy != null && readingAccuracy <= arrival.maxAccuracyMeters
+            arrivalStreak = if (confirmable && readingDistance != null && readingDistance <= arrival.distanceMeters) arrivalStreak + 1 else 0
+            if (arrivalStreak >= ARRIVAL_READINGS) {
+                arrivedBy = ArrivalMethod.GPS
+                started = true
+                prompts += say(fix.timeMillis, arrivalLine(target), urgent = true)
+                return result(GuidancePhase.ARRIVED, ArrivalEvent(target, ArrivalMethod.GPS, readingDistance, readingAccuracy))
+            }
+
+            // Very close: the pin is inside this reading's uncertainty, so GPS can't say more.
+            if (trustworthy && accuracy != null && distance <= max(accuracy, arrival.distanceMeters)) {
+                veryCloseStreak += 1
+                if (veryCloseStreak >= ARRIVAL_READINGS && arrivalStreak == 0 && !veryCloseAnnounced) {
+                    veryCloseAnnounced = true
+                    started = true
+                    prompts += say(fix.timeMillis, veryCloseLine(target))
+                }
+                return result(GuidancePhase.VERY_CLOSE)
+            }
+            veryCloseStreak = 0
         }
-        veryCloseStreak = 0
 
         // Spoken directions only from readings good enough to be worth saying.
         if (!trustworthy) return result(GuidancePhase.NAVIGATING)
@@ -301,7 +333,7 @@ class GuidanceEngine {
                 closestMeters = distance
                 prompts += say(
                     fix.timeMillis,
-                    "You're moving away from ${target.name}. It's ${spokenDistance(distance, unit)} away${sideClause(side)}.",
+                    "You're moving away from ${target.place}. It's ${spokenDistance(distance, unit)} away${sideClause(side)}.",
                 )
             }
         }
@@ -320,7 +352,7 @@ class GuidanceEngine {
         val point = target.point
         val distance = if (fix != null && point != null) GeoMath.distanceMeters(fix.point, point) else null
         val text = when (target.kind) {
-            TargetKind.OFFICE -> "Arrival confirmed at ${target.name}."
+            TargetKind.OFFICE -> "You have arrived at ${target.name}."
             TargetKind.GATE, TargetKind.ENTRY -> "Arrival confirmed. Show your pass to the guard to check out."
         }
         val prompts = listOf(say(nowMillis, text, urgent = true))
@@ -337,6 +369,8 @@ class GuidanceEngine {
         arrivalStreak = 0
         veryCloseStreak = 0
         veryCloseAnnounced = false
+        atBuilding = false
+        atBuildingAnnounced = false
         nextMilestone = 0
         closestMeters = Double.MAX_VALUE
         noPinAnnounced = false
@@ -448,7 +482,7 @@ class GuidanceEngine {
         if (remaining <= JUST_AHEAD_METERS && !justAheadSaid && !turnBeforeEnd) {
             if (canSpeak(now)) {
                 justAheadSaid = true
-                prompts += say(now, "${target.name} is just ahead.")
+                prompts += say(now, "${target.place} is just ahead.")
             }
             return
         }
@@ -457,7 +491,7 @@ class GuidanceEngine {
         val crossed = crossedRouteMilestone(remaining)
         if (crossed != null && (turn == null || turn.atMeters > TURN_AHEAD_METERS) && canSpeak(now)) {
             nextRouteMilestone = crossed + 1
-            prompts += say(now, "${spokenDistance(remaining, unit).replaceFirstChar { it.uppercase() }} to ${target.name}.")
+            prompts += say(now, "${spokenDistance(remaining, unit).replaceFirstChar { it.uppercase() }} to ${target.place}.")
         }
     }
 
@@ -499,6 +533,10 @@ class GuidanceEngine {
     companion object {
         /** Distances (meters) at which directions are repeated; 25 m is spoken as "just ahead". */
         val MILESTONES = listOf(200.0, 100.0, 50.0, 25.0, 10.0)
+        /** At an office's building from this far along the way (or straight, with no recorded route). */
+        const val AT_BUILDING_METERS = 25.0
+        /** Walking this far away again takes the question back. */
+        const val AT_BUILDING_LEFT_METERS = 50.0
         /** Readings in a row needed to confirm an arrival (about 3 seconds on the map screen). */
         const val ARRIVAL_READINGS = 3
         /** Distances are only spoken from readings at least this accurate. */
@@ -557,8 +595,12 @@ class GuidanceEngine {
             }
         }
 
+        /** "CCI Building is just ahead. Tech Support is on the 2nd floor, Room 201. ..." */
+        fun atBuildingLine(target: GuidanceTarget): String =
+            target.nearLine ?: ("${target.place} is just ahead." + locationSentence(target))
+
         fun arrivalLine(target: GuidanceTarget): String = when (target.kind) {
-            TargetKind.OFFICE -> "You have arrived at ${target.name}." + locationSentence(target)
+            TargetKind.OFFICE -> "You have arrived at ${target.name}."
             TargetKind.GATE -> "You have arrived at ${target.name}. Show your pass to the guard to check out."
             TargetKind.ENTRY -> "You're back where you checked in. Show your pass to the guard to check out."
         }
@@ -580,9 +622,9 @@ class GuidanceEngine {
             side: RelativeSide?,
             unit: DistanceUnit,
         ): String = when {
-            milestone != 25.0 -> "${target.name} is ${spokenDistance(distance, unit)} away${sideClause(side)}."
-            side == null || side == RelativeSide.AHEAD -> "${target.name} is just ahead."
-            else -> "${target.name} is close, ${sideWords(side)}."
+            milestone != 25.0 -> "${target.place} is ${spokenDistance(distance, unit)} away${sideClause(side)}."
+            side == null || side == RelativeSide.AHEAD -> "${target.place} is just ahead."
+            else -> "${target.place} is close, ${sideWords(side)}."
         }
     }
 }

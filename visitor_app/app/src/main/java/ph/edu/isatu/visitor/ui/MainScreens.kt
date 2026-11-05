@@ -32,7 +32,9 @@ import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MarkEmailRead
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.PendingActions
@@ -86,8 +88,11 @@ import kotlinx.coroutines.delay
 import ph.edu.isatu.visitor.BuildConfig
 import ph.edu.isatu.visitor.data.AppointmentDto
 import ph.edu.isatu.visitor.data.NotificationDto
+import ph.edu.isatu.visitor.data.UserDto
 import ph.edu.isatu.visitor.data.VisitSummaryDto
 import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 private data class MainTab(val label: String, val icon: ImageVector)
@@ -137,7 +142,7 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
         topBar = {
             Column {
                 TopAppBar(
-                    title = { PortalBrand(subtitle = "Visitor mobile application") },
+                    title = { PortalBrand() },
                     actions = {
                         IconButton(onClick = {
                             headerScreen = HeaderScreen.Notifications
@@ -146,7 +151,7 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
                             BadgedBox(
                                 badge = {
                                     if (state.unreadCount > 0) {
-                                        Badge(containerColor = Color(0xFFD92D20)) {
+                                        Badge(containerColor = Color(0xFFD92D20), contentColor = Color.White) {
                                             Text(state.unreadCount.coerceAtMost(99).toString())
                                         }
                                     }
@@ -202,10 +207,11 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
                 HeaderScreen.Profile -> ProfileScreen(state, viewModel)
                 null -> when (selectedTab) {
                     0 -> HomeScreen(
-                        state = state,
-                        viewModel = viewModel,
+                        user = state.user,
+                        appointments = state.appointments,
+                        onOpenAppointment = viewModel::openAppointment,
+                        onOpenVisit = viewModel::openVisit,
                         onBook = { selectedTab = 2 },
-                        onAppointments = { selectedTab = 1 },
                     )
                     1 -> AppointmentsScreen(state.appointments, viewModel::openAppointment, viewModel::openVisit, viewModel::refreshAll)
                     else -> BookingScreen(state, viewModel)
@@ -216,11 +222,12 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun HomeScreen(
-    state: VisitorUiState,
-    viewModel: AppViewModel,
+internal fun HomeScreen(
+    user: UserDto?,
+    appointments: List<AppointmentDto>,
+    onOpenAppointment: (Long) -> Unit,
+    onOpenVisit: (Long) -> Unit,
     onBook: () -> Unit,
-    onAppointments: () -> Unit,
 ) {
     val context = LocalContext.current
     var notificationsAllowed by remember {
@@ -232,155 +239,247 @@ private fun HomeScreen(
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted -> notificationsAllowed = granted }
+    var showSteps by remember { mutableStateOf(false) }
 
-    val upcoming = groupVisits(state.appointments).filter { it.isActive }.minByOrNull { it.startsAt }
-    val firstName = state.user?.fullName?.trim()?.substringBefore(' ')?.ifBlank { "Visitor" } ?: "Visitor"
+    val upcoming = groupVisits(appointments).filter { it.isActive }.minByOrNull { it.startsAt }
+    val firstName = user?.fullName?.trim()?.substringBefore(' ')?.ifBlank { "Visitor" } ?: "Visitor"
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        item { Greeting(firstName) }
+        // The visit that matters now, with the one thing to do next. Booking is the Book tab.
         item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = IsatuBlueDark),
-                shape = RoundedCornerShape(22.dp),
-            ) {
-                Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Welcome, $firstName", style = MaterialTheme.typography.headlineMedium, color = Color.White)
-                    Text(
-                        "Plan your visit, receive office decisions, and keep your visitor pass in one place.",
-                        color = Color(0xFFDCEBFF),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    PrimaryButton(
-                        text = "Register a visit",
-                        onClick = onBook,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+            when (upcoming) {
+                null -> NoVisitCard(onBook)
+                is VisitListItem.Single -> NextVisitCard(homeCard(upcoming)) { onOpenAppointment(upcoming.appointment.id) }
+                is VisitListItem.MultiStop -> NextVisitCard(homeCard(upcoming)) { onOpenVisit(upcoming.summary.id) }
             }
         }
-
-        item {
-            SectionHeading("Quick actions")
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                QuickActionCard("Register visit", "Walk in or schedule ahead", Icons.Rounded.Add, onBook, Modifier.weight(1f))
-                QuickActionCard("My visits", "View requests and QR passes", Icons.Rounded.QrCode2, onAppointments, Modifier.weight(1f))
-            }
-        }
-
         if (!notificationsAllowed) {
             item {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = YellowSurface),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Color(0xFFF4D86C)),
-                ) {
-                    Row(Modifier.padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Icon(Icons.Rounded.Notifications, contentDescription = null, tint = Color(0xFF9A6700))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Turn on appointment updates", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                "Get notified when an office approves, declines, or suggests another schedule.",
-                                color = MutedInk,
-                            )
-                            TextButton(
-                                onClick = {
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                    }
-                                },
-                            ) {
-                                Text("Enable notifications")
-                            }
-                        }
+                NotificationsPrompt {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }
             }
         }
-
+        // Until a visitor's first booking the steps show in full; after that, behind a link.
         item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                SectionHeading("Next visit", Modifier.weight(1f))
-                TextButton(onClick = onAppointments) { Text("View all") }
-            }
-            Spacer(Modifier.height(8.dp))
-            if (upcoming == null) {
-                EmptyState("No upcoming visit", "Request an appointment when you are ready to visit the campus.")
+            if (appointments.isEmpty()) {
+                VisitStepsCard()
             } else {
-                VisitListCard(upcoming, viewModel::openAppointment, viewModel::openVisit)
-            }
-        }
-
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, BorderSoft),
-                shape = RoundedCornerShape(18.dp),
-            ) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("How your visit works", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark)
-                    VisitStep(Icons.Rounded.PendingActions, "1", "Register", "Choose walk-in or appointment and tell us where you are going.")
-                    VisitStep(Icons.Rounded.CheckCircle, "2", "Get your pass", "Walk-ins receive it now; appointments receive it after approval.")
-                    VisitStep(Icons.Rounded.QrCode2, "3", "Present your pass", "An approved visit receives a secure QR pass.")
-                    VisitStep(Icons.Rounded.LocationOn, "4", "Check in", "Location sharing starts only after Security check-in and your permission.")
+                TextButton(onClick = { showSteps = true }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.size(6.dp))
+                    Text("How a visit works")
                 }
             }
         }
     }
+    if (showSteps) {
+        AlertDialog(
+            onDismissRequest = { showSteps = false },
+            title = { Text("How a visit works") },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { VisitSteps() } },
+            confirmButton = { TextButton(onClick = { showSteps = false }) { Text("Got it") } },
+        )
+    }
 }
 
 @Composable
-private fun SectionHeading(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = MaterialTheme.typography.titleLarge, color = Ink, modifier = modifier)
+private fun Greeting(firstName: String) {
+    val now = remember { LocalDateTime.now(ManilaZone) }
+    val greeting = when (now.hour) {
+        in 5..11 -> "Good morning"
+        in 12..17 -> "Good afternoon"
+        else -> "Good evening"
+    }
+    Column(Modifier.padding(horizontal = 2.dp)) {
+        Text("$greeting, $firstName", style = MaterialTheme.typography.titleLarge, color = Ink)
+        Text(
+            now.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.US)),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MutedInk,
+        )
+    }
+}
+
+private enum class Tone(val background: Color, val content: Color) {
+    Green(Color(0xFFDCFCE7), IsatuGreen),
+    Yellow(Color(0xFFFFF4CC), Color(0xFF9A6700)),
+    Blue(BlueSurface, IsatuBlueDark),
+    Grey(Color(0xFFE8EEF7), Color(0xFF475569)),
+}
+
+/** What the Home card says about a visit: where it stands, when it is, and the one thing to do. */
+private data class HomeCard(
+    val state: String,
+    val tone: Tone,
+    val title: String,
+    val timeIcon: ImageVector,
+    val time: String,
+    val note: String,
+    val action: String? = null,
+    val actionIcon: ImageVector? = null,
+)
+
+private fun homeCard(item: VisitListItem): HomeCard = when (item) {
+    is VisitListItem.Single -> {
+        val appointment = item.appointment
+        val office = appointment.office.name
+        val time = visitTimeText(appointment)
+        when (appointment.status) {
+            // The visit list does not carry the suggested times; the visit screen shows them.
+            "reschedule_proposed" -> HomeCard(
+                "New time suggested", Tone.Yellow, office, Icons.Rounded.Schedule, "Requested: $time",
+                "The office suggested another time. Accept it or pick a new one.", "Respond",
+            )
+            "checked_in" -> HomeCard(
+                "On campus", Tone.Blue, office, Icons.Rounded.LocationOn,
+                appointment.checkedInAt?.let { "Checked in at ${formatTimeOfDay(it)}" } ?: time,
+                "Directions and your pass are on the map.", "Open map", Icons.Rounded.Map,
+            )
+            "approved" -> HomeCard(
+                "Approved · pass ready", Tone.Green, office, Icons.Rounded.Schedule, time, appointment.subject,
+                "Show pass", Icons.Rounded.QrCode2,
+            )
+            else -> HomeCard(
+                "Waiting for approval", Tone.Grey, office, Icons.Rounded.Schedule, time,
+                "You'll get a notification when the office decides.",
+            )
+        }
+    }
+    is VisitListItem.MultiStop -> {
+        val stops = item.stops
+        val title = "${stops.size} office stops"
+        val first = stops.firstOrNull()
+        val time = when {
+            first == null -> ""
+            first.visitType == "walk_in" -> visitTimeText(first)
+            else -> formatVisitStart(first.scheduledStartAt)
+        }
+        when {
+            stops.any { it.status == "reschedule_proposed" } -> HomeCard(
+                "New time suggested", Tone.Yellow, title, Icons.Rounded.Schedule, time,
+                "An office suggested another time for its stop.", "Respond",
+            )
+            item.summary.status == "checked_in" -> HomeCard(
+                "On campus", Tone.Blue, title, Icons.Rounded.LocationOn,
+                stops.firstNotNullOfOrNull { it.checkedInAt }?.let { "Checked in at ${formatTimeOfDay(it)}" } ?: time,
+                "Directions and your pass are on the map.", "Open map", Icons.Rounded.Map,
+            )
+            // One pass covers the visit as soon as one office approves its stop.
+            stops.any { it.status == "approved" } -> HomeCard(
+                "Pass ready", Tone.Green, title, Icons.Rounded.Schedule, time,
+                stops.joinToString(" → ") { it.office.name }, "Show pass", Icons.Rounded.QrCode2,
+            )
+            else -> HomeCard(
+                "Waiting for approval", Tone.Grey, title, Icons.Rounded.Schedule, time,
+                "Each office reviews its own stop. You'll get a notification.",
+            )
+        }
+    }
 }
 
 @Composable
-private fun SummaryCard(
-    value: String,
-    label: String,
-    icon: ImageVector,
-    color: Color,
-    modifier: Modifier = Modifier,
-) {
+private fun NextVisitCard(card: HomeCard, onOpen: () -> Unit) {
     Card(
-        modifier = modifier,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, BorderSoft),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(22.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(38.dp).clip(CircleShape).background(color.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(21.dp))
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.background(card.tone.background, RoundedCornerShape(50)).padding(horizontal = 10.dp, vertical = 5.dp),
+                ) {
+                    Text(card.state, color = card.tone.content, style = MaterialTheme.typography.labelLarge)
+                }
+                Spacer(Modifier.weight(1f))
+                Icon(Icons.Rounded.ChevronRight, contentDescription = "Open visit", tint = MutedInk)
             }
-            Text(value, style = MaterialTheme.typography.headlineMedium, color = color)
-            Text(label, color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+            Text(card.title, style = MaterialTheme.typography.titleLarge, color = Ink)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(card.timeIcon, contentDescription = null, tint = MutedInk, modifier = Modifier.size(18.dp))
+                Text(card.time)
+            }
+            if (card.note.isNotBlank()) {
+                Text(
+                    card.note,
+                    color = MutedInk,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            card.action?.let { action ->
+                PrimaryButton(action, onOpen, Modifier.fillMaxWidth().padding(top = 4.dp), icon = card.actionIcon)
+            }
         }
     }
 }
 
 @Composable
-private fun QuickActionCard(
-    title: String,
-    body: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+private fun NoVisitCard(onBook: () -> Unit) {
     Card(
-        modifier = modifier.clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, BorderSoft),
+        shape = RoundedCornerShape(22.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("No upcoming visits", style = MaterialTheme.typography.titleLarge, color = Ink)
+            Text("Book a walk-in or an appointment.", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+            PrimaryButton("Book a visit", onBook, Modifier.fillMaxWidth().padding(top = 4.dp), icon = Icons.Rounded.Add)
+        }
+    }
+}
+
+@Composable
+private fun NotificationsPrompt(onEnable: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = YellowSurface),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(1.dp, Color(0xFFF4D86C)),
+    ) {
+        Row(Modifier.padding(18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Icon(Icons.Rounded.Notifications, contentDescription = null, tint = Color(0xFF9A6700))
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Turn on appointment updates", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Get notified when an office approves, declines, or suggests another schedule.",
+                    color = MutedInk,
+                )
+                TextButton(onClick = onEnable) { Text("Enable notifications") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VisitStepsCard() {
+    Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, BorderSoft),
         shape = RoundedCornerShape(18.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(icon, contentDescription = null, tint = IsatuBlue, modifier = Modifier.size(28.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(body, color = MutedInk, style = MaterialTheme.typography.bodySmall)
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("How a visit works", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark)
+            VisitSteps()
         }
     }
+}
+
+@Composable
+private fun VisitSteps() {
+    VisitStep(Icons.Rounded.PendingActions, "1", "Register", "Choose walk-in or appointment and tell us where you are going.")
+    VisitStep(Icons.Rounded.CheckCircle, "2", "Get your pass", "Walk-ins receive it now; appointments receive it after approval.")
+    VisitStep(Icons.Rounded.QrCode2, "3", "Present your pass", "An approved visit receives a secure QR pass.")
+    VisitStep(Icons.Rounded.LocationOn, "4", "Check in", "Location sharing starts only after Security check-in and your permission.")
 }
 
 @Composable

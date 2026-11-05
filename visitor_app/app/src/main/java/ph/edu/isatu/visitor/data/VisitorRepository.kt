@@ -15,6 +15,7 @@ class VisitorRepository(
     val installationStore: InstallationStore,
     private val locationQueue: LocationQueueDao,
     private val campusMapCache: CampusMapCache,
+    private val directionPhotos: DirectionPhotoStore,
 ) {
     val signedIn: StateFlow<Boolean> = tokenStore.signedIn
 
@@ -43,6 +44,7 @@ class VisitorRepository(
             tokenStore.clear()
             installationStore.clearActiveTracking()
             campusMapCache.clear()
+            directionPhotos.clear()
         }
     }
 
@@ -159,9 +161,18 @@ class VisitorRepository(
 
     fun cachedCampusMap(appointmentId: Long): CampusMapData? = campusMapCache.load(appointmentId)
 
+    /** Saves the photos of this visit's directions on the phone, for places with poor signal. */
+    suspend fun saveDirectionPhotos(map: CampusMapData) {
+        directionPhotos.keepOnly(map.stops.flatMap { it.directionSteps }.map { it.photo }.filter { it.isNotBlank() }.toSet())
+    }
+
     /** Tells the server (and so Security and the office) that the visitor reached a stop. */
     suspend fun reportArrival(request: ArrivalRequest): ArrivalData =
         apiClient.requireData(apiClient.api.reportArrival(request))
+
+    /** "I can't find it": tells the office which step the visitor stopped at. */
+    suspend fun requestDirectionHelp(stopAppointmentId: Long, stepNumber: Int?): DirectionHelpData =
+        apiClient.requireData(apiClient.api.requestDirectionHelp(DirectionHelpRequest(stopAppointmentId, stepNumber)))
 
     suspend fun queueLocation(appointmentId: Long, sessionId: Long, location: Location) {
         locationQueue.insert(

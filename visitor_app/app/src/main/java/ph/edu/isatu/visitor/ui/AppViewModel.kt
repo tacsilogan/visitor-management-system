@@ -226,7 +226,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 ?: repository.cachedCampusMap(appointmentId)
                 ?: return@launch
             _state.update { it.copy(campusMap = map) }
+            // Directions must work where the signal doesn't, so their photos are saved now.
+            runCatching { repository.saveDirectionPhotos(map) }
         }
+    }
+
+    /** "I can't find it": tells the office which step the visitor stopped at. */
+    suspend fun askOfficeForHelp(stopAppointmentId: Long, stepNumber: Int?): HelpResult = try {
+        if (repository.requestDirectionHelp(stopAppointmentId, stepNumber).officeTold) HelpResult.TOLD else HelpResult.NO_STAFF
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        HelpResult.FAILED
     }
 
     private val arrivalReports = mutableMapOf<Long, Job>()

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -35,10 +36,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import ph.edu.isatu.visitor.R
+import ph.edu.isatu.visitor.data.AppointmentDto
 
 @Composable
 fun PortalBrand(modifier: Modifier = Modifier, subtitle: String? = null) {
@@ -71,6 +78,7 @@ fun PrimaryButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    icon: ImageVector? = null,
 ) {
     Button(
         onClick = onClick,
@@ -79,6 +87,10 @@ fun PrimaryButton(
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(containerColor = IsatuBlue),
     ) {
+        icon?.let {
+            Icon(it, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+        }
         Text(text, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -142,7 +154,7 @@ fun formatTimeSpan(start: String, end: String): String {
     return if (minutes != null && minutes > 0) "$range ($minutes min)" else range
 }
 
-private val ManilaZone: java.time.ZoneId = java.time.ZoneId.of("Asia/Manila")
+internal val ManilaZone: java.time.ZoneId = java.time.ZoneId.of("Asia/Manila")
 
 /** A server time ("yyyy-MM-dd HH:mm:ss", Philippine time) as epoch milliseconds. */
 fun serverTimeMillis(value: String?): Long? = value?.takeIf { it.isNotBlank() }?.let {
@@ -150,6 +162,55 @@ fun serverTimeMillis(value: String?): Long? = value?.takeIf { it.isNotBlank() }?
         java.time.LocalDateTime.parse(it.trim().replace(' ', 'T')).atZone(ManilaZone).toInstant().toEpochMilli()
     }.getOrNull()
 }
+
+/** A server time ("yyyy-MM-dd HH:mm:ss", Philippine time), or null when it can't be read. */
+fun serverDateTime(value: String?): LocalDateTime? = value?.takeIf { it.isNotBlank() }?.let {
+    runCatching { LocalDateTime.parse(it.trim().replace(' ', 'T')) }.getOrNull()
+}
+
+private val ClockFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+
+/** "2:00 PM". */
+fun clockTime(time: LocalDateTime): String = time.format(ClockFormat)
+
+/** "Today", "Tomorrow", or "Thu, Nov 5", counting days in the Philippines. */
+fun formatDayLabel(date: LocalDate): String {
+    val today = LocalDate.now(ManilaZone)
+    return when (date) {
+        today -> "Today"
+        today.plusDays(1) -> "Tomorrow"
+        else -> date.format(DateTimeFormatter.ofPattern("EEE, MMM d", Locale.US))
+    }
+}
+
+/** "Today, 2:00 – 2:30 PM", "Tomorrow, 11:30 AM – 12:00 PM", or "Thu, Nov 5, 9:00 – 9:30 AM". */
+fun formatVisitTime(start: String, end: String): String {
+    val from = serverDateTime(start) ?: return formatDateTime(start)
+    val until = serverDateTime(end)?.takeIf { it.toLocalDate() == from.toLocalDate() }
+    val times = if (until == null) {
+        clockTime(from)
+    } else {
+        val first = clockTime(from)
+        val last = clockTime(until)
+        // "2:00 – 2:30 PM" when both are in the afternoon (or both in the morning).
+        if (first.takeLast(2) == last.takeLast(2)) "${first.dropLast(3)} – $last" else "$first – $last"
+    }
+    return "${formatDayLabel(from.toLocalDate())}, $times"
+}
+
+/** "Today, from 2:00 PM": when a visit to several offices starts. */
+fun formatVisitStart(start: String): String {
+    val from = serverDateTime(start) ?: return formatDateTime(start)
+    return "${formatDayLabel(from.toLocalDate())}, from ${clockTime(from)}"
+}
+
+/** When a visit is: its time slot, or for a walk-in how long its pass lasts. */
+fun visitTimeText(appointment: AppointmentDto): String =
+    if (appointment.visitType == "walk_in") {
+        "Walk-in · until ${formatTimeOfDay(appointment.scheduledEndAt)}"
+    } else {
+        formatVisitTime(appointment.scheduledStartAt, appointment.scheduledEndAt)
+    }
 
 /** "under a minute", "25 min", "2 h", or "1 h 41 min". */
 fun formatDuration(millis: Long): String {

@@ -7,4 +7,6 @@
 *.keystore
 keystore.properties
 app/google-services.json
+# Screen pictures from updateDebugScreenshotTest: sample dates follow today, so they change daily.
+app/src/screenshotTestDebug/
 

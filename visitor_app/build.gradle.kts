@@ -11,4 +11,6 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose") version "2.2.10" apply false
     id("com.google.devtools.ksp") version "2.3.10" apply false
     id("com.google.gms.google-services") version "4.5.0" apply false
+    // Draws the app's screens as pictures on the laptop (app/src/screenshotTest).
+    id("com.android.compose.screenshot") version "0.0.1-alpha16" apply false
 }

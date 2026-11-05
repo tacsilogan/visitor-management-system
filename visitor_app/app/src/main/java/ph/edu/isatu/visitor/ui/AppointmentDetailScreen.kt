@@ -2,16 +2,12 @@ package ph.edu.isatu.visitor.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
 import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,15 +17,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.HourglassTop
-import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -54,18 +49,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.qrcode.QRCodeWriter
 import kotlinx.coroutines.delay
 import ph.edu.isatu.visitor.data.AppointmentDto
 import ph.edu.isatu.visitor.data.CampusMapData
+import ph.edu.isatu.visitor.data.QrPassDto
 import ph.edu.isatu.visitor.data.TrackingData
+import ph.edu.isatu.visitor.navigation.OfficeDirections
+import ph.edu.isatu.visitor.navigation.toDirections
 import ph.edu.isatu.visitor.service.VisitorTrackingService
 
 @Composable
@@ -138,9 +132,13 @@ fun AppointmentDetailScreen(
         }
     }
 
-    // The campus map: on opening, then every minute (an admin may move a pin).
-    LaunchedEffect(appointment.id, appointment.status == "checked_in") {
-        if (appointment.status != "checked_in") return@LaunchedEffect
+    // The campus map: on opening, then every minute (an admin may move a pin). With a pass it is
+    // loaded once ahead of the visit, for the directions and to keep them on the phone.
+    LaunchedEffect(appointment.id, appointment.status == "checked_in", appointment.qrPass != null) {
+        if (appointment.status != "checked_in") {
+            if (appointment.qrPass != null) viewModel.loadCampusMap(appointment.id)
+            return@LaunchedEffect
+        }
         while (true) {
             viewModel.loadCampusMap(appointment.id)
             delay(60_000)
@@ -186,12 +184,22 @@ fun AppointmentDetailScreen(
             onArrival = { stopId, method, distance, accuracy ->
                 viewModel.reportArrival(appointment.id, stopId, method, distance, accuracy)
             },
+            onAskForHelp = viewModel::askOfficeForHelp,
         )
         return
     }
 
+    val directions = campusMap?.stops.orEmpty().firstOrNull { it.appointmentId == appointment.id }?.toDirections()
+    var showDirections by remember(appointment.id) { mutableStateOf(false) }
+    if (showDirections && directions != null) {
+        DirectionsPreview(directions) { showDirections = false }
+        return
+    }
+
+    val pass = appointment.qrPass
+    val canCancel = appointment.status in listOf("pending_approval", "approved", "reschedule_proposed")
     DetailScaffold(
-        if (appointment.qrPass != null) "Visitor pass" else "Visit details",
+        if (pass != null) "Your pass" else "Visit details",
         viewModel::closeAppointment,
     ) { outerModifier ->
         LazyColumn(
@@ -199,6 +207,12 @@ fun AppointmentDetailScreen(
             contentPadding = PaddingValues(18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // With a pass the screen is for the gate: the QR code first, everything else once.
+            // It needs no refresh button, since it checks for the check-in scan every 3 seconds.
+            if (pass != null) {
+                passItems(appointment, pass, busy, directions, { showDirections = true }, onCancel = if (canCancel) ({ showCancel = true }) else null)
+                return@LazyColumn
+            }
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -277,17 +291,6 @@ fun AppointmentDetailScreen(
                     }
                 }
             }
-            appointment.qrPass?.let { pass ->
-                item {
-                    QrPassCard(
-                        appointment = appointment,
-                        payload = pass.token.ifBlank { pass.payload },
-                        validFrom = pass.validFrom,
-                        validUntil = pass.validUntil,
-                        currentlyValid = pass.currentlyValid,
-                    )
-                }
-            }
             pendingProposal?.let { proposal ->
                 val singleSlot = proposal.slots.size == 1
                 item {
@@ -335,7 +338,7 @@ fun AppointmentDetailScreen(
                     }
                 }
             }
-            if (appointment.status in listOf("pending_approval", "approved", "reschedule_proposed")) {
+            if (canCancel) {
                 item {
                     OutlinedButton(
                         onClick = { showCancel = true },
@@ -343,7 +346,7 @@ fun AppointmentDetailScreen(
                         enabled = !busy,
                     ) {
                         Text(
-                            if (appointment.visit != null) "Cancel this stop" else "Cancel appointment",
+                            if (appointment.visit != null) "Cancel this stop" else "Cancel visit",
                             color = MaterialTheme.colorScheme.error,
                         )
                     }
@@ -355,6 +358,7 @@ fun AppointmentDetailScreen(
 
     if (showCancel) {
         CancelAppointmentDialog(
+            stop = appointment.visit != null,
             onDismiss = { showCancel = false },
             onConfirm = { reason ->
                 viewModel.cancelAppointment(appointment.id, reason)
@@ -385,6 +389,39 @@ fun AppointmentDetailScreen(
     }
 }
 
+/** The pass screen of a single visit: the QR code first, the visit in one line, the rest folded. */
+internal fun LazyListScope.passItems(
+    appointment: AppointmentDto,
+    pass: QrPassDto,
+    busy: Boolean,
+    directions: OfficeDirections?,
+    onHowToFind: () -> Unit,
+    onCancel: (() -> Unit)?,
+) {
+    item {
+        PassCard(
+            payload = pass.token.ifBlank { pass.payload },
+            visitorName = appointment.visitor?.fullName.orEmpty().ifBlank { "Registered visitor" },
+            reference = appointment.registrationCode,
+            pass = pass,
+        )
+    }
+    item { PassSummaryCard(appointment.office.name, visitTimeText(appointment), directions?.where.orEmpty(), onHowToFind.takeIf { directions?.hasSteps == true || directions?.message?.isNotBlank() == true }) }
+    item {
+        PassDetails(
+            lines = buildList {
+                add("Purpose" to appointment.purpose)
+                add("Subject" to appointment.subject)
+                if (appointment.additionalDetails.isNotBlank()) add("Additional details" to appointment.additionalDetails)
+                add("The guard can scan it" to formatVisitTime(pass.validFrom, pass.validUntil))
+            },
+            note = "Keep your pass private: don't share screenshots.",
+        )
+    }
+    onCancel?.let { cancel -> item { QuietCancelButton("Cancel visit", !busy, cancel) } }
+    item { Spacer(Modifier.height(18.dp)) }
+}
+
 private fun formatVisitDate(value: String): String = runCatching {
     val source = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.US)
     val target = java.text.SimpleDateFormat("EEEE, MMM d, yyyy", java.util.Locale.US)
@@ -412,94 +449,21 @@ private fun DetailLine(label: String, value: String) {
     }
 }
 
+/** Cancels a single visit, or one [stop] of a visit to several offices. */
 @Composable
-private fun QrPassCard(
-    appointment: AppointmentDto,
-    payload: String,
-    validFrom: String,
-    validUntil: String,
-    currentlyValid: Boolean,
-) {
-    val bitmap = remember(payload) { generateQrBitmap(payload) }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, BorderSoft),
-        shape = RoundedCornerShape(20.dp),
-    ) {
-        Column(
-            Modifier.fillMaxWidth().padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Box(
-                Modifier.size(48.dp).background(BlueSurface, RoundedCornerShape(14.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.QrCode2, contentDescription = null, tint = IsatuBlue)
-            }
-            Text("VISITOR PASS", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark)
-            Text(
-                if (currentlyValid) "Ready to scan"
-                else if (appointment.visitType == "walk_in") "This walk-in pass is no longer active"
-                else "Keep this pass ready for your scheduled arrival",
-                color = if (currentlyValid) IsatuGreen else IsatuOrange,
-                fontWeight = FontWeight.SemiBold,
-            )
-            appointment.registrationCode?.let {
-                Text("Reference $it", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
-            }
-            HorizontalDivider(color = BorderSoft)
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DetailLine("Visitor", appointment.visitor?.fullName.orEmpty().ifBlank { "Registered visitor" })
-                DetailLine("Visitor type", if (appointment.visitType == "walk_in") "Walk-in" else "Appointment")
-                DetailLine("Destination", appointment.office.name)
-                DetailLine("Purpose", appointment.purpose)
-                DetailLine("Subject / concern", appointment.subject)
-                DetailLine("Schedule", formatDateTime(appointment.scheduledStartAt))
-            }
-            bitmap?.let {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(8.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Image(it.asImageBitmap(), "Visitor QR pass", Modifier.size(238.dp))
-                }
-            }
-            Text(
-                "Security can scan this pass from ${formatDateTime(validFrom)} until ${formatDateTime(validUntil)}.",
-                color = MutedInk,
-                textAlign = TextAlign.Center,
-            )
-            Text("Do not share screenshots of your pass.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun CancelAppointmentDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+private fun CancelAppointmentDialog(stop: Boolean, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var reason by remember { mutableStateOf("") }
+    val what = if (stop) "stop" else "visit"
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Cancel this appointment?") },
+        title = { Text("Cancel this $what?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("The office will be notified and the slot will become available to another visitor.")
                 OutlinedTextField(reason, { reason = it.take(500) }, label = { Text("Reason (optional)") }, minLines = 2)
             }
         },
-        confirmButton = { TextButton(onClick = { onConfirm(reason) }) { Text("Cancel appointment", color = MaterialTheme.colorScheme.error) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep appointment") } },
+        confirmButton = { TextButton(onClick = { onConfirm(reason) }) { Text("Cancel $what", color = MaterialTheme.colorScheme.error) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Keep $what") } },
     )
 }
-
-internal fun generateQrBitmap(payload: String): Bitmap? = runCatching {
-    val matrix = QRCodeWriter().encode(payload, BarcodeFormat.QR_CODE, 720, 720)
-    Bitmap.createBitmap(matrix.width, matrix.height, Bitmap.Config.ARGB_8888).apply {
-        for (x in 0 until matrix.width) {
-            for (y in 0 until matrix.height) {
-                setPixel(x, y, if (matrix[x, y]) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
-            }
-        }
-    }
-}.getOrNull()

@@ -201,6 +201,9 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
                 enabledOptions = state.offices.filter { it.acceptingVisitors }.map { it.code }.toSet(),
                 onSelect = { officeCode = it },
             )
+            selectedOffice?.location?.takeIf { it.isNotBlank() }?.let { location ->
+                Text(location, style = MaterialTheme.typography.bodySmall, color = MutedInk, modifier = Modifier.padding(top = 6.dp))
+            }
             selectedOffice?.takeIf { !it.acceptingVisitors }?.let {
                 Text(
                     it.unavailableReason.ifBlank { "This office is not accepting visitors right now." },

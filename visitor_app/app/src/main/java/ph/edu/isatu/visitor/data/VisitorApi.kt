@@ -103,4 +103,7 @@ interface VisitorApi {
 
     @POST("arrival.php")
     suspend fun reportArrival(@Body request: ArrivalRequest): Response<ApiEnvelope<ArrivalData>>
+
+    @POST("direction_help.php")
+    suspend fun requestDirectionHelp(@Body request: DirectionHelpRequest): Response<ApiEnvelope<DirectionHelpData>>
 }

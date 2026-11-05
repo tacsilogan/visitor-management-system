@@ -7,7 +7,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,12 +27,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.HourglassTop
-import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -51,18 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.delay
 import ph.edu.isatu.visitor.data.AppointmentDto
 import ph.edu.isatu.visitor.data.CampusMapData
-import ph.edu.isatu.visitor.data.QrPassDto
 import ph.edu.isatu.visitor.data.TrackingData
 import ph.edu.isatu.visitor.data.VisitDto
+import ph.edu.isatu.visitor.navigation.toDirections
 import ph.edu.isatu.visitor.service.VisitorTrackingService
 
 /**
@@ -130,9 +126,13 @@ fun VisitDetailScreen(
     }
 
     // The campus map: on opening, whenever the current stop changes (an office marked its
-    // meeting done), and every minute.
-    LaunchedEffect(trackingAppointmentId, visit.status == "checked_in", visit.currentStopId) {
-        if (visit.status != "checked_in" || trackingAppointmentId == null) return@LaunchedEffect
+    // meeting done), and every minute. With a pass it is loaded once ahead of the visit, for the
+    // directions and to keep them on the phone.
+    LaunchedEffect(trackingAppointmentId, visit.status == "checked_in", visit.currentStopId, visit.qrPass != null) {
+        if (visit.status != "checked_in" || trackingAppointmentId == null) {
+            if (visit.status == "open" && visit.qrPass != null) visit.stops.firstOrNull()?.let { viewModel.loadCampusMap(it.id) }
+            return@LaunchedEffect
+        }
         while (true) {
             viewModel.loadCampusMap(trackingAppointmentId)
             delay(60_000)
@@ -180,30 +180,52 @@ fun VisitDetailScreen(
             onArrival = { stopId, method, distance, accuracy ->
                 viewModel.reportArrival(trackingAppointmentId, stopId, method, distance, accuracy)
             },
+            onAskForHelp = viewModel::askOfficeForHelp,
         )
         return
     }
 
-    DetailScaffold(if (visit.qrPass != null) "Visitor pass" else "Visit details", viewModel::closeVisit) { outerModifier ->
+    val places = campusMap?.stops.orEmpty()
+    var directionsFor by remember(visit.id) { mutableLongStateOf(0L) }
+    places.firstOrNull { it.appointmentId == directionsFor }?.toDirections()?.let { directions ->
+        DirectionsPreview(directions) { directionsFor = 0L }
+        return
+    }
+
+    val pass = visit.qrPass
+    DetailScaffold(if (pass != null) "Your pass" else "Visit details", viewModel::closeVisit) { outerModifier ->
         LazyColumn(
             modifier = outerModifier.fillMaxSize(),
             contentPadding = PaddingValues(18.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Multi-stop visit", style = MaterialTheme.typography.headlineMedium)
-                        Text("${visit.visitCode} • ${formatVisitDay(visit.visitDate)}", color = MutedInk)
-                    }
-                    IconButton(onClick = { viewModel.openVisit(visit.id) }, enabled = !busy) {
-                        Icon(Icons.Rounded.Refresh, "Refresh")
+            if (pass != null) {
+                // One pass for every office, QR code first. The screen checks for the check-in
+                // scan every 3 seconds, so it needs no refresh button.
+                item {
+                    PassCard(
+                        payload = pass.token.ifBlank { pass.payload },
+                        visitorName = visit.stops.firstOrNull()?.visitor?.fullName.orEmpty().ifBlank { "Registered visitor" },
+                        reference = visit.visitCode,
+                        pass = pass,
+                    )
+                }
+            } else {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Multi-stop visit", style = MaterialTheme.typography.headlineMedium)
+                            Text("${visit.visitCode} • ${formatVisitDay(visit.visitDate)}", color = MutedInk)
+                        }
+                        IconButton(onClick = { viewModel.openVisit(visit.id) }, enabled = !busy) {
+                            Icon(Icons.Rounded.Refresh, "Refresh")
+                        }
                     }
                 }
-            }
-            item { VisitStatusPill(visit.status) }
-            if (visit.status == "completed" && visit.checkedInAt != null) {
-                item { VisitSummaryCard(visit.checkedInAt, visit.completedAt, visit.checkoutMethod) }
+                item { VisitStatusPill(visit.status) }
+                if (visit.status == "completed" && visit.checkedInAt != null) {
+                    item { VisitSummaryCard(visit.checkedInAt, visit.completedAt, visit.checkoutMethod) }
+                }
             }
             val waitingStops = visit.stops.count { it.status == "pending_approval" }
             val actionStops = visit.stops.count { it.status == "reschedule_proposed" }
@@ -222,18 +244,35 @@ fun VisitDetailScreen(
                     )
                 }
             }
-            visit.qrPass?.let { pass -> item { VisitPassCard(visit, pass) } }
             item { Text("Office stops", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark) }
             itemsIndexed(visit.stops, key = { _, stop -> stop.id }) { index, stop ->
-                VisitStopCard(index + 1, stop) { viewModel.openAppointment(stop.id) }
+                val place = places.firstOrNull { it.appointmentId == stop.id }?.toDirections()
+                VisitStopCard(
+                    number = index + 1,
+                    stop = stop,
+                    where = place?.where.orEmpty(),
+                    onHowToFind = if (place?.hasSteps == true || place?.message?.isNotBlank() == true) ({ directionsFor = stop.id }) else null,
+                ) { viewModel.openAppointment(stop.id) }
+            }
+            if (pass != null) {
+                item {
+                    PassDetails(
+                        lines = listOf("The guard can scan it" to formatVisitTime(pass.validFrom, pass.validUntil)),
+                        note = "One scan checks you in for every approved stop. Keep your pass private: don't share screenshots.",
+                    )
+                }
             }
             if (visit.status == "open") {
                 item {
-                    OutlinedButton(
-                        onClick = { showCancel = true },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        enabled = !busy,
-                    ) { Text("Cancel whole visit", color = MaterialTheme.colorScheme.error) }
+                    if (pass != null) {
+                        QuietCancelButton("Cancel whole visit", !busy) { showCancel = true }
+                    } else {
+                        OutlinedButton(
+                            onClick = { showCancel = true },
+                            modifier = Modifier.fillMaxWidth().height(52.dp),
+                            enabled = !busy,
+                        ) { Text("Cancel whole visit", color = MaterialTheme.colorScheme.error) }
+                    }
                 }
             }
             item { Spacer(Modifier.height(18.dp)) }
@@ -292,7 +331,7 @@ private fun NoticeCard(title: String, body: String) {
 }
 
 @Composable
-private fun VisitStopCard(number: Int, stop: AppointmentDto, onClick: () -> Unit) {
+private fun VisitStopCard(number: Int, stop: AppointmentDto, where: String, onHowToFind: (() -> Unit)?, onClick: () -> Unit) {
     val needsAction = stop.status == "reschedule_proposed"
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
@@ -312,64 +351,11 @@ private fun VisitStopCard(number: Int, stop: AppointmentDto, onClick: () -> Unit
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 Text(stop.subject, style = MaterialTheme.typography.bodySmall, color = MutedInk, maxLines = 1)
+                if (where.isNotBlank()) Text(where, style = MaterialTheme.typography.bodySmall, color = MutedInk)
                 StatusPill(stop.status)
+                onHowToFind?.let { TextButton(onClick = it) { Text("How to find it", fontWeight = FontWeight.SemiBold) } }
             }
             Icon(Icons.Rounded.ChevronRight, contentDescription = "Open stop", tint = MutedInk)
-        }
-    }
-}
-
-@Composable
-private fun VisitPassCard(visit: VisitDto, pass: QrPassDto) {
-    val payload = pass.token.ifBlank { pass.payload }
-    val bitmap = remember(payload) { generateQrBitmap(payload) }
-    val approvedStops = visit.stops.filter { it.status == "approved" }
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, BorderSoft),
-        shape = RoundedCornerShape(20.dp),
-    ) {
-        Column(
-            Modifier.fillMaxWidth().padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Box(Modifier.size(48.dp).background(BlueSurface, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.QrCode2, contentDescription = null, tint = IsatuBlue)
-            }
-            Text("VISITOR PASS", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark)
-            Text(
-                if (pass.currentlyValid) "Ready to scan" else "Keep this pass ready for your first stop",
-                color = if (pass.currentlyValid) IsatuGreen else IsatuOrange,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text("Reference ${visit.visitCode}", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
-            HorizontalDivider(color = BorderSoft)
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("Covers these approved stops", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
-                approvedStops.forEachIndexed { index, stop ->
-                    Text(
-                        if (stop.visitType == "walk_in") "${index + 1}. ${stop.office.name}"
-                        else "${formatTimeOfDay(stop.scheduledStartAt)} • ${stop.office.name}",
-                    )
-                }
-            }
-            bitmap?.let {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    border = BorderStroke(8.dp, Color.White),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Image(it.asImageBitmap(), "Visitor QR pass", Modifier.size(238.dp))
-                }
-            }
-            Text(
-                "Security can scan this pass from ${formatDateTime(pass.validFrom)} until ${formatDateTime(pass.validUntil)}. " +
-                    "One scan checks you in for every approved stop.",
-                color = MutedInk,
-                textAlign = TextAlign.Center,
-            )
-            Text("Do not share screenshots of your pass.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

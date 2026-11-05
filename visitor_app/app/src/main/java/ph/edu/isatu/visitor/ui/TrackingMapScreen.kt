@@ -142,6 +142,10 @@ import ph.edu.isatu.visitor.navigation.HeadingSensor
 import ph.edu.isatu.visitor.navigation.LiveLocation
 import ph.edu.isatu.visitor.navigation.LocationFix
 import ph.edu.isatu.visitor.navigation.NavigationPreferences
+import ph.edu.isatu.visitor.navigation.OfficeDirections
+import ph.edu.isatu.visitor.navigation.VisitScreen
+import ph.edu.isatu.visitor.navigation.mustLeaveBuilding
+import ph.edu.isatu.visitor.navigation.toDirections
 import ph.edu.isatu.visitor.navigation.PathFollower
 import ph.edu.isatu.visitor.navigation.PositionQuality
 import ph.edu.isatu.visitor.navigation.RouteGuidance
@@ -196,6 +200,8 @@ fun TrackingMapScreen(
     onShareAgain: () -> Unit,
     /** Reports a confirmed arrival at office stop (appointment id), by "gps" or "visitor". */
     onArrival: (stopAppointmentId: Long, method: String, distanceMeters: Double?, accuracyMeters: Double?) -> Unit,
+    /** "I can't find it": tells the office which step (counting from 1) the visitor stopped at. */
+    onAskForHelp: suspend (stopAppointmentId: Long, stepNumber: Int?) -> HelpResult,
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -235,10 +241,12 @@ fun TrackingMapScreen(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_START -> {
+                    VisitScreen.showing = true
                     if (hasPermission) liveLocation.start()
                     headingSensor.start()
                 }
                 Lifecycle.Event.ON_STOP -> {
+                    VisitScreen.showing = false
                     liveLocation.stop()
                     headingSensor.stop()
                     voice.silence()
@@ -248,6 +256,7 @@ fun TrackingMapScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
+            VisitScreen.showing = false
             lifecycleOwner.lifecycle.removeObserver(observer)
             liveLocation.stop()
             headingSensor.stop()
@@ -336,6 +345,33 @@ fun TrackingMapScreen(
         guidanceTarget(destination, campusMap?.stops.orEmpty(), exitMode, exitRequested, chosenGate, gates, entryPoint)
     }
 
+    // Past the building door (INDOOR_DIRECTIONS.md): the map gives way to the question near the
+    // building, one step at a time inside it, and the way back out.
+    val directions = remember(destination) { destination?.toDirections() }
+    val stopId = destination?.appointmentId ?: 0L
+    fun officeTarget() = target?.kind == TargetKind.OFFICE && directions != null
+    /** The step on screen, or -1 for the map. Kept on the phone, so reopening the app returns to it. */
+    var insideStep by remember(stopId) {
+        mutableIntStateOf(if (destination?.arrivedAt == null) preferences.insideStep(stopId) else -1)
+    }
+    fun showStep(step: Int) {
+        insideStep = step
+        preferences.saveInsideStep(stopId, step)
+    }
+    var nearCardOpen by rememberSaveable(target?.key) { mutableStateOf(false) }
+    var nearCardAnswered by rememberSaveable(target?.key) { mutableStateOf(false) }
+    var helpPrompt by remember { mutableStateOf<HelpPrompt?>(null) }
+    // The stop whose building the visitor is walking out of, because they tapped Guide me out or
+    // their next stop is somewhere else. They say when they are outside.
+    var outsideStop by remember { mutableLongStateOf(preferences.outsideStop) }
+    var headingOutOf by rememberSaveable { mutableLongStateOf(0L) }
+    val finishedStop = campusMap?.stops.orEmpty().lastOrNull { it.status == "completed" && it.arrivedAt != null }
+    val leavingStop = campusMap?.stops.orEmpty().firstOrNull { it.appointmentId == headingOutOf }
+        ?: finishedStop?.takeIf { it.appointmentId != outsideStop && mustLeaveBuilding(it.building, destination?.building) }
+    val leaving = remember(leavingStop) { leavingStop?.toDirections() }
+    val stepOnScreen = insideStep.takeIf { it >= 0 && !exitMode && directions?.steps?.getOrNull(it) != null }
+    val mapHidden = leaving != null || stepOnScreen != null
+
     var snapshot by remember { mutableStateOf(GuidanceSnapshot(GuidancePhase.WAITING_FOR_FIX)) }
     val arrivalRule = remember(campusMap?.arrivalDistanceMeters, campusMap?.arrivalMaxAccuracyMeters) {
         ArrivalRule(campusMap?.arrivalDistanceMeters ?: 3.0, campusMap?.arrivalMaxAccuracyMeters ?: 8.0)
@@ -358,7 +394,9 @@ fun TrackingMapScreen(
     var shownLocation by remember { mutableStateOf<Location?>(null) }
     var shownAt by remember { mutableLongStateOf(Long.MIN_VALUE) }
     val follower = remember(visit.trackingAppointmentId) { PathFollower() }
-    LaunchedEffect(live, target, campusArea, unit, arrivalRule, planner) {
+    LaunchedEffect(live, target, campusArea, unit, arrivalRule, planner, mapHidden) {
+        // Inside a building GPS would only give wrong directions, so it waits for the map's return.
+        if (mapHidden) return@LaunchedEffect
         val raw = live?.reading
         val reading = raw?.toFix()
         val here = live?.steady
@@ -391,9 +429,85 @@ fun TrackingMapScreen(
             ),
         )
     }
-    // "I'm here": the visitor confirms they reached the office, e.g. inside a building.
+    // "Yes, I'm here": only the visitor can say they reached the office.
     val confirmHere: () -> Unit = {
         engine.confirmArrival(location?.toFix(), target, System.currentTimeMillis())?.let { applyGuidance(it) }
+    }
+    fun say(text: String) {
+        if (voiceOn && voiceStatus == VoiceGuide.Status.READY) voice.speak(text, urgent = true)
+    }
+    val arrivedHere = snapshot.phase == GuidancePhase.ARRIVED || destination?.arrivedAt != null
+    fun arriveAtOffice() {
+        nearCardOpen = false
+        nearCardAnswered = true
+        showStep(-1)
+        confirmHere()
+    }
+    /** The question near the building: asked by GPS, or by the visitor when GPS can't tell. */
+    fun openNearCard() {
+        nearCardOpen = true
+        directions?.let { say(it.nearLine()) }
+    }
+    fun answerYesAtBuilding() {
+        nearCardOpen = false
+        nearCardAnswered = true
+        val guide = directions
+        if (guide != null && guide.hasSteps) {
+            preferences.saveReachedBuilding(stopId, System.currentTimeMillis())
+            preferences.takeNearNotification()
+            showStep(0)
+            say(guide.stepLine(0))
+        } else {
+            arriveAtOffice()
+        }
+    }
+    fun closeSteps() {
+        showStep(-1)
+        if (snapshot.phase == GuidancePhase.AT_BUILDING) nearCardOpen = true
+    }
+    fun askForHelp(step: Int?) {
+        val guide = directions ?: return
+        helpPrompt = HelpPrompt.Sending
+        scope.launch {
+            val result = onAskForHelp(guide.appointmentId, step?.plus(1))
+            helpPrompt = HelpPrompt.Answered(result)
+            if (result == HelpResult.TOLD) say(guide.helpSentLine())
+        }
+    }
+    fun finishLeaving(stop: Long) {
+        preferences.outsideStop = stop
+        outsideStop = stop
+        if (headingOutOf == stop) {
+            headingOutOf = 0L
+            exitRequested = true
+        }
+    }
+    // Reaching the building opens the question once. The office hears nothing until the visitor taps.
+    LaunchedEffect(snapshot.phase, snapshot.target?.key) {
+        if (snapshot.phase != GuidancePhase.AT_BUILDING || snapshot.target?.key != target?.key || !officeTarget()) return@LaunchedEffect
+        preferences.saveReachedBuilding(stopId, System.currentTimeMillis())
+        preferences.takeNearNotification()
+        if (!nearCardAnswered && !mapHidden) nearCardOpen = true
+    }
+    LaunchedEffect(arrivedHere) {
+        if (arrivedHere) {
+            nearCardOpen = false
+            if (insideStep >= 0) showStep(-1)
+        }
+    }
+    // One gentle reminder for a visitor who reached the building but never tapped: without the tap
+    // the office gets no alert. If the app is in the background, VisitorTrackingService reminds them.
+    LaunchedEffect(stopId, arrivedHere, snapshot.phase == GuidancePhase.AT_BUILDING, stepOnScreen != null) {
+        val guide = directions ?: return@LaunchedEffect
+        if (arrivedHere) return@LaunchedEffect
+        val reachedAt = preferences.reachedBuildingAt(stopId).takeIf { it > 0L } ?: return@LaunchedEffect
+        lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            delay(max(0L, reachedAt + VisitScreen.ARRIVAL_REMINDER_MILLIS - System.currentTimeMillis()))
+            if (preferences.takeArrivalReminder()) {
+                say(guide.reminderLine())
+                if (insideStep < 0 && leaving == null) nearCardOpen = true
+            }
+        }
     }
 
     // Map camera: follows the visitor heading-up until they drag the map.
@@ -412,7 +526,7 @@ fun TrackingMapScreen(
         mapMarkers(campusMap, destination, exitMode, target, entryPoint)
     }
     val showDirections = snapshot.phase == GuidancePhase.NAVIGATING || snapshot.phase == GuidancePhase.WEAK_SIGNAL ||
-        snapshot.phase == GuidancePhase.VERY_CLOSE
+        snapshot.phase == GuidancePhase.VERY_CLOSE || snapshot.phase == GuidancePhase.AT_BUILDING
     // The walking path when walkways lead there; otherwise the dotted pointer straight at it.
     val routeLine = walkingPath?.takeIf { showDirections }?.toRouteLine()
     val pointerTo = target?.point?.takeIf { showDirections && routeLine == null }
@@ -436,139 +550,210 @@ fun TrackingMapScreen(
     val navigationBottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val peekHeight = SHEET_PEEK + navigationBottom
     val peekPx = with(density) { peekHeight.roundToPx() }
+    val toggleVoice = {
+        voiceOn = !voiceOn
+        preferences.voiceEnabled = voiceOn
+        if (voiceOn) voice.speak("Voice directions on.", urgent = true) else voice.silence()
+    }
 
-    BottomSheetScaffold(
-        scaffoldState = scaffoldState,
-        sheetPeekHeight = peekHeight,
-        sheetContainerColor = Color.White,
-        sheetShadowElevation = 14.dp,
-        sheetDragHandle = { BottomSheetDefaults.DragHandle(color = BorderSoft) },
-        containerColor = AppBackground,
-        sheetContent = {
-            VisitSheet(
-                visit = visit,
-                campusMap = campusMap,
-                snapshot = snapshot,
-                target = target,
-                unit = unit,
-                sharing = sharing,
-                exitMode = exitMode,
-                exitRequested = exitRequested,
-                allStopsDone = allStopsDone,
+    Box(Modifier.fillMaxSize()) {
+        if (leaving != null && leavingStop != null) {
+            BackHandler(enabled = headingOutOf != 0L) { headingOutOf = 0L }
+            LaunchedEffect(leavingStop.appointmentId) { say(leaving.leavingLine()) }
+            HeadingOutWithPhoto(
+                directions = leaving,
                 voiceOn = voiceOn,
-                voiceStatus = voiceStatus,
-                keepScreenOn = keepScreenOn,
-                clockOffsetMillis = clockOffsetMillis,
-                arrivalRule = arrivalRule,
-                onShowPass = { showPass = true },
-                onToggleVoice = {
-                    voiceOn = !voiceOn
-                    preferences.voiceEnabled = voiceOn
-                    if (voiceOn) voice.speak("Voice directions on.", urgent = true) else voice.silence()
-                },
-                onUnitChange = {
-                    unit = it
-                    preferences.unit = it
-                },
-                onKeepScreenOnChange = {
-                    keepScreenOn = it
-                    preferences.keepScreenOn = it
-                },
-                onToggleExit = {
-                    exitRequested = !exitRequested
-                    following = true
-                },
-                onStopSharing = { confirmStopSharing = true },
-                onShareAgain = onShareAgain,
-                onRequestLocationPermission = onRequestLocationPermission,
+                onToggleVoice = toggleVoice,
+                onHear = { say(leaving.leavingLine()) },
+                onBack = { if (headingOutOf != 0L) headingOutOf = 0L else onBack() },
+                onOutside = { finishLeaving(leavingStop.appointmentId) },
             )
-        },
-    ) { _ ->
-        Box(Modifier.fillMaxSize()) {
-            CampusMap(
-                model = mapModel,
-                location = shownLocation,
-                headingSensor = headingSensor,
-                following = following,
-                command = command,
-                topPaddingPx = topOverlayPx,
-                bottomPaddingPx = peekPx,
-                onFollowDismissed = { following = false },
-                onMarkerTapped = { scope.launch { sheetState.expand() } },
-                onBearingChanged = { mapBearing = it },
-                onOfflineChanged = { mapOffline = it },
-                modifier = Modifier.fillMaxSize(),
-                route = routeLine,
+        } else if (stepOnScreen != null && directions != null) {
+            BackHandler(enabled = helpPrompt == null) { closeSteps() }
+            InsideStepWithPhoto(
+                directions = directions,
+                step = stepOnScreen,
+                voiceOn = voiceOn,
+                onToggleVoice = toggleVoice,
+                onHear = { say(directions.stepLine(stepOnScreen)) },
+                onStep = { next ->
+                    showStep(next)
+                    say(directions.stepLine(next))
+                },
+                onClose = { closeSteps() },
+                onHelp = { helpPrompt = HelpPrompt.Asking },
+                onArrived = { arriveAtOffice() },
             )
-            // Keeps the status bar icons readable over the map.
-            Box(
-                Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
-                    .background(Color.White.copy(alpha = 0.9f)),
-            )
-            Column(
-                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp)
-                    .onSizeChanged { topOverlayPx = it.height },
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-                    Surface(onClick = onBack, shape = CircleShape, color = Color.White, shadowElevation = 4.dp, modifier = Modifier.size(46.dp)) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = IsatuBlueDark)
+        } else {
+            BottomSheetScaffold(
+                scaffoldState = scaffoldState,
+                sheetPeekHeight = peekHeight,
+                sheetContainerColor = Color.White,
+                sheetShadowElevation = 14.dp,
+                sheetDragHandle = { BottomSheetDefaults.DragHandle(color = BorderSoft) },
+                containerColor = AppBackground,
+                sheetContent = {
+                    VisitSheet(
+                        visit = visit,
+                        campusMap = campusMap,
+                        snapshot = snapshot,
+                        target = target,
+                        unit = unit,
+                        sharing = sharing,
+                        exitMode = exitMode,
+                        exitRequested = exitRequested,
+                        allStopsDone = allStopsDone,
+                        voiceOn = voiceOn,
+                        voiceStatus = voiceStatus,
+                        keepScreenOn = keepScreenOn,
+                        clockOffsetMillis = clockOffsetMillis,
+                        directions = directions?.takeIf { (it.hasSteps || it.message.isNotBlank()) && !arrivedHere && !exitMode },
+                        onHowToFind = {
+                            if (directions?.hasSteps == true) {
+                                showStep(0)
+                                say(directions.stepLine(0))
+                            } else {
+                                openNearCard()
+                            }
+                        },
+                        onShowPass = { showPass = true },
+                        onToggleVoice = toggleVoice,
+                        onUnitChange = {
+                            unit = it
+                            preferences.unit = it
+                        },
+                        onKeepScreenOnChange = {
+                            keepScreenOn = it
+                            preferences.keepScreenOn = it
+                        },
+                        onToggleExit = {
+                            // Out of the building first: GPS can't guide anyone down the stairs.
+                            if (!exitRequested && destination != null && arrivedHere && mustLeaveBuilding(destination.building, null)) {
+                                headingOutOf = destination.appointmentId
+                            } else {
+                                exitRequested = !exitRequested
+                            }
+                            following = true
+                        },
+                        onStopSharing = { confirmStopSharing = true },
+                        onShareAgain = onShareAgain,
+                        onRequestLocationPermission = onRequestLocationPermission,
+                    )
+                },
+            ) { _ ->
+                Box(Modifier.fillMaxSize()) {
+                    CampusMap(
+                        model = mapModel,
+                        location = shownLocation,
+                        headingSensor = headingSensor,
+                        following = following,
+                        command = command,
+                        topPaddingPx = topOverlayPx,
+                        bottomPaddingPx = peekPx,
+                        onFollowDismissed = { following = false },
+                        onMarkerTapped = { scope.launch { sheetState.expand() } },
+                        onBearingChanged = { mapBearing = it },
+                        onOfflineChanged = { mapOffline = it },
+                        modifier = Modifier.fillMaxSize(),
+                        route = routeLine,
+                    )
+                    // Keeps the status bar icons readable over the map.
+                    Box(
+                        Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
+                            .background(Color.White.copy(alpha = 0.9f)),
+                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp)
+                            .onSizeChanged { topOverlayPx = it.height },
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+                            Surface(onClick = onBack, shape = CircleShape, color = Color.White, shadowElevation = 4.dp, modifier = Modifier.size(46.dp)) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = IsatuBlueDark)
+                                }
+                            }
+                            GuidanceBanner(
+                                snapshot = snapshot,
+                                campusLoaded = campusMap != null,
+                                permissionMissing = !hasPermission || sharing == SharingState.PERMISSION_NEEDED,
+                                locationServicesOn = locationServicesOn,
+                                allStopsDone = allStopsDone,
+                                compass = compass,
+                                mapBearing = mapBearing,
+                                unit = unit,
+                                exitSeconds = campusMap?.exitPolicy?.outsideConfirmationSeconds ?: 300,
+                                onAllowLocation = onRequestLocationPermission,
+                                onOpenLocationSettings = {
+                                    context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                                },
+                                onShowPass = if (visit.passPayload != null) ({ showPass = true }) else null,
+                                // At an office "I'm here" brings the question and the description first.
+                                onImHere = { if (officeTarget()) openNearCard() else confirmHere() },
+                                nearCardOpen = nearCardOpen,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        if (needsCalibration && hasPermission) {
+                            HintChip(Icons.Rounded.Explore, "Compass needs calibrating: wave your phone in a figure 8.")
+                        }
+                        if (mapOffline) {
+                            HintChip(Icons.Rounded.CloudOff, "Map images can't load. Directions still work.", "Retry") {
+                                send(MapCommand.RetryOnlineMap)
+                            }
+                        }
+                        if (campusMap == null) {
+                            HintChip(Icons.Rounded.CloudOff, "Couldn't load the campus map yet.", "Retry", onRefreshCampusMap)
+                        }
+                        if (voiceOn && volumeMuted && voiceStatus == VoiceGuide.Status.READY) {
+                            HintChip(Icons.AutoMirrored.Rounded.VolumeOff, "Media volume is off. Turn it up to hear directions.")
                         }
                     }
-                    GuidanceBanner(
-                        snapshot = snapshot,
-                        campusLoaded = campusMap != null,
-                        permissionMissing = !hasPermission || sharing == SharingState.PERMISSION_NEEDED,
-                        locationServicesOn = locationServicesOn,
-                        allStopsDone = allStopsDone,
-                        compass = compass,
-                        mapBearing = mapBearing,
-                        unit = unit,
-                        exitSeconds = campusMap?.exitPolicy?.outsideConfirmationSeconds ?: 300,
-                        onAllowLocation = onRequestLocationPermission,
-                        onOpenLocationSettings = {
-                            context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                        },
-                        onShowPass = if (visit.passPayload != null) ({ showPass = true }) else null,
-                        onImHere = confirmHere,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (needsCalibration && hasPermission) {
-                    HintChip(Icons.Rounded.Explore, "Compass needs calibrating: wave your phone in a figure 8.")
-                }
-                if (mapOffline) {
-                    HintChip(Icons.Rounded.CloudOff, "Map images can't load. Directions still work.", "Retry") {
-                        send(MapCommand.RetryOnlineMap)
+                    Column(
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = peekHeight + 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        AnimatedVisibility(visible = !following && mapBearing != 0f) {
+                            MapButton(Icons.Rounded.Explore, "Point the map north", rotation = -mapBearing) {
+                                send(MapCommand.NorthUp)
+                            }
+                        }
+                        MapButton(Icons.Rounded.ZoomOutMap, "Show the whole route") {
+                            following = false
+                            val points = walkingPath?.points ?: listOfNotNull(shownPoint, target?.point)
+                            send(MapCommand.Overview(if (points.isEmpty()) boundary else points))
+                        }
+                        AnimatedVisibility(visible = !following) {
+                            MapButton(Icons.Rounded.MyLocation, "Follow my position", highlighted = true) { following = true }
+                        }
                     }
                 }
-                if (campusMap == null) {
-                    HintChip(Icons.Rounded.CloudOff, "Couldn't load the campus map yet.", "Retry", onRefreshCampusMap)
-                }
-                if (voiceOn && volumeMuted && voiceStatus == VoiceGuide.Status.READY) {
-                    HintChip(Icons.AutoMirrored.Rounded.VolumeOff, "Media volume is off. Turn it up to hear directions.")
-                }
             }
-            Column(
-                modifier = Modifier.align(Alignment.BottomEnd).padding(end = 14.dp, bottom = peekHeight + 14.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                AnimatedVisibility(visible = !following && mapBearing != 0f) {
-                    MapButton(Icons.Rounded.Explore, "Point the map north", rotation = -mapBearing) {
-                        send(MapCommand.NorthUp)
-                    }
-                }
-                MapButton(Icons.Rounded.ZoomOutMap, "Show the whole route") {
-                    following = false
-                    val points = walkingPath?.points ?: listOfNotNull(shownPoint, target?.point)
-                    send(MapCommand.Overview(if (points.isEmpty()) boundary else points))
-                }
-                AnimatedVisibility(visible = !following) {
-                    MapButton(Icons.Rounded.MyLocation, "Follow my position", highlighted = true) { following = true }
-                }
-            }
+
+        }
+        if (nearCardOpen && directions != null && stepOnScreen == null && leaving == null && officeTarget()) {
+            BackHandler { nearCardOpen = false }
+            NearBuildingCard(
+                directions = directions,
+                onYes = { answerYesAtBuilding() },
+                onNotYet = {
+                    nearCardOpen = false
+                    nearCardAnswered = true
+                },
+                // With steps, "I can't find it" is on each of them.
+                onCantFind = if (directions.hasSteps) null else ({ helpPrompt = HelpPrompt.Asking }),
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+        if (helpPrompt != null && directions != null) {
+            HelpSheet(
+                directions = directions,
+                step = stepOnScreen,
+                prompt = helpPrompt ?: HelpPrompt.Asking,
+                onAsk = { askForHelp(stepOnScreen) },
+                onDismiss = { helpPrompt = null },
+            )
         }
     }
 
@@ -613,14 +798,15 @@ private fun GuidanceBanner(
     onOpenLocationSettings: () -> Unit,
     onShowPass: (() -> Unit)?,
     onImHere: () -> Unit,
+    nearCardOpen: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val target = snapshot.target
     val distance = snapshot.distanceMeters?.let { displayDistance(it, unit) }
     val accuracy = snapshot.accuracyMeters?.let { displayAccuracy(it, unit) }
     // "I'm here" when close, or wherever GPS can't confirm the spot (indoors, no pin).
-    val canConfirm = target != null && when (snapshot.phase) {
-        GuidancePhase.VERY_CLOSE, GuidancePhase.WEAK_SIGNAL, GuidancePhase.NO_PIN -> true
+    val canConfirm = target != null && !nearCardOpen && when (snapshot.phase) {
+        GuidancePhase.VERY_CLOSE, GuidancePhase.AT_BUILDING, GuidancePhase.WEAK_SIGNAL, GuidancePhase.NO_PIN -> true
         GuidancePhase.NAVIGATING -> (snapshot.distanceMeters ?: Double.MAX_VALUE) <= CONFIRM_WITHIN_METERS
         else -> false
     }
@@ -628,7 +814,7 @@ private fun GuidanceBanner(
         permissionMissing || !locationServicesOn -> BannerSlate
         snapshot.phase == GuidancePhase.OUTSIDE_CAMPUS -> BannerOrange
         snapshot.phase == GuidancePhase.ARRIVED -> IsatuGreen
-        snapshot.phase == GuidancePhase.VERY_CLOSE -> BannerTeal
+        snapshot.phase == GuidancePhase.VERY_CLOSE || snapshot.phase == GuidancePhase.AT_BUILDING -> BannerTeal
         snapshot.phase == GuidancePhase.WEAK_SIGNAL || snapshot.phase == GuidancePhase.WAITING_FOR_FIX -> BannerSlate
         else -> IsatuBlueDark
     }
@@ -689,6 +875,13 @@ private fun GuidanceBanner(
                         target?.detail?.takeIf { it.isNotBlank() }?.let { BannerText("Location: $it", strong = true) }
                         BannerButton("I'm here", onImHere)
                     }
+                    GuidancePhase.AT_BUILDING -> {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            snapshot.bearingDegrees?.let { DirectionArrow(it, compass, mapBearing) }
+                            Text("${target?.place.orEmpty()} is just ahead", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        }
+                        if (canConfirm) BannerButton("I'm here", onImHere)
+                    }
                     GuidancePhase.NO_TARGET -> {
                         BannerHeader(Icons.Rounded.Flag, if (allStopsDone) "All office stops done" else "Head to the gate")
                         BannerText("Go back to the gate and show your pass to the guard to check out.")
@@ -697,12 +890,7 @@ private fun GuidanceBanner(
                     GuidancePhase.ARRIVED -> {
                         BannerHeader(Icons.Rounded.CheckCircle, "You've arrived")
                         BannerText(target?.name.orEmpty(), strong = true)
-                        target?.detail?.takeIf { it.isNotBlank() }?.let { BannerText(it) }
-                        when (snapshot.arrivedBy) {
-                            ArrivalMethod.GPS -> BannerText("Confirmed by GPS at the office pin.")
-                            ArrivalMethod.VISITOR -> BannerText("Confirmed by you.")
-                            null -> Unit
-                        }
+                        target?.whereLine?.takeIf { it.isNotBlank() }?.let { BannerText(it) }
                         if (target != null && target.kind != TargetKind.OFFICE) {
                             BannerText("Show your pass to the guard to check out.")
                             onShowPass?.let { BannerButton("Show pass", it) }
@@ -770,7 +958,7 @@ private fun NavigatingContent(snapshot: GuidanceSnapshot, distance: String?, acc
                 }
             }
             Text(
-                listOfNotNull(target.name, snapshot.side?.let(::sideWords)).joinToString(" · "),
+                listOfNotNull(target.place, snapshot.side?.let(::sideWords)).joinToString(" · "),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 2,
@@ -816,7 +1004,7 @@ private fun RouteNavigatingContent(
             )
             Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    "${displayDistance(route.remainingMeters, unit)} to ${target.name}",
+                    "${displayDistance(route.remainingMeters, unit)} to ${target.place}",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -942,7 +1130,8 @@ private fun VisitSheet(
     voiceStatus: VoiceGuide.Status,
     keepScreenOn: Boolean,
     clockOffsetMillis: Long,
-    arrivalRule: ArrivalRule,
+    directions: OfficeDirections?,
+    onHowToFind: () -> Unit,
     onShowPass: () -> Unit,
     onToggleVoice: () -> Unit,
     onUnitChange: (DistanceUnit) -> Unit,
@@ -958,6 +1147,7 @@ private fun VisitSheet(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         // Peek area: what a glance should answer.
+        val arrivedAtOffice = snapshot.phase == GuidancePhase.ARRIVED && target?.kind == TargetKind.OFFICE
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 val distance = snapshot.distanceMeters
@@ -965,6 +1155,7 @@ private fun VisitSheet(
                 val headline = when {
                     snapshot.phase == GuidancePhase.ARRIVED -> "Arrived"
                     snapshot.phase == GuidancePhase.VERY_CLOSE -> "Very close"
+                    snapshot.phase == GuidancePhase.AT_BUILDING -> "Just ahead"
                     route != null && snapshot.phase == GuidancePhase.NAVIGATING ->
                         "${walkingMinutesAlongPath(route.remainingMeters)} min walk · ${displayDistance(route.remainingMeters, unit)}"
                     distance != null && snapshot.phase == GuidancePhase.NAVIGATING ->
@@ -972,20 +1163,41 @@ private fun VisitSheet(
                     else -> if (exitMode) "Heading out" else "Campus visit"
                 }
                 Text(headline, style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark, fontWeight = FontWeight.Bold)
-                Text(
-                    target?.name ?: if (allStopsDone) "All office stops done" else "Your visit",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Ink,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                target?.detail?.takeIf { it.isNotBlank() }?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = MutedInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (arrivedAtOffice) {
+                    Text("${target?.name.orEmpty()} knows you're here.", style = MaterialTheme.typography.bodyMedium, color = MutedInk)
+                } else {
+                    Text(
+                        target?.name ?: if (allStopsDone) "All office stops done" else "Your visit",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Ink,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    target?.detail?.takeIf { it.isNotBlank() }?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MutedInk, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
                 }
             }
             SharingBadge(sharing)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (arrivedAtOffice) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (visit.passPayload != null) {
+                    OutlinedButton(
+                        onClick = onShowPass,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) { Text("Show pass", fontWeight = FontWeight.SemiBold) }
+                }
+                if (!allStopsDone) {
+                    OutlinedButton(
+                        onClick = onToggleExit,
+                        modifier = Modifier.weight(1f).height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) { Text("Guide me out", fontWeight = FontWeight.SemiBold) }
+                }
+            }
+        } else Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             if (visit.passPayload != null) {
                 Button(
                     onClick = onShowPass,
@@ -1050,14 +1262,11 @@ private fun VisitSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MutedInk,
             )
-            Text(
-                "\"You have arrived\" is only said when GPS places you within " +
-                    "${displayDistance(arrivalRule.distanceMeters, unit)} of the office pin with a clear signal " +
-                    "(${displayAccuracy(arrivalRule.maxAccuracyMeters, unit)} or better). Inside buildings, " +
-                    "where GPS can't confirm the spot, tap I'm here.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MutedInk,
-            )
+            directions?.let {
+                OutlinedButton(onClick = onHowToFind, shape = RoundedCornerShape(12.dp)) {
+                    Text("How to find it", fontWeight = FontWeight.SemiBold)
+                }
+            }
             if (!allStopsDone) {
                 TextButton(onClick = onToggleExit) {
                     Text(if (exitRequested) "Guide me back to my office" else "Guide me out to the gate")
@@ -1310,13 +1519,17 @@ private fun guidanceTarget(
         null
     }
     val earlierStopDone = stops.takeWhile { it.appointmentId != destination.appointmentId }.any { it.status == "completed" }
+    val directions = destination.toDirections()
     return GuidanceTarget(
         key = "office:${destination.appointmentId}:${destination.officeCode}",
         name = destination.label,
         kind = TargetKind.OFFICE,
         point = point,
-        detail = destination.location,
-        startLine = if (earlierStopDone) "Next stop: ${destination.label}" else "Heading to ${destination.label}",
+        detail = directions.detailWhileWalking,
+        startLine = directions.startLine(if (earlierStopDone) "Next stop: ${destination.label}" else "Heading to ${destination.label}"),
+        place = directions.place,
+        nearLine = directions.nearLine(),
+        whereLine = directions.where,
         appointmentId = destination.appointmentId,
         arrivedBy = when {
             destination.arrivedAt == null -> null
@@ -1359,7 +1572,7 @@ private fun mapMarkers(
         }
         val point = target?.point
         if (!exitMode && target != null && point != null) {
-            add(MapMarker(target.key, point, MarkerStyle.Pin(target.name, OfficeRed)))
+            add(MapMarker(target.key, point, MarkerStyle.Pin(target.place, OfficeRed)))
         }
     }
 }

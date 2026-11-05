@@ -207,4 +207,24 @@ class ApiModelTest {
         assertEquals(emptyList<WalkingRouteDto>(), map.walkingRoutes)
         assertNull(map.destination)
     }
+
+    @Test
+    fun directionsInsideABuildingArriveWithTheCampusMap() {
+        val gson = com.google.gson.GsonBuilder()
+            .setFieldNamingPolicy(com.google.gson.FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+            .create()
+        val stop = gson.fromJson(
+            """{"appointment_id":5,"label":"Tech Support","building":"CCI Building","floor":"2nd floor","room":"Room 201",
+                "visitor_message":"Take the stairs.","direction_steps":[{"text":"Go up.","photo":"uploads/directions/a.jpg"},{"text":"Turn right.","photo":""}]}""",
+            ph.edu.isatu.visitor.data.CampusStopDto::class.java,
+        )
+        assertEquals("CCI Building", stop.building)
+        assertEquals("Take the stairs.", stop.visitorMessage)
+        assertEquals(2, stop.directionSteps.size)
+        assertEquals("uploads/directions/a.jpg", stop.directionSteps[0].photo)
+
+        val fromOlderServer = gson.fromJson("""{"appointment_id":5,"label":"Tech Support"}""", ph.edu.isatu.visitor.data.CampusStopDto::class.java)
+        assertEquals("", fromOlderServer.building)
+        assertEquals(0, fromOlderServer.directionSteps.size)
+    }
 }

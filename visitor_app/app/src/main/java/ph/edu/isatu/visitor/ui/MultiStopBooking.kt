@@ -246,6 +246,9 @@ private fun StopEditor(
                 enabledOptions = state.offices.filter { it.acceptingVisitors && it.code !in takenOffices }.map { it.code }.toSet(),
                 onSelect = { code -> draft.update(stop.key) { it.copy(officeCode = code, slot = null) } },
             )
+            state.offices.firstOrNull { it.code == stop.officeCode }?.location?.takeIf { it.isNotBlank() }?.let { location ->
+                Text(location, style = MaterialTheme.typography.bodySmall, color = MutedInk)
+            }
             SelectionField(
                 label = "Reason for visiting",
                 selectedText = stop.purpose,

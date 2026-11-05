@@ -4,6 +4,7 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
     id("com.google.devtools.ksp")
+    id("com.android.compose.screenshot")
 }
 
 if (file("google-services.json").exists()) {
@@ -46,8 +47,8 @@ android {
         applicationId = "ph.edu.isatu.visitor"
         minSdk = 26
         targetSdk = 37
-        versionCode = 6
-        versionName = "0.5.0"
+        versionCode = 7
+        versionName = "0.6.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"$normalizedApiUrl\"")
@@ -103,6 +104,10 @@ android {
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
     }
+
+    // Pictures of the screens with sample data, drawn on the laptop instead of a phone:
+    // ./gradlew :app:updateDebugScreenshotTest writes them to app/src/screenshotTestDebug/reference.
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
 }
 
 // A release APK that cannot reach the server, or that phones would refuse to install as an
@@ -163,6 +168,10 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("com.google.zxing:core:3.5.4")
+
+    screenshotTestImplementation(composeBom)
+    screenshotTestImplementation("com.android.tools.screenshot:screenshot-validation-api:0.0.1-alpha16")
+    screenshotTestImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

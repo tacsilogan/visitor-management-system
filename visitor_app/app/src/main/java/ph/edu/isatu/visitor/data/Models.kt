@@ -67,6 +67,8 @@ data class OfficeRuleDto(
 data class OfficeDto(
     val code: String = "",
     val name: String = "",
+    /** Where the office is, e.g. "CCI Building, 2nd floor, Room 201". */
+    val location: String = "",
     val acceptingVisitors: Boolean = false,
     val unavailableReason: String = "",
     val availableAgainAt: String? = null,
@@ -344,6 +346,13 @@ data class CampusPointDto(val latitude: Double = 0.0, val longitude: Double = 0.
 
 data class CampusGateDto(val name: String = "", val latitude: Double = 0.0, val longitude: Double = 0.0)
 
+/** One step from the building door to the office door (Campus Map > Inside). */
+data class DirectionStepDto(
+    val text: String = "",
+    /** Relative to the site, like uploads/directions/abc.jpg; empty when the step has no photo. */
+    val photo: String = "",
+)
+
 /** One office stop on the campus map. Coordinates are null until an admin places the pin. */
 data class CampusStopDto(
     val appointmentId: Long = 0,
@@ -352,6 +361,12 @@ data class CampusStopDto(
     /** Where the office is, from the Department Directory, e.g. "CCI building, room 201". */
     val location: String = "",
     val description: String = "",
+    /** Where the office is inside its building, and how to get there from the door. */
+    val building: String = "",
+    val floor: String = "",
+    val room: String = "",
+    val visitorMessage: String = "",
+    val directionSteps: List<DirectionStepDto> = emptyList(),
     val latitude: Double? = null,
     val longitude: Double? = null,
     val status: String = "",
@@ -421,4 +436,14 @@ data class ArrivalData(
     val arrivedAt: String? = null,
     val arrivalMethod: String? = null,
     val alreadyRecorded: Boolean = false,
+)
+
+/** POST direction_help.php: "I can't find it". [stepNumber] counts from 1. */
+data class DirectionHelpRequest(val appointmentId: Long, val stepNumber: Int?)
+
+data class DirectionHelpData(
+    val appointmentId: Long = 0,
+    /** False when the office has no active staff account to tell. */
+    val officeTold: Boolean = false,
+    val alreadyTold: Boolean = false,
 )
