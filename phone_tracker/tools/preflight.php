@@ -159,6 +159,8 @@ $schemaChecks = [
     "visitor_presence" => ["appointment_id"],
     "campus_places" => ["place_type", "placed_by"],
     "campus_routes" => ["office_code", "points_json"],
+    "office_directions" => ["office_code", "visitor_message"],
+    "office_direction_steps" => ["office_code", "photo_path"],
     "offices" => ["code"],
     "outbound_emails" => ["status"],
     "api_access_tokens" => ["id"],
@@ -261,6 +263,14 @@ $routedDepartments = (int) preflight_scalar(
 );
 preflight_line("INFO", "Walking routes: " . $routedDepartments . " of " . $activeDepartments
     . " department(s) have one (record them in Campus Map > Routes).");
+$directedDepartments = (int) preflight_scalar(
+    $conn,
+    "SELECT COUNT(*) FROM office_directions d INNER JOIN offices o ON o.code = d.office_code AND o.is_active = 1
+     WHERE d.building <> '' AND d.floor <> ''
+       AND (d.visitor_message <> '' OR EXISTS (SELECT 1 FROM office_direction_steps s WHERE s.office_code = d.office_code))"
+);
+preflight_line("INFO", "Directions inside buildings: " . $directedDepartments . " of " . $activeDepartments
+    . " department(s) have them (write them in Campus Map > Inside).");
 
 // Background jobs: anything left waiting means the scheduler is not running.
 $stuckEmails = (int) preflight_scalar($conn, "SELECT COUNT(*) FROM outbound_emails WHERE status = 'queued' AND created_at < NOW() - INTERVAL 10 MINUTE");

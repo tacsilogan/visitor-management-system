@@ -10,10 +10,11 @@ APP=/var/www/html/phone_tracker
 PHP=/usr/local/bin/php
 
 # Persistent folders. With a Railway volume mounted at /data they survive every deploy:
-# sign-in sessions, staff profile photos, and (unless ISATU_AUTH_SECRET is set) the
-# two-step verification key.
-mkdir -p "$DATA/sessions" "$DATA/uploads/profile_pictures" "$DATA/private"
+# sign-in sessions, staff profile photos, the photos in directions inside buildings, and
+# (unless ISATU_AUTH_SECRET is set) the two-step verification key.
+mkdir -p "$DATA/sessions" "$DATA/uploads/profile_pictures" "$DATA/uploads/directions" "$DATA/private"
 cp -f /usr/local/share/isatu-uploads/profile_pictures/.htaccess "$DATA/uploads/profile_pictures/.htaccess"
+cp -f /usr/local/share/isatu-uploads/directions/.htaccess "$DATA/uploads/directions/.htaccess"
 chown -R www-data:www-data "$DATA/sessions" "$DATA/uploads" "$DATA/private"
 chmod 700 "$DATA/sessions" "$DATA/private"
 if [ -z "${ISATU_AUTH_SECRET:-}" ] && [ -z "${ISATU_AUTH_SECRET_FILE:-}" ]; then

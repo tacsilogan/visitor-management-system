@@ -1580,7 +1580,11 @@
         text("departmentCodeHint", department
             ? "The short code is permanent because appointments and accounts store it."
             : "Used in records and reports. It cannot be changed later.");
-        document.getElementById("departmentLocation").value = department ? department.location : "";
+        const locationField = document.getElementById("departmentLocation");
+        locationField.value = department ? department.location : "";
+        // A department with directions takes its location from them (Campus Map > Inside).
+        locationField.readOnly = Boolean(department && department.location_from_directions);
+        document.getElementById("departmentLocationHint").hidden = !locationField.readOnly;
         document.getElementById("departmentDescription").value = department ? department.description : "";
         showMessage("departmentFormError", "");
         document.getElementById("departmentDialog").showModal();

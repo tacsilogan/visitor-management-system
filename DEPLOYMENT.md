@@ -247,7 +247,8 @@ The app works without them; visitors see updates when they open it. To turn them
 4. Set `ISATU_AUTH_SECRET` to the value inside `phone_tracker/config/auth_secret.php`
    (between the quotes), so existing authenticator setups keep working.
 5. Turn the TCP proxy off and deploy the web service. It records the existing tables and
-   applies any missing changes. Staff upload their profile photos again.
+   applies any missing changes. Staff upload their profile photos again, and administrators
+   the photos in their directions inside buildings.
 
 ## Settings reference
 

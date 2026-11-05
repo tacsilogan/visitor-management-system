@@ -43,6 +43,7 @@ JSON for this Android client file.
    - `phone_tracker/visitor_arrival_migration.sql`
    - `phone_tracker/campus_routes_migration.sql`
    - `phone_tracker/office_breaks_migration.sql`
+   - `phone_tracker/indoor_directions_migration.sql`
 
    An existing database only needs the files it is missing. Every migration can be run
    again safely. Do not import `app_users_office_code_migration.sql`,

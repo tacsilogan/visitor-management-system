@@ -16,3 +16,5 @@ phone_tracker/config/*.json
 phone_tracker/config/*.tmp
 phone_tracker/uploads/profile_pictures/*
 !phone_tracker/uploads/profile_pictures/.htaccess
+phone_tracker/uploads/directions/*
+!phone_tracker/uploads/directions/.htaccess

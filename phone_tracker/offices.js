@@ -409,6 +409,39 @@
         });
         byId("officeNotificationEmpty").hidden = state.notifications.length !== 0;
         byId("markOfficeNotificationsReadBtn").hidden = state.unread === 0;
+        renderHelpAlerts();
+    }
+
+    /**
+     * A visitor who tapped "I can't find it" is standing somewhere waiting, so the request stays
+     * at the top of every view until someone takes it, not only in the bell's list.
+     */
+    function renderHelpAlerts() {
+        const host = byId("officeHelpAlerts");
+        const waiting = state.notifications.filter(function (notification) {
+            return notification.notification_type === "visitor_needs_help" && !notification.read_at;
+        });
+        host.replaceChildren();
+        host.hidden = waiting.length === 0;
+        waiting.forEach(function (notification) {
+            const alert = document.createElement("div");
+            alert.className = "office-help-alert";
+            const copy = document.createElement("div");
+            const title = document.createElement("strong");
+            title.textContent = notification.title || "A visitor can't find your office";
+            const message = document.createElement("span");
+            message.textContent = notification.message || "";
+            const time = document.createElement("time");
+            time.textContent = formatDateTime(notification.created_at, false);
+            copy.append(title, message, time);
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = "admin-primary-button";
+            button.textContent = "Someone is going";
+            button.dataset.helpNotificationId = String(notification.id);
+            alert.append(copy, button);
+            host.appendChild(alert);
+        });
     }
 
     function renderDashboardData() {
@@ -1751,6 +1784,15 @@
             state.notifications.forEach(function (item) { item.read_at = item.read_at || new Date().toISOString(); });
             renderNotifications();
         }
+    });
+    byId("officeHelpAlerts").addEventListener("click", async function (event) {
+        const button = event.target.closest("button[data-help-notification-id]");
+        if (!button) {
+            return;
+        }
+        button.disabled = true;
+        await postJson("office_notifications.php", { action: "mark_read", notification_id: Number(button.dataset.helpNotificationId) });
+        loadOfficeData(true);
     });
     byId("officeNotificationList").addEventListener("click", async function (event) {
         const button = event.target.closest("button[data-notification-id]");

@@ -4,6 +4,7 @@ require_once __DIR__ . "/_bootstrap.php";
 require_once __DIR__ . "/_appointments.php";
 require_once dirname(__DIR__, 2) . "/presence_service.php";
 require_once dirname(__DIR__, 2) . "/arrival_service.php";
+require_once dirname(__DIR__, 2) . "/office_directions_service.php";
 
 // The visitor app's campus map and walking guidance (VISITOR_NAVIGATION.md): the campus
 // boundary and gates, where the visitor is going, and the rules the server uses to confirm
@@ -52,6 +53,9 @@ foreach ($campus["offices"] as $pin) {
     $pins[$pin["code"]] = $pin;
 }
 $offices = campus_map_office_details($conn);
+// What to do past the building door (INDOOR_DIRECTIONS.md). Empty until
+// indoor_directions_migration.sql is imported.
+$directions = office_directions_load($conn);
 $visit = visit_for_appointment($conn, $appointmentId);
 $stopRows = $visit ? visit_stops($conn, (int) $visit["id"]) : [$row];
 $arrivals = arrival_lookup($conn, array_column($stopRows, "id"));
@@ -61,17 +65,25 @@ $routes = campus_routes_load($conn);
 // An office with a recorded route but no pin is found where its route ends (its door), so
 // a route alone is enough to guide visitors there.
 $routeEnds = campus_route_ends($routes);
-$place = function (array $stop) use ($pins, $offices, $arrivals, $routeEnds): array {
+$place = function (array $stop) use ($pins, $offices, $directions, $arrivals, $routeEnds): array {
     $code = (string) $stop["office_code"];
     $pin = $pins[$code] ?? null;
     $point = $pin ? [(float) $pin["latitude"], (float) $pin["longitude"]] : ($routeEnds[$code] ?? null);
     $arrival = $arrivals[(int) $stop["id"]] ?? arrival_public(null);
+    $inside = $directions[$code] ?? office_directions_blank();
     return [
         "appointment_id" => (int) $stop["id"],
         "office_code" => $code,
         "label" => appointment_office_label($code),
         "location" => $offices[$code]["location"] ?? "",
         "description" => $offices[$code]["description"] ?? "",
+        // Where the office is inside its building, and how to get there from the door.
+        "building" => $inside["building"],
+        "floor" => $inside["floor"],
+        "room" => $inside["room"],
+        "visitor_message" => $inside["visitor_message"],
+        // [{text, photo}, ...] in walking order; photo is relative to phone_tracker, or "".
+        "direction_steps" => $inside["steps"],
         "latitude" => $point ? $point[0] : null,
         "longitude" => $point ? $point[1] : null,
         // Where the coordinates come from: "pin", "route" (the end of a recorded route), or null.

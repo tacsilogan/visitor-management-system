@@ -7,6 +7,7 @@
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/session_bootstrap.php";
 require_once __DIR__ . "/personnel.php";
+require_once __DIR__ . "/office_directions_service.php";
 
 auth_json_exception_guard();
 auth_require_method("GET", "POST");
@@ -127,6 +128,10 @@ function departments_overview(mysqli $conn): array
     $pinSql = $hasPins
         ? "EXISTS (SELECT 1 FROM campus_places p WHERE p.place_type = 'office' AND p.office_code = o.code)"
         : "0";
+    // Directions set the location (Campus Map > Inside), so it is changed there.
+    $directionsSql = office_directions_schema_ready($conn)
+        ? "EXISTS (SELECT 1 FROM office_directions d WHERE d.office_code = o.code AND (d.building <> '' OR d.floor <> '' OR d.room <> ''))"
+        : "0";
     $result = $conn->query(
         "SELECT o.code, o.name, o.location, o.description, o.is_active, o.created_at,
                 COALESCE(s.accepting_visitors, 1) AS accepting_visitors,
@@ -134,7 +139,8 @@ function departments_overview(mysqli $conn): array
                 (SELECT COUNT(*) FROM appointments a WHERE a.office_code = o.code AND a.status = 'pending_approval') AS pending_appointments,
                 (SELECT COUNT(*) FROM appointments a WHERE a.office_code = o.code
                    AND a.status IN ('pending_approval', 'approved', 'reschedule_proposed', 'checked_in')) AS open_appointments,
-                {$pinSql} AS has_map_pin
+                {$pinSql} AS has_map_pin,
+                {$directionsSql} AS location_from_directions
          FROM offices o
          LEFT JOIN office_availability_settings s ON s.office_code = o.code
          ORDER BY o.is_active DESC, o.sort_order ASC, o.name ASC"
@@ -153,6 +159,7 @@ function departments_overview(mysqli $conn): array
             "pending_appointments" => (int) $row["pending_appointments"],
             "open_appointments" => (int) $row["open_appointments"],
             "has_map_pin" => (int) $row["has_map_pin"] === 1,
+            "location_from_directions" => (int) $row["location_from_directions"] === 1,
             "personnel" => [],
         ];
     }
@@ -248,6 +255,9 @@ switch ($action) {
         if (department_name_taken($conn, $name, $code)) {
             auth_json_error(409, "name_taken", "A department with this name already exists.");
         }
+        if (office_directions_where(office_directions_load($conn, $code)[$code] ?? office_directions_blank()) !== "") {
+            $location = (string) $department["location"];
+        }
         $changes = [];
         foreach (["name" => $name, "location" => $location, "description" => $description] as $field => $value) {
             if ($value !== (string) $department[$field]) {
@@ -306,6 +316,7 @@ switch ($action) {
             auth_json_error(409, "in_use", "This department has appointments, personnel, or a schedule, so it can only be archived.");
         }
         require_step_up_json();
+        $directionPhotos = array_column(office_directions_load($conn, $code)[$code]["steps"] ?? [], "photo");
         $conn->begin_transaction();
         try {
             foreach ([
@@ -328,6 +339,7 @@ switch ($action) {
             $conn->rollback();
             throw $error;
         }
+        office_directions_remove_unused_photos($conn, $directionPhotos);
         auth_audit($conn, $adminId, "department.deleted", "office", $code, ["code" => $code, "name" => (string) $department["name"]]);
         auth_json(["success" => true, "message" => $department["name"] . " was deleted."]);
 

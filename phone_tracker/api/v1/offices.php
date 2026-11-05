@@ -8,6 +8,16 @@ api_require_method("GET");
 api_require_visitor();
 $offices = [];
 $now = new DateTimeImmutable("now");
+// Where each office is, so the booking form can say it before the visitor comes.
+$locations = [];
+try {
+    $locationRows = $conn->query("SELECT code, location FROM offices");
+    while ($locationRows && ($row = $locationRows->fetch_assoc())) {
+        $locations[(string) $row["code"]] = trim((string) ($row["location"] ?? ""));
+    }
+} catch (Throwable $ignored) {
+    // The offices table is not installed yet.
+}
 foreach (appointment_office_active_map() as $code => $label) {
     try {
         $settings = office_availability_get_settings($conn, $code);
@@ -39,6 +49,7 @@ foreach (appointment_office_active_map() as $code => $label) {
     $offices[] = [
         "code" => $code,
         "name" => $label,
+        "location" => $locations[$code] ?? "",
         "accepting_visitors" => (bool) $settings["accepting_visitors"],
         "unavailable_reason" => (string) $settings["unavailable_reason"],
         "available_again_at" => $settings["available_again_at"],

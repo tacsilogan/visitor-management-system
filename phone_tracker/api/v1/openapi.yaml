@@ -359,7 +359,9 @@ paths:
         Each stop has appointment_id, office_code, label, location and description (from the Department
         Directory), latitude and longitude (the office pin; for an office with a recorded route but no
         pin, where its newest route ends; null when it has neither), location_source ("pin", "route",
-        or null), status,
+        or null), building, floor, room, visitor_message and direction_steps (what to do past the
+        building door, written in Campus Map > Inside: [{text, photo}, ...] in walking order, photo
+        relative to phone_tracker or empty; see INDOOR_DIRECTIONS.md), status,
         visit_type, scheduled_start_at, scheduled_end_at, and arrived_at and arrival_method once the
         arrival is recorded. destination is the first stop still to visit, and null once every stop is
         done, when the app guides the visitor to a gate. walking_routes lists every walking route an
@@ -375,12 +377,36 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Success" }
         "404": { $ref: "#/components/responses/Error" }
+  /direction_help.php:
+    post:
+      summary: Tell the office that a checked-in visitor can't find it
+      description: >-
+        The visitor's "I can't find it". The office's staff are told, with the step the visitor stopped
+        at when step_number is given. A repeat within a minute tells nobody again (already_told true).
+        data.office_told is false when the office has no active staff account to tell, so the app can
+        say to ask someone nearby. 409 when the stop is not checked in.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [appointment_id]
+              properties:
+                appointment_id: { type: integer, minimum: 1, description: The office stop }
+                step_number: { type: integer, minimum: 1, nullable: true, description: The step they stopped at, counting from 1 }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
   /arrival.php:
     post:
       summary: Record a confirmed arrival at one of the visitor's office stops
       description: >-
-        method gps requires distance_meters within the arrival distance and accuracy_meters within
-        arrival_max_accuracy_meters (campus_map.php); method visitor is the visitor tapping "I'm here".
+        method visitor is the visitor tapping "Yes, I'm here", the only way the current app reports an
+        arrival (INDOOR_DIRECTIONS.md). Older app versions may still send method gps, which requires
+        distance_meters within the arrival distance and accuracy_meters within
+        arrival_max_accuracy_meters (campus_map.php).
         Only the first arrival per stop is kept (a repeat returns already_recorded true). The office's
         staff are notified and the activity log records it. 409 when the stop is not checked in.
       requestBody:

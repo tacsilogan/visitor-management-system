@@ -61,6 +61,9 @@ jobs:
       - name: Weekly break rules
         run: docker exec web php /var/www/html/phone_tracker/tools/office_breaks_test.php
 
+      - name: Directions inside buildings
+        run: docker exec web php /var/www/html/phone_tracker/tools/office_directions_test.php --database
+
       # Each failed check is written as an error note, which shows on the pull request
       # without opening the log.
       - name: Pages, privacy rules, uploads, and sign-in
@@ -96,6 +99,12 @@ jobs:
           docker exec web sh -c 'echo ok > /data/uploads/profile_pictures/ci.txt && echo "<?php echo 1;" > /data/uploads/profile_pictures/ci.php'
           expect "Photo on the /data volume" "$(curl -s "$base/uploads/profile_pictures/ci.txt")" ok
           expect "Script in the uploads folder" "$(status $base/uploads/profile_pictures/ci.php)" 403
+          # The same for the photos in directions inside buildings.
+          docker exec web sh -c 'echo ok > /data/uploads/directions/ci.txt && echo "<?php echo 1;" > /data/uploads/directions/ci.php'
+          expect "Directions photo on the /data volume" "$(curl -s "$base/uploads/directions/ci.txt")" ok
+          expect "Script in the directions photos folder" "$(status $base/uploads/directions/ci.php)" 403
+          directions=$(status "$base/admin_office_directions.php")
+          [ "$directions" = 401 ] || [ "$directions" = 403 ] || fail "Directions editor without signing in: expected 401 or 403, got $directions"
 
           # The published password "password" no longer works; the chosen one asks for a new password.
           jar=$(mktemp)
@@ -159,6 +168,25 @@ jobs:
           reply=$(send -H "Authorization: Bearer $token" "$api/campus_map.php?appointment_id=$id")
           contains "$reply" '"location_source":"route"' || fail "An office with a route but no pin got no destination: ${reply:0:400}"
           contains "$reply" '"name":"Back Gate"' || fail "The route's named start was not offered as a gate: ${reply:0:400}"
+
+          # Directions an administrator wrote reach the visitor with the map.
+          contains "$reply" '"direction_steps":[]' || fail "campus_map.php did not answer with direction_steps: ${reply:0:400}"
+          docker exec db mariadb -uisatu -pisatu-secret app -e "INSERT INTO office_directions (office_code, building, floor, room, visitor_message) VALUES ('TECH_SUPPORT', 'CCI Building', '2nd floor', 'Room 201', 'Take the stairs near the main door.'); INSERT INTO office_direction_steps (office_code, sort_order, step_text) VALUES ('TECH_SUPPORT', 1, 'Take the stairs on your left.')"
+          reply=$(send -H "Authorization: Bearer $token" "$api/campus_map.php?appointment_id=$id")
+          contains "$reply" '"building":"CCI Building"' || fail "The building did not reach the visitor: ${reply:0:400}"
+          contains "$reply" '"text":"Take the stairs on your left."' || fail "The steps did not reach the visitor: ${reply:0:400}"
+          # "I can't find it" needs the guard's check-in first.
+          reply=$(send -H "Authorization: Bearer $token" -d "{\"appointment_id\":$id,\"step_number\":1}" "$api/direction_help.php")
+          contains "$reply" 'once the guard has checked you in' || fail "Asking for help before check-in was not refused: ${reply:0:300}"
+          docker exec db mariadb -uisatu -pisatu-secret app -e "UPDATE appointments SET status = 'checked_in', checked_in_at = NOW() WHERE id = $id"
+          reply=$(send -H "Authorization: Bearer $token" -d "{\"appointment_id\":$id,\"step_number\":1}" "$api/direction_help.php")
+          contains "$reply" '"office_told":' || fail "Asking for help after check-in failed: ${reply:0:300}"
+          contains "$reply" '"already_told":false' || fail "Asking for help after check-in failed: ${reply:0:300}"
+          reply=$(send -H "Authorization: Bearer $token" -d "{\"appointment_id\":$id,\"step_number\":1}" "$api/direction_help.php")
+          contains "$reply" '"success":true' || fail "Asking for help twice failed: ${reply:0:300}"
+          # The tap that counts as arrived.
+          reply=$(send -H "Authorization: Bearer $token" -d "{\"appointment_id\":$id,\"method\":\"visitor\"}" "$api/arrival.php")
+          contains "$reply" '"arrival_method":"visitor"' || fail "The visitor's arrival tap was not recorded: ${reply:0:300}"
 
       - name: Startup log
         if: always()

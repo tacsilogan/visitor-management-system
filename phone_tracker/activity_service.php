@@ -12,7 +12,7 @@ const ACTIVITY_SIGNIN_ACTIONS = ["auth.signed_in", "auth.signed_out", "mobile.si
 const ACTIVITY_DECISION_ACTIONS = ["appointment.approved", "appointment.rejected", "appointment.reschedule_proposed", "appointment.stop_completed"];
 const ACTIVITY_GATE_ACTIONS = [
     "appointment.checked_in", "appointment.completed", "appointment.qr_override_created", "visit.checked_in", "visit.completed",
-    "presence.left_campus", "presence.returned_to_campus", "visit.arrived",
+    "presence.left_campus", "presence.returned_to_campus", "visit.arrived", "visit.help_requested",
 ];
 const ACTIVITY_SCHEDULE_ACTIONS = ["office.availability_updated", "office.availability_exception_added", "office.availability_exception_removed"];
 const ACTIVITY_VISITOR_ACTIONS = ["appointment.created", "appointment.cancelled", "appointment.reschedule_response"];
@@ -219,6 +219,15 @@ function activity_describe(array $row): array
                 ? "confirmed by GPS" . ($accuracy !== null ? " (±" . (int) round((float) $accuracy) . " m)" : "")
                 : "confirmed by the visitor";
             return ["Arrived at an office", ucfirst($visitorName) . " arrived at " . $arrivedAt . ", " . $how, "good"];
+        case "visit.help_requested":
+            $helpAt = $detailOffice !== "" ? $detailOffice : ($office !== "" ? $office : "their office");
+            $stepNote = !empty($details["step"]) ? " at step " . (int) $details["step"] : "";
+            return [
+                "Asked for help finding an office",
+                ucfirst($visitorName) . " couldn't find " . $helpAt . " and stopped" . $stepNote
+                    . (empty($details["office_told"]) ? ". The office has no active staff account to tell" : ""),
+                "warn",
+            ];
 
         case "office.availability_updated":
             $open = !empty($details["accepting_visitors"]);
@@ -329,6 +338,10 @@ function activity_describe(array $row): array
                 . (int) round((float) ($details["distance_meters"] ?? 0)) . " m)", "info"];
         case "campus.route_deleted":
             return ["Removed a walking route", "Removed the route \"" . ($details["name"] ?? "") . "\"", "warn"];
+        case "campus.directions_saved":
+            return ["Updated directions inside a building", "Saved the directions to " . appointment_office_label((string) ($details["office_code"] ?? "")) . ": "
+                . (($details["where"] ?? "") !== "" ? $details["where"] . ", " : "") . (int) ($details["steps"] ?? 0) . " step(s), "
+                . (int) ($details["photos"] ?? 0) . " photo(s)", "info"];
 
         case "auth.password_changed":
             return ["Changed their password", ($details["during"] ?? "") === "sign_in" ? "Set a new password while signing in" : "Changed it in Account security; other devices were signed out", "info"];

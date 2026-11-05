@@ -6,7 +6,7 @@
     <title>ISATU Admin Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
-    <link rel="stylesheet" href="style.css?v=20261013-1">
+    <link rel="stylesheet" href="style.css?v=20261105-3">
 </head>
 <body class="admin-page">
     <header class="admin-topbar">
@@ -690,7 +690,7 @@
                     <div>
                         <p class="admin-eyebrow">Campus setup</p>
                         <h1>Campus Map</h1>
-                        <p>Draw the ISATU campus boundary, place its gates and offices, and record the walking routes visitors should take. Maps and route analytics stay inside this boundary.</p>
+                        <p>Draw the ISATU campus boundary, place its gates and offices, record the walking routes visitors should take, and write the directions inside each building. Maps and route analytics stay inside this boundary.</p>
                     </div>
                 </header>
 
@@ -699,12 +699,64 @@
                         <div class="campus-setup-map" id="campusSetupMap" aria-label="Campus map editor"></div>
                     </div>
 
+                    <article class="analytics-card inside-editor" id="insideEditor" aria-labelledby="insideTitle" hidden>
+                        <p class="admin-message is-error" id="insideUnavailable" role="alert" hidden></p>
+                        <div id="insideForm">
+                            <div class="inside-head">
+                                <h2 id="insideTitle"></h2>
+                                <span class="inside-state" id="insideState"></span>
+                            </div>
+
+                            <h3>Where it is</h3>
+                            <div class="inside-where">
+                                <label><span>Building</span>
+                                    <input type="text" id="insideBuilding" list="insideBuildingNames" maxlength="60" placeholder="e.g. CCI Building" autocomplete="off">
+                                    <datalist id="insideBuildingNames"></datalist>
+                                </label>
+                                <label><span>Floor</span>
+                                    <select id="insideFloor"></select>
+                                </label>
+                                <label><span>Room <small>(optional)</small></span>
+                                    <input type="text" id="insideRoom" maxlength="30" placeholder="e.g. Room 201" autocomplete="off">
+                                </label>
+                            </div>
+                            <p class="inside-help inside-directory-note" id="insideDirectoryNote" hidden></p>
+
+                            <h3>Description for visitors</h3>
+                            <p class="inside-help">Shown and read aloud when they reach the building. Say anything they should know before going in.</p>
+                            <textarea id="insideDescription" rows="2" maxlength="160" aria-label="Description for visitors" placeholder="e.g. Take the stairs near the main door. Show your pass when you reach our office."></textarea>
+                            <p class="inside-count" id="insideDescriptionCount"></p>
+
+                            <div class="inside-steps-head">
+                                <h3>Steps inside the building <small>(optional)</small></h3>
+                                <label class="inside-copy">Copy from
+                                    <select id="insideCopyFrom"></select>
+                                </label>
+                            </div>
+                            <p class="inside-help">Start at the building door and end at the office door. Write what a first-time visitor would need, one short sentence per step. Hold the phone sideways for photos.</p>
+                            <ol class="inside-steps" id="insideStepList"></ol>
+                            <p class="inside-empty" id="insideStepsEmpty">No steps yet. Visitors will see only the description, then the question "Are you at the office now?"</p>
+
+                            <div class="inside-add" aria-label="Add a step">
+                                <span>Add a step</span>
+                                <div id="insideAddButtons"></div>
+                            </div>
+
+                            <p class="admin-message" id="insideMessage" role="status" hidden></p>
+                            <div class="inside-foot">
+                                <span class="inside-saved" id="insideSavedNote" role="status"></span>
+                                <button class="admin-primary-button" id="insideSaveBtn" type="button">Save directions</button>
+                            </div>
+                        </div>
+                    </article>
+
                     <aside class="analytics-card campus-setup-panel" aria-label="Campus map tools">
                         <div class="analytics-period-tabs campus-mode-tabs" role="group" aria-label="What to edit">
                             <button class="is-active" type="button" data-campus-mode="boundary">Boundary</button>
                             <button type="button" data-campus-mode="gates">Gates</button>
                             <button type="button" data-campus-mode="offices">Offices</button>
                             <button type="button" data-campus-mode="routes">Routes</button>
+                            <button type="button" data-campus-mode="inside">Inside</button>
                         </div>
 
                         <div data-campus-panel="boundary">
@@ -819,6 +871,27 @@
                                 <button class="admin-primary-button campus-route-big" id="campusReviewSaveBtn" type="button">Save route</button>
                                 <button class="admin-cancel-button campus-route-wide" id="campusReviewDiscardBtn" type="button">Discard</button>
                             </div>
+                        </div>
+
+                        <div data-campus-panel="inside" hidden>
+                            <div class="campus-route-coverage">
+                                <strong id="insideCoverageTitle"></strong>
+                                <div class="campus-route-chips" id="insideCoverageChips"></div>
+                            </div>
+                            <label class="campus-setup-field" for="insideDepartment">
+                                <span>Department</span>
+                                <select id="insideDepartment"></select>
+                            </label>
+                            <ul class="inside-check" id="insideChecklist"></ul>
+                            <details class="inside-preview" id="insidePreview" open>
+                                <summary>What the visitor sees</summary>
+                                <div class="inside-seg" role="group" aria-label="Which screen to preview">
+                                    <button type="button" id="insidePreviewNear" class="is-on">Near the building</button>
+                                    <button type="button" id="insidePreviewSteps">Steps</button>
+                                </div>
+                                <div id="insidePhone"></div>
+                                <button class="inside-hear" id="insideHearBtn" type="button"></button>
+                            </details>
                         </div>
 
                         <div class="campus-locate-box" id="campusLocateBox" role="status" hidden>
@@ -1006,6 +1079,7 @@
                 <label>
                     <span>Location <small>(optional)</small></span>
                     <input type="text" id="departmentLocation" maxlength="150" placeholder="e.g. Admin Building, 2nd floor">
+                    <small class="person-field-hint" id="departmentLocationHint" hidden>Change it in Campus Map, on the Inside tab.</small>
                 </label>
                 <label class="sec-wide-field">
                     <span>Description <small>(optional)</small></span>
@@ -1151,6 +1225,7 @@
     <script src="campus_gps.js?v=20261012-1"></script>
     <script src="campus_setup.js?v=20261006-4"></script>
     <script src="campus_routes_editor.js?v=20261006-4"></script>
-    <script src="admin.js?v=20261013-1"></script>
+    <script src="campus_inside_editor.js?v=20261105-1"></script>
+    <script src="admin.js?v=20261105-1"></script>
 </body>
 </html>
