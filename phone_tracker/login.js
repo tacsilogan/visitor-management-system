@@ -8,10 +8,10 @@
     "use strict";
 
     const ROLE_HOME = {
-        admin: "admin.html?v=20261004-1",
-        security: "dashboard.html?v=20261004-2",
-        offices: "offices.html?v=20261004-1",
-        visitor: "index.html?v=20261004-1",
+        admin: "admin.html",
+        security: "dashboard.html",
+        offices: "offices.html",
+        visitor: "index.html",
     };
     const ROLE_PLACE = {
         admin: "the Admin dashboard",

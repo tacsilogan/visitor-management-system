@@ -7,4 +7,11 @@
     # Other sites receive only our origin (e.g. http://localhost/), never page paths.
     # OpenStreetMap's tile servers require this Referer; "same-origin" gets the maps blocked.
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # Browsers keep their copies of pages, scripts and styles but must ask the server before
+    # reusing one, so an update shows on the next visit. With no rule a browser guesses, and can
+    # reuse an old page for days without asking (DEPLOYMENT.md, "Updating the system later").
+    <FilesMatch "\.(html|js|css)$">
+        Header always set Cache-Control "no-cache"
+    </FilesMatch>
 </IfModule>

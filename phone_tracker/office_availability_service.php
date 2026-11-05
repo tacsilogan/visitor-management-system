@@ -322,6 +322,20 @@ function office_day_windows(int $open, int $close, array $breaks): array
  *         the open days, keyed by day of the week (1 = Monday)
  * @throws RuntimeException naming the day and what to fix
  */
+/**
+ * A copy of the page from before breaks existed sends days with no "breaks" list. It shows only the
+ * last part of a day with a break, so saving it would delete the rest of that day's hours.
+ */
+function office_schedules_from_old_page(array $schedules): bool
+{
+    foreach ($schedules as $schedule) {
+        if (is_array($schedule) && !array_key_exists("breaks", $schedule)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function office_normalize_week(array $schedules): array
 {
     $week = [];

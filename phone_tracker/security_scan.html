@@ -11,7 +11,7 @@
 </head>
 <body class="admin-page security-page security-scan-page">
     <header class="admin-topbar">
-        <a class="admin-brand" href="dashboard.html?v=20261004-2" aria-label="ISATU Security Dashboard home">
+        <a class="admin-brand" href="dashboard.html" aria-label="ISATU Security Dashboard home">
             <span class="admin-brand-mark" aria-hidden="true">
                 <img src="assets/images/isatu-logo.png" alt="">
             </span>
@@ -31,7 +31,7 @@
             </button>
             <div class="admin-profile-menu" id="securityProfileMenu" hidden>
                 <p>Signed in as <strong id="securityProfileUsername">security</strong></p>
-                <a class="security-admin-link" id="securityAdminLink" href="admin.html?v=20261004-1" hidden>Open Admin Dashboard</a>
+                <a class="security-admin-link" id="securityAdminLink" href="admin.html" hidden>Open Admin Dashboard</a>
                 <button type="button" id="logoutBtn">Sign out</button>
             </div>
         </div>
@@ -40,11 +40,11 @@
     <div class="admin-layout security-layout">
         <aside class="admin-sidebar security-sidebar" aria-label="Security navigation">
             <nav>
-                <a class="admin-nav-item" href="dashboard.html?v=20261004-2">
+                <a class="admin-nav-item" href="dashboard.html">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
                     <span>Security Dashboard</span>
                 </a>
-                <a class="admin-nav-item" href="dashboard.html?v=20261004-2#monitoring">
+                <a class="admin-nav-item" href="dashboard.html#monitoring">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-4.35 7-11A7 7 0 0 0 5 10c0 6.65 7 11 7 11Zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/></svg>
                     <span>Visitor Monitoring</span>
                 </a>
@@ -58,7 +58,7 @@
                     <h1>Scan visitor pass</h1>
                     <p>Place the visitor's QR code inside the frame. The first scan checks the visitor in; scan the same pass again when they leave to check them out.</p>
                 </div>
-                <a class="security-scan-back" href="dashboard.html?v=20261004-2">
+                <a class="security-scan-back" href="dashboard.html">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
                     Back to dashboard
                 </a>
@@ -197,6 +197,6 @@
     <script src="auth.js?v=20261004-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261004-1"></script>
-    <script src="security_scan.js?v=20261004-2"></script>
+    <script src="security_scan.js?v=20261105-1"></script>
 </body>
 </html>

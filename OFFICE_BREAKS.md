@@ -36,6 +36,10 @@ the app's time slots, office reschedule proposals, and the web booking page. The
 name and span for display. Before that migration runs, breaks still work but are all called
 "Break". The server applies the migration by itself on its next start (`tools/setup_database.php`).
 
+A copy of the page from before breaks existed shows only the last window of a day and sends no
+`breaks`. Saving it would delete the day's other hours, so the server refuses it and asks for a
+refresh (`office_schedules_from_old_page()`).
+
 The rules live in `phone_tracker/office_availability_service.php`: `office_normalize_week()`
 (checks a week and works out its windows), `office_week_for_editing()`,
 `office_open_state_at()`, `office_schedule_conflicts()`, and

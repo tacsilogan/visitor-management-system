@@ -229,6 +229,11 @@ same(office_when("2026-11-03 08:00:00", $monday("18:00")), "tomorrow at 8:00 AM"
 same(office_when("2026-11-06 08:00:00", $monday("18:00")), "on Friday at 8:00 AM", "later this week");
 same(office_when("2026-11-12 08:00:00", $monday("18:00")), "on Nov 12 at 8:00 AM", "more than a week away");
 
+// A copy of the page from before breaks existed may not overwrite the week.
+check(office_schedules_from_old_page([["day_of_week" => 1, "enabled" => true, "start_time" => "13:00", "end_time" => "17:00"]]), "a page that sends no break lists is out of date");
+check(office_schedules_from_old_page([["day_of_week" => 1, "enabled" => false]]), "even when the day is closed");
+check(!office_schedules_from_old_page([["day_of_week" => 1, "enabled" => true, "start_time" => "08:00", "end_time" => "17:00", "breaks" => []]]), "an empty break list is a current page");
+
 if ($failures > 0) {
     fwrite(STDERR, "{$failures} of {$checks} checks failed.\n");
     exit(1);

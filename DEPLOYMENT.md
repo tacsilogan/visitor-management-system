@@ -219,6 +219,12 @@ The app works without them; visitors see updates when they open it. To turn them
   image, starts it next to MariaDB, and tests sign-in, privacy rules, and uploads on every
   push that touches the server. On a fork, enable it once under the **Actions** tab. Deploy
   only when it is green.
+- **Seeing an update:** `phone_tracker/.htaccess` makes browsers ask the server before reusing
+  a saved page, script, or style (`Cache-Control: no-cache`; the server answers "not changed"
+  when it still matches). An update therefore shows on the next visit, with no special refresh.
+  A tab that is already open keeps what it loaded until it is refreshed. Link to a page by its
+  plain name (`offices.html`), never with a `?v=` number: a second address for a page is a
+  second saved copy. The server check fails if the rule goes missing.
 
 ## Day-to-day operations
 

@@ -29,7 +29,7 @@
 
     document.getElementById("logoutBtn").addEventListener("click", function () {
         PhoneTrackerAuth.logout().then(function () {
-            window.location.href = "login.html?v=20261004-1";
+            window.location.href = "login.html";
         });
     });
 

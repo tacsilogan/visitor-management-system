@@ -87,6 +87,10 @@ jobs:
           [ "$listing" = 403 ] || [ "$listing" = 404 ] || fail "Uploads folder: expected no listing (403 or 404), got $listing"
           headers=$(curl -sI "$base/login.html")
           contains "$headers" "content-security-policy:" || fail "Sign-in page: Content-Security-Policy header missing"
+          # Browsers must recheck these, or an update stays hidden behind their saved copies.
+          for file in login.html offices.html login.js style.css; do
+            contains "$(curl -sI "$base/$file")" "cache-control: no-cache" || fail "$file: browsers may keep showing an old copy (Cache-Control: no-cache missing)"
+          done
 
           # Photos on the /data volume are served; scripts placed there are not.
           docker exec web sh -c 'echo ok > /data/uploads/profile_pictures/ci.txt && echo "<?php echo 1;" > /data/uploads/profile_pictures/ci.php'

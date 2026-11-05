@@ -120,6 +120,9 @@ try {
         $availableAgainRaw = trim((string) ($input["available_again_at"] ?? ""));
         $schedules = isset($input["schedules"]) && is_array($input["schedules"]) ? $input["schedules"] : [];
 
+        if (office_schedules_from_old_page($schedules)) {
+            throw new RuntimeException("This page is out of date, so nothing was saved. Refresh the page, then make your change again.");
+        }
         if (!in_array($slotDuration, [15, 30, 45, 60, 90, 120], true)) {
             throw new RuntimeException("Choose a valid appointment duration");
         }
