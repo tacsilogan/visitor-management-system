@@ -3,12 +3,14 @@ declare(strict_types=1);
 require_once __DIR__ . "/_bootstrap.php";
 require_once dirname(__DIR__, 2) . "/appointment_offices.php";
 require_once dirname(__DIR__, 2) . "/office_availability_service.php";
+require_once dirname(__DIR__, 2) . "/teacher_service.php";
 
 api_require_method("GET");
-api_require_visitor();
+api_require_app_user();
 $officeCode = strtoupper(trim((string) ($_GET["office_code"] ?? "")));
 $dateText = trim((string) ($_GET["date"] ?? ""));
-$officeMap = appointment_office_active_map();
+$officeMap = appointment_office_bookable_map() + appointment_teacher_bookable_map();
+$isTeacher = appointment_is_teacher_code($officeCode);
 if (!isset($officeMap[$officeCode])) {
     api_fail("Select a valid office", 422);
 }
@@ -33,7 +35,10 @@ if (!(int) $settings["accepting_visitors"]) {
         "date" => $dateText,
         "slots" => [],
         "accepting_visitors" => false,
-        "message" => (string) ($settings["unavailable_reason"] ?: "This office is not accepting visitors right now."),
+        // Why a teacher isn't taking visits stays private.
+        "message" => $isTeacher
+            ? teacher_short_label($officeCode) . " isn't taking visits right now."
+            : (string) ($settings["unavailable_reason"] ?: "This office is not accepting visitors right now."),
     ]);
 }
 $duration = max(15, (int) $settings["slot_duration_minutes"]);
@@ -105,7 +110,7 @@ usort($slots, fn(array $a, array $b): int => strcmp($a["scheduled_start_at"], $b
 
 // Why the day has gaps: the office's named breaks and its posted "Office unavailable" changes.
 $unavailable = [];
-if ($hasWeeklyHoursToday) {
+if ($hasWeeklyHoursToday && !$isTeacher) {
     foreach (office_breaks_by_day(office_load_break_rows($conn, $officeCode))[$day] ?? [] as $break) {
         $unavailable[] = [
             "starts_at" => $dateText . " " . office_minutes_sql($break["start"]),
@@ -117,7 +122,7 @@ if ($hasWeeklyHoursToday) {
 }
 $dayStart = new DateTimeImmutable($dateText . " 00:00:00");
 $dayEnd = $dayStart->modify("+1 day");
-foreach (office_load_exceptions_between($conn, $officeCode, $dayStart, $dayEnd) as $closure) {
+foreach ($isTeacher ? [] : office_load_exceptions_between($conn, $officeCode, $dayStart, $dayEnd) as $closure) {
     if ((int) $closure["is_available"]) {
         continue;
     }

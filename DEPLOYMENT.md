@@ -118,9 +118,11 @@ Then open your address, sign in as `admin` with the temporary password, choose y
 password, and set up two-step verification with Google or Microsoft Authenticator. Keep
 the backup codes it shows.
 
-## 4. Email for password-reset codes
+## 4. Email for sign-up and password-reset codes
 
-Visitors who forget their password receive a recovery code by email.
+Every new app account, visitor or student, and every teacher request confirms its email with a
+6-digit code ([SCHOOL_ACCOUNTS.md](SCHOOL_ACCOUNTS.md)), and visitors who forget their password
+receive a recovery code. **Without email, nobody can sign up.**
 
 1. In Brevo, open **Senders, Domains & Dedicated IPs → Senders**, add the address emails
    should come from (for example the office's Gmail), and confirm it from that inbox.
@@ -141,7 +143,8 @@ Visitors who forget their password receive a recovery code by email.
    railway ssh -s web -- php /var/www/html/phone_tracker/workers/send_outbound_emails.php --test you@example.com
    ```
 
-Brevo's free plan sends 300 emails a day. Mail from a Gmail sender can land in spam; tell
+Brevo's free plan sends 300 emails a day, shared by sign-up codes, password resets and teacher
+alerts; the first week of a semester may need a paid plan or the school's own mail server. Mail from a Gmail sender can land in spam; tell
 visitors to check there. Other options: `RESEND_API_KEY` for [Resend](https://resend.com)
 if you own a domain, or `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and
 `SMTP_ENCRYPTION` on a host that allows SMTP (Railway Pro, a school server).
@@ -260,6 +263,8 @@ The app works without them; visitors see updates when they open it. To turn them
 | `BREVO_API_KEY`, `MAIL_FROM_ADDRESS` | for email | See step 4. `MAIL_FROM_NAME`, `MAIL_REPLY_TO`, and `MAIL_TRANSPORT` (`brevo`, `resend`, `smtp`) are optional. |
 | `ISATU_ADMIN_PASSWORD` | no | The admin's temporary password on the very first start. |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | no | Push notifications (step 7). |
+| `PUBLIC_BASE_URL` | no | The address of `phone_tracker`, for the link in teachers' reminder emails. Railway's own address is used when this is not set. |
+| `WEB_PUSH_CONTACT` | no | Who the browser makers can contact about teachers' phone alerts (`mailto:` or a web address). Defaults to `MAIL_FROM_ADDRESS`. Phone alerts need nothing else set up: the server makes its keys at first use. |
 | `ISATU_TRUST_PROXY` | set by the image | `1`: read the visitor's address and HTTPS from Railway's proxy. Use `0` on a server without a proxy in front. |
 | `VISITOR_APP_ENV` | set by the image | `production`. Never `development` online: it shows reset codes in API replies. |
 

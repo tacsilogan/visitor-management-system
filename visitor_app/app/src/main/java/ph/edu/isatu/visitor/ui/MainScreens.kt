@@ -110,6 +110,7 @@ private enum class HeaderScreen { Notifications, Profile }
 fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var headerScreen by remember { mutableStateOf<HeaderScreen?>(null) }
+    var noticeOpen by remember { mutableStateOf(false) }
     // Office decisions and suggested times arrive as notifications. Check whenever the
     // app returns to the foreground and every 30 seconds while it stays open.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -129,11 +130,15 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
         }
     }
     state.selectedAppointment?.let { appointment ->
-        AppointmentDetailScreen(appointment, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message)
+        AppointmentDetailScreen(appointment, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message, state.teacherChoices)
         return
     }
     state.selectedVisit?.let { visit ->
         VisitDetailScreen(visit, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message)
+        return
+    }
+    if (noticeOpen) {
+        TermsNoticeScreen("Back to profile") { noticeOpen = false }
         return
     }
 
@@ -204,7 +209,7 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
             }
             when (headerScreen) {
                 HeaderScreen.Notifications -> NotificationsScreen(state.notifications, state.unreadCount, viewModel)
-                HeaderScreen.Profile -> ProfileScreen(state, viewModel)
+                HeaderScreen.Profile -> ProfileScreen(state, viewModel, onOpenNotice = { noticeOpen = true })
                 null -> when (selectedTab) {
                     0 -> HomeScreen(
                         user = state.user,
@@ -243,6 +248,7 @@ internal fun HomeScreen(
 
     val upcoming = groupVisits(appointments).filter { it.isActive }.minByOrNull { it.startsAt }
     val firstName = user?.fullName?.trim()?.substringBefore(' ')?.ifBlank { "Visitor" } ?: "Visitor"
+    val isStudent = user?.isStudent == true
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -253,7 +259,7 @@ internal fun HomeScreen(
         // The visit that matters now, with the one thing to do next. Booking is the Book tab.
         item {
             when (upcoming) {
-                null -> NoVisitCard(onBook)
+                null -> NoVisitCard(onBook, isStudent)
                 is VisitListItem.Single -> NextVisitCard(homeCard(upcoming)) { onOpenAppointment(upcoming.appointment.id) }
                 is VisitListItem.MultiStop -> NextVisitCard(homeCard(upcoming)) { onOpenVisit(upcoming.summary.id) }
             }
@@ -270,7 +276,7 @@ internal fun HomeScreen(
         // Until a visitor's first booking the steps show in full; after that, behind a link.
         item {
             if (appointments.isEmpty()) {
-                VisitStepsCard()
+                VisitStepsCard(isStudent)
             } else {
                 TextButton(onClick = { showSteps = true }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -284,7 +290,7 @@ internal fun HomeScreen(
         AlertDialog(
             onDismissRequest = { showSteps = false },
             title = { Text("How a visit works") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { VisitSteps() } },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { VisitSteps(isStudent) } },
             confirmButton = { TextButton(onClick = { showSteps = false }) { Text("Got it") } },
         )
     }
@@ -332,25 +338,41 @@ private fun homeCard(item: VisitListItem): HomeCard = when (item) {
         val appointment = item.appointment
         val office = appointment.office.name
         val time = visitTimeText(appointment)
+        val teacherName = appointment.teacher?.shortName
         when (appointment.status) {
             // The visit list does not carry the suggested times; the visit screen shows them.
             "reschedule_proposed" -> HomeCard(
                 "New time suggested", Tone.Yellow, office, Icons.Rounded.Schedule, "Requested: $time",
-                "The office suggested another time. Accept it or pick a new one.", "Respond",
+                (teacherName ?: "The office") + " suggested another time. Accept it or pick a new one.", "Respond",
             )
             "checked_in" -> HomeCard(
                 "On campus", Tone.Blue, office, Icons.Rounded.LocationOn,
                 appointment.checkedInAt?.let { "Checked in at ${formatTimeOfDay(it)}" } ?: time,
                 "Directions and your pass are on the map.", "Open map", Icons.Rounded.Map,
             )
-            "approved" -> HomeCard(
-                "Approved · pass ready", Tone.Green, office, Icons.Rounded.Schedule, time, appointment.subject,
-                "Show pass", Icons.Rounded.QrCode2,
-            )
-            else -> HomeCard(
-                "Waiting for approval", Tone.Grey, office, Icons.Rounded.Schedule, time,
-                "You'll get a notification when the office decides.",
-            )
+            // A student has no pass: the room, the directions and "I'm here" are inside.
+            "approved" -> if (appointment.isStudentVisit) {
+                HomeCard(
+                    if (appointment.arrivedAt != null) "You're here" else "Accepted", Tone.Green, office, Icons.Rounded.Schedule, time,
+                    appointment.subject, if (appointment.arrivedAt != null) "Open visit" else "Directions and I'm here", Icons.Rounded.Map,
+                )
+            } else {
+                HomeCard(
+                    if (teacherName != null) "Accepted · pass ready" else "Approved · pass ready", Tone.Green, office, Icons.Rounded.Schedule, time, appointment.subject,
+                    "Show pass", Icons.Rounded.QrCode2,
+                )
+            }
+            else -> if (appointment.answerByAt != null) {
+                HomeCard(
+                    "Waiting for an answer", Tone.Yellow, office, Icons.Rounded.Schedule, "Request closes at ${formatTimeOfDay(appointment.answerByAt)}",
+                    if (appointment.isStudentVisit) "You'll get a notification when ${teacherName ?: "they"} answers." else "You have no pass yet. You'll get a notification.",
+                )
+            } else {
+                HomeCard(
+                    "Waiting for approval", Tone.Grey, office, Icons.Rounded.Schedule, time,
+                    teacherName?.let { "You'll get a notification when $it answers." } ?: "You'll get a notification when the office decides.",
+                )
+            }
         }
     }
     is VisitListItem.MultiStop -> {
@@ -425,7 +447,7 @@ private fun NextVisitCard(card: HomeCard, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun NoVisitCard(onBook: () -> Unit) {
+private fun NoVisitCard(onBook: () -> Unit, isStudent: Boolean = false) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, BorderSoft),
@@ -433,8 +455,12 @@ private fun NoVisitCard(onBook: () -> Unit) {
     ) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("No upcoming visits", style = MaterialTheme.typography.titleLarge, color = Ink)
-            Text("Book a walk-in or an appointment.", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
-            PrimaryButton("Book a visit", onBook, Modifier.fillMaxWidth().padding(top = 4.dp), icon = Icons.Rounded.Add)
+            Text(
+                if (isStudent) "See a teacher now or at a set time." else "Book a walk-in or an appointment.",
+                color = MutedInk,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            PrimaryButton(if (isStudent) "Book a teacher" else "Book a visit", onBook, Modifier.fillMaxWidth().padding(top = 4.dp), icon = Icons.Rounded.Add)
         }
     }
 }
@@ -461,7 +487,7 @@ private fun NotificationsPrompt(onEnable: () -> Unit) {
 }
 
 @Composable
-private fun VisitStepsCard() {
+private fun VisitStepsCard(isStudent: Boolean = false) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, BorderSoft),
@@ -469,13 +495,21 @@ private fun VisitStepsCard() {
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("How a visit works", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark)
-            VisitSteps()
+            VisitSteps(isStudent)
         }
     }
 }
 
 @Composable
-private fun VisitSteps() {
+private fun VisitSteps(isStudent: Boolean = false) {
+    if (isStudent) {
+        // No pass, gate scan or tracking for an ISATU student.
+        VisitStep(Icons.Rounded.PendingActions, "1", "Find a teacher", "Any teacher at ISATU, by name. Ask to see them now or pick a time.")
+        VisitStep(Icons.Rounded.CheckCircle, "2", "Wait for the answer", "You'll get a notification when they accept.")
+        VisitStep(Icons.Rounded.LocationOn, "3", "Go to their room", "The room and the directions show once they accept.")
+        VisitStep(Icons.Rounded.Notifications, "4", "Tap I'm here", "They're told you've arrived. No pass and no gate scan.")
+        return
+    }
     VisitStep(Icons.Rounded.PendingActions, "1", "Register", "Choose walk-in or appointment and tell us where you are going.")
     VisitStep(Icons.Rounded.CheckCircle, "2", "Get your pass", "Walk-ins receive it now; appointments receive it after approval.")
     VisitStep(Icons.Rounded.QrCode2, "3", "Present your pass", "An approved visit receives a secure QR pass.")
@@ -750,7 +784,7 @@ private fun NotificationCard(notification: NotificationDto, onClick: () -> Unit)
 }
 
 @Composable
-private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel) {
+private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel, onOpenNotice: () -> Unit) {
     var showEdit by remember { mutableStateOf(false) }
     val user = state.user
     LazyColumn(
@@ -808,6 +842,7 @@ private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel) {
                         "Location is collected only after Security checks you in and while the tracking notification is visible. You can withdraw consent from the active visit.",
                         color = MutedInk,
                     )
+                    NoticeLink(onOpenNotice)
                 }
             }
         }
@@ -872,4 +907,13 @@ fun formatDateTime(value: String): String {
         val target = SimpleDateFormat("MMM d, yyyy • h:mm a", Locale.US)
         target.format(requireNotNull(source.parse(value)))
     }.getOrDefault(value)
+}
+
+/** The way back to the notice from Profile. */
+@Composable
+internal fun NoticeLink(onClick: () -> Unit) {
+    TextButton(onClick = onClick, contentPadding = PaddingValues(0.dp)) {
+        Text(TermsNotice.TITLE)
+        Icon(Icons.Rounded.ChevronRight, contentDescription = null)
+    }
 }

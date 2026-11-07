@@ -22,6 +22,11 @@ class SecureTokenStore(context: Context) {
     private val _signedIn = MutableStateFlow(readToken() != null)
     val signedIn = _signedIn.asStateFlow()
 
+    /** The visitor's name, to greet them before the network answers. Goes with the token. */
+    var savedName: String?
+        get() = preferences.getString("name", null)
+        set(value) = preferences.edit().putString("name", value).apply()
+
     @Synchronized
     fun saveToken(token: String) {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
@@ -90,6 +95,13 @@ class InstallationStore(context: Context) {
             .joinToString(" ")
             .ifBlank { "Android phone" }
             .take(100)
+
+    /** The notice version each account agreed to on this phone. It outlives signing out. */
+    fun agreedNotice(userId: Long): String? = preferences.getString("agreed_notice_$userId", null)
+
+    fun saveAgreedNotice(userId: Long, version: String) {
+        preferences.edit().putString("agreed_notice_$userId", version).apply()
+    }
 
     fun saveActiveTracking(appointmentId: Long, sessionId: Long) {
         preferences.edit()

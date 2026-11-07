@@ -19,6 +19,11 @@ fun VisitorApp(viewModel: AppViewModel) {
         ) { LoadingBlock("Preparing your visitor account…") }
 
         !state.signedIn -> AuthFlow(state, viewModel)
+        state.noticeAgreementNeeded -> TermsAgreementScreen(
+            busy = state.busy,
+            onAgree = viewModel::agreeToNotice,
+            onSignOut = viewModel::logout,
+        )
         else -> MainShell(state, viewModel)
     }
 }

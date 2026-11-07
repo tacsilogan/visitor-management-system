@@ -10,7 +10,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 }
 api_rate_limit($conn, "password_reset", $email, 5, 3600);
 $stmt = $conn->prepare(
-    "SELECT id FROM app_users WHERE email = ? AND role = 'visitor' AND is_active = 1 LIMIT 1"
+    "SELECT id FROM app_users WHERE email = ? AND role IN ('visitor', 'student') AND is_active = 1 LIMIT 1"
 );
 if (!$stmt) {
     api_fail("Mobile API database migration is required", 503);

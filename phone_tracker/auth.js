@@ -8,7 +8,7 @@
     const PERMISSIONS_KEY = "phone_tracker_permissions";
     const NOTICE_KEY = "phone_tracker_auth_notice";
     const CSRF_COOKIE = "ISATU_VMS_CSRF";
-    const ALLOWED_ROLES = ["security", "visitor", "offices", "admin"];
+    const ALLOWED_ROLES = ["security", "visitor", "offices", "admin", "teacher"];
     const SAFE_METHODS = ["GET", "HEAD", "OPTIONS"];
     // X-Auth-Error codes that mean the server ended this browser's session.
     const SESSION_END_MESSAGES = {

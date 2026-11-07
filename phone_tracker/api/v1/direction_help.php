@@ -12,7 +12,7 @@ require_once dirname(__DIR__, 2) . "/office_directions_service.php";
 const DIRECTION_HELP_REPEAT_SECONDS = 60;
 
 api_require_method("POST");
-$user = api_require_visitor();
+$user = api_require_app_user();
 $input = api_body();
 $appointmentId = (int) ($input["appointment_id"] ?? 0);
 if ($appointmentId <= 0) {
@@ -49,13 +49,20 @@ if ($alreadyTold) {
     api_success(["appointment_id" => $appointmentId, "office_told" => true, "already_told" => true]);
 }
 
-$staff = $conn->prepare("SELECT COUNT(*) FROM app_users WHERE role = 'offices' AND office_code = ? AND is_active = 1");
+$staff = $conn->prepare("SELECT COUNT(*) FROM app_users WHERE role IN ('offices', 'teacher') AND office_code = ? AND is_active = 1");
 $staff->bind_param("s", $officeCode);
 $staff->execute();
 $hasStaff = (int) $staff->get_result()->fetch_row()[0] > 0;
 $staff->close();
 
-$steps = office_directions_load($conn, $officeCode)[$officeCode]["steps"] ?? [];
+// A teacher's steps are their course's or department's.
+$steps = [];
+foreach (appointment_office_chain($officeCode) as $link) {
+    $steps = office_directions_load($conn, $link)[$link]["steps"] ?? [];
+    if ($steps) {
+        break;
+    }
+}
 $stepNumber = isset($input["step_number"]) && is_numeric($input["step_number"]) ? (int) $input["step_number"] : 0;
 $stepText = $steps[$stepNumber - 1]["text"] ?? "";
 $visitorName = trim((string) $stop["visitor_full_name"]) ?: "A visitor";
@@ -68,7 +75,7 @@ try {
             $appointmentId,
             $officeCode,
             "visitor_needs_help",
-            "{$visitorName} can't find your office",
+            appointment_is_teacher_code($officeCode) ? "{$visitorName} can't find you" : "{$visitorName} can't find your office",
             $stepText !== ""
                 ? "They stopped at step {$stepNumber}: {$stepText} Someone should go and meet them."
                 : "They are near the building. Someone should go and meet them."

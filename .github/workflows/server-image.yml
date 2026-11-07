@@ -60,6 +60,8 @@ jobs:
 
       - name: Weekly break rules
         run: docker exec web php /var/www/html/phone_tracker/tools/office_breaks_test.php
+      - name: Teacher visit rules
+        run: docker exec web php /var/www/html/phone_tracker/tools/teacher_visits_test.php
 
       - name: Directions inside buildings
         run: docker exec web php /var/www/html/phone_tracker/tools/office_directions_test.php --database
@@ -139,12 +141,39 @@ jobs:
           contains() { grep -qiF -- "$2" <<< "$1"; }
           send() { curl -s -H "Content-Type: application/json" -H "User-Agent: ISATU-Visitor-Android/ci" "$@"; }
 
+          # A new account exists only once the code emailed to it is entered. Email isn't set up
+          # here, so the code waits in the queue, where this check reads it.
+          code_for() { docker exec db mariadb -uisatu -pisatu-secret app -N -e "SELECT JSON_UNQUOTE(JSON_EXTRACT(payload_json, '\$.code')) FROM outbound_emails WHERE recipient_email = '$1' AND template_key = 'account_code' ORDER BY id DESC LIMIT 1"; }
+          signup() {
+            local reply request code
+            reply=$(send -d "$2" "$api/auth/register.php")
+            # The number in data, not the text request_id in meta.
+            request=$(sed -n 's/.*"request_id":\([0-9][0-9]*\).*/\1/p' <<< "$reply")
+            # No fail here: this runs inside $(...), so the caller reports what came back.
+            [ -n "$request" ] || { echo "Sign-up did not send a code to $1: ${reply:0:300}"; return 0; }
+            code=$(code_for "$1")
+            [ -n "$code" ] || { echo "No code was queued for $1"; return 0; }
+            send -d "{\"request_id\":$request,\"code\":\"$code\",\"installation_id\":\"ci-phone\",\"device_name\":\"CI phone\"}" "$api/auth/confirm_signup.php"
+          }
+
           email="ci-visitor-$(date +%s)@example.test"
-          reply=$(send -d "{\"email\":\"$email\",\"full_name\":\"CI Visitor\",\"contact_number\":\"09170000000\",\"password\":\"Ci-Visitor-Pass-1\",\"tracking_consent\":true,\"consent_version\":\"location-v1\"}" "$api/auth/register.php")
-          contains "$reply" '"success":true' || fail "Visitor registration failed: ${reply:0:300}"
+          reply=$(signup "$email" "{\"account_type\":\"visitor\",\"email\":\"$email\",\"full_name\":\"CI Visitor\",\"contact_number\":\"09170000000\",\"password\":\"Ci-Visitor-Pass-1\",\"tracking_consent\":true,\"consent_version\":\"terms-privacy-v3\"}")
+          contains "$reply" '"role":"visitor"' || fail "Confirming the visitor's code failed: ${reply:0:300}"
           reply=$(send -d "{\"identifier\":\"$email\",\"password\":\"Ci-Visitor-Pass-1\",\"installation_id\":\"ci-phone\",\"device_name\":\"CI phone\"}" "$api/auth/login.php")
           token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
           [ -n "$token" ] || fail "Visitor sign-in failed: ${reply:0:300}"
+
+          # An ISATU student signs up with their school email, is never offered offices, and can't be tracked.
+          student="ci-student-$(date +%s)@students.isatu.edu.ph"
+          reply=$(signup "$student" "{\"account_type\":\"student\",\"email\":\"$student\",\"full_name\":\"CI Student\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-00001\",\"course_name\":\"BS Information Technology\",\"year_level\":3,\"section\":\"B\"}")
+          contains "$reply" '"role":"student"' || fail "Confirming the student's code failed: ${reply:0:300}"
+          student_token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
+          reply=$(send -H "Authorization: Bearer $student_token" "$api/offices.php")
+          contains "$reply" '"offices":[]' || fail "A student was offered offices: ${reply:0:300}"
+          status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $student_token" "$api/tracking.php?appointment_id=1")
+          [ "$status" = "403" ] || fail "A student reached tracking.php (HTTP $status)"
+          reply=$(send -d "{\"account_type\":\"student\",\"email\":\"ci-outsider@example.test\",\"full_name\":\"CI Outsider\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-00002\",\"course_name\":\"BSIT\",\"year_level\":1,\"section\":\"A\"}" "$api/auth/register.php")
+          contains "$reply" 'students.isatu.edu.ph' || fail "A non-school email made a student sign-up: ${reply:0:300}"
 
           # 10:00 on the next weekday, Philippine time, when the offices take appointments.
           day=1
@@ -158,6 +187,13 @@ jobs:
           [ -n "$id" ] || fail "The walk-in reply had no appointment id: ${reply:0:300}"
           reply=$(send -H "Authorization: Bearer $token" "$api/campus_map.php?appointment_id=$id")
           contains "$reply" '"walking_routes"' || fail "campus_map.php did not answer with walking_routes: ${reply:0:300}"
+
+          # The list of teachers answers, and is empty until a teacher saves their hours.
+          reply=$(send -H "Authorization: Bearer $token" "$api/teachers.php")
+          contains "$reply" '"teachers":[]' || fail "teachers.php did not answer with an empty list: ${reply:0:300}"
+
+          # Visitors only see an office that has someone to answer it.
+          docker exec db mariadb -uisatu -pisatu-secret app -e "INSERT INTO app_users (username, password_hash, display_name, role, office_code) VALUES ('ci_tech_support', 'not-a-password', 'CI Tech Support', 'offices', 'TECH_SUPPORT')"
 
           # An office with a recorded route but no pin (Tech Support on the starting map) is
           # found where its route ends, and the route's named start is offered as a gate.

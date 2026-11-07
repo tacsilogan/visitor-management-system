@@ -33,10 +33,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -49,15 +53,23 @@ import ph.edu.isatu.visitor.data.AppointmentDto
 
 @Composable
 fun PortalBrand(modifier: Modifier = Modifier, subtitle: String? = null) {
+    val sealHome = LocalSealHome.current
+    DisposableEffect(sealHome) {
+        onDispose { sealHome?.bounds = null }
+    }
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Image(
-            painter = painterResource(R.drawable.isatu_logo),
+            painter = painterResource(R.drawable.isatu_seal),
             contentDescription = "ISATU logo",
-            modifier = Modifier.size(42.dp),
+            modifier = Modifier
+                .size(32.dp)
+                .onGloballyPositioned { sealHome?.bounds = it.boundsInRoot() }
+                // Until the opening animation's seal lands here, that one is the logo on screen.
+                .alpha(if (sealHome?.away == true) 0f else 1f),
         )
         Column {
             Text(
@@ -206,7 +218,8 @@ fun formatVisitStart(start: String): String {
 
 /** When a visit is: its time slot, or for a walk-in how long its pass lasts. */
 fun visitTimeText(appointment: AppointmentDto): String =
-    if (appointment.visitType == "walk_in") {
+    // A walk-in to a teacher has a slot, not an hour-long pass.
+    if (appointment.visitType == "walk_in" && appointment.teacher == null) {
         "Walk-in · until ${formatTimeOfDay(appointment.scheduledEndAt)}"
     } else {
         formatVisitTime(appointment.scheduledStartAt, appointment.scheduledEndAt)

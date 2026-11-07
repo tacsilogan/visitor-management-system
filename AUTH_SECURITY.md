@@ -18,10 +18,25 @@ for any remaining steps in this order:
 3. **Two-step setup** (`login_two_factor_setup.php`) if the role requires it and it is
    not set up yet. Ends by showing 10 backup codes once.
 
-Only then does the server create the session. The page plays a 4-second logo animation
-while this happens ("The sign-in animation" in `login.js`). The four checks end at fixed
-moments counted from the sign-in, so a slow server shortens the later ones and does not
-lengthen the whole. A wrong password returns to the form after about 2 seconds instead.
+Only then does the server create the session, and only then does the page play its logo
+animation ("The sign-in animation" in `login.js`), for about 3.5 seconds before the dashboard
+opens. While the server checks the password, the button reads "Signing in…". Each further
+step, and a wrong password, shows on the form straight away, without the animation.
+
+## New accounts
+
+The server decides every role. Sign-up in the app only ever makes a visitor or an ISATU student, and
+a teacher's request on the website becomes an account only when their department's Dean's Office
+approves it. Office Personnel, Security and Admin accounts are made only by the admin (Add user).
+
+- Every new account confirms its email first: a 6-digit code that works for 10 minutes, once, with
+  5 tries. Only an HMAC of the code is stored. Nothing exists in `app_users` until the code is
+  entered (`account_requests` holds the sign-up until then).
+- A student must use an `@students.isatu.edu.ph` email, a teacher an `@isatu.edu.ph` email. A
+  student email can't make a visitor account.
+- Sign-ups are limited per email and per network.
+
+Details: [SCHOOL_ACCOUNTS.md](SCHOOL_ACCOUNTS.md).
 
 ## Lockout rules
 
@@ -108,7 +123,10 @@ Endpoints check a permission, not a role name (`permissions.php`).
 | `profile.self` | ✓ | ✓ | ✓ | |
 | `appointments.book`, `tracking.self` | | | | ✓ |
 
-Office Personnel still only see their own office's records. To add a role, add it to
+Office Personnel still only see their own office's records. A student uses the app like a visitor,
+except the pass, tracking and multi-office visit endpoints, which call `api_require_visitor()`; the
+others call `api_require_app_user()`. The Dean's Office approves teachers only for its own department
+(`offices.approves_teachers`). To add a role, add it to
 `AUTH_ROLE_PERMISSIONS`; new endpoints should call `require_permission_json("...")`.
 
 ## Admin tools

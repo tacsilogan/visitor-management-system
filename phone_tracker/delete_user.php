@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/session_bootstrap.php";
+require_once __DIR__ . "/teacher_service.php";
 
 require_permission_json("users.manage");
 
@@ -29,7 +30,7 @@ if ($id === $selfId) {
     exit;
 }
 
-$lookup = $conn->prepare("SELECT id, username, role, is_active FROM app_users WHERE id = ? LIMIT 1");
+$lookup = $conn->prepare("SELECT id, username, role, office_code, is_active FROM app_users WHERE id = ? LIMIT 1");
 $lookup->bind_param("i", $id);
 $lookup->execute();
 $user = $lookup->get_result()->fetch_assoc();
@@ -49,6 +50,11 @@ if ($user["role"] === "admin" && (int) $user["is_active"] === 1) {
 }
 
 require_step_up_json();
+
+// A teacher's visits keep their name; the calendar itself stops being bookable.
+if ($user["role"] === "teacher") {
+    teacher_retire_calendar($conn, (string) $user["office_code"]);
+}
 
 $stmt = $conn->prepare("DELETE FROM app_users WHERE id = ? LIMIT 1");
 $stmt->bind_param("i", $id);

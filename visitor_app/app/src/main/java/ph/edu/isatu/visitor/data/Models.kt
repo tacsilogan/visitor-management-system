@@ -20,7 +20,25 @@ data class UserDto(
     val fullName: String = "",
     val contactNumber: String = "",
     val emailVerified: Boolean = false,
+    /** "visitor" (from outside ISATU) or "student" (an ISATU student, who books teachers only). */
     val role: String = "visitor",
+    /** A student's details, as their teachers see them. Null for a visitor. */
+    val student: StudentProfileDto? = null,
+) {
+    /** A student has no pass, no gate scan and no tracking: they say "I'm here" instead. */
+    val isStudent: Boolean get() = role == "student"
+}
+
+data class StudentProfileDto(
+    val studentNumber: String = "",
+    val courseCode: String = "",
+    /** "IT", or what the student typed when their course wasn't listed. */
+    val course: String = "",
+    val department: String = "",
+    val yearLevel: Int = 0,
+    val section: String = "",
+    /** "IT 3-B": how the student's class reads on a timetable. */
+    val label: String = "",
 )
 
 data class LoginRequest(
@@ -37,19 +55,61 @@ data class LoginData(
     val user: UserDto = UserDto(),
 )
 
+/**
+ * Starts an account. Nothing exists until the code emailed to [email] is entered
+ * ([ConfirmSignupRequest]). A student must use their @students.isatu.edu.ph email.
+ */
 data class RegisterRequest(
     val email: String,
     val fullName: String,
     val contactNumber: String,
     val password: String,
+    /** Visitors agree to be tracked on campus; students are never tracked. */
     val trackingConsent: Boolean,
     val consentVersion: String,
+    /** "visitor" or "student". */
+    val accountType: String = "visitor",
+    val studentNumber: String? = null,
+    /** A course from [SignupOptionsData], or null with [courseName] when it isn't listed. */
+    val courseCode: String? = null,
+    val courseName: String? = null,
+    val yearLevel: Int? = null,
+    val section: String? = null,
 )
 
-data class RegisterData(
-    val user: UserDto = UserDto(),
-    val emailVerificationRequired: Boolean = false,
+/** The code is on its way. [developmentCode] is only sent by a server in development mode. */
+data class SignupCodeData(
+    val verificationRequired: Boolean = true,
+    val requestId: Long = 0,
+    val email: String = "",
+    val expiresAt: String = "",
+    val resendAfterSeconds: Int = 60,
+    val developmentCode: String? = null,
 )
+
+data class ConfirmSignupRequest(
+    val requestId: Long,
+    val code: String,
+    val installationId: String,
+    val deviceName: String,
+)
+
+data class ResendCodeRequest(val requestId: Long)
+
+/** What the student sign-up form offers. */
+data class SignupOptionsData(
+    val studentEmailDomain: String = "students.isatu.edu.ph",
+    val yearLevels: List<Int> = listOf(1, 2, 3, 4, 5),
+    val departments: List<SignupDepartmentDto> = emptyList(),
+)
+
+data class SignupDepartmentDto(
+    val code: String = "",
+    val name: String = "",
+    val courses: List<SignupCourseDto> = emptyList(),
+)
+
+data class SignupCourseDto(val code: String = "", val name: String = "")
 
 data class PasswordResetRequest(val email: String)
 data class PasswordResetData(val developmentResetToken: String? = null)
@@ -101,6 +161,38 @@ data class AvailabilityData(
 
 data class OfficeSummaryDto(val code: String = "", val name: String = "")
 
+/**
+ * A teacher a visitor can find. It says whether they can be seen now, or their next free time, and
+ * never why. Their room only comes with an accepted pass.
+ */
+data class TeacherDto(
+    val code: String = "",
+    val name: String = "",
+    val shortName: String = "",
+    val course: String = "",
+    val department: String = "",
+    val departmentName: String = "",
+    val availableNow: Boolean = false,
+    val acceptsWalkIns: Boolean = true,
+    val canWalkIn: Boolean = false,
+    val nextFreeAt: String? = null,
+    val slotDurationMinutes: Int = 30,
+    val nextFreeSlots: List<AvailabilitySlotDto> = emptyList(),
+    val fallbackOffice: OfficeSummaryDto? = null,
+)
+
+data class TeachersData(val teachers: List<TeacherDto> = emptyList(), val courses: List<String> = emptyList())
+data class TeacherData(val teacher: TeacherDto = TeacherDto())
+
+/** Who a visit is with, when it's a teacher and not an office. */
+data class VisitTeacherDto(
+    val code: String = "",
+    val name: String = "",
+    val shortName: String = "",
+    val course: String = "",
+    val department: String = "",
+)
+
 data class QrPassDto(
     val payload: String = "",
     val token: String = "",
@@ -147,6 +239,10 @@ data class AppointmentDto(
     val id: Long = 0,
     val registrationCode: String? = null,
     val visitType: String = "appointment",
+    /** "student" for an ISATU student's visit: no pass and no gate, "I'm here" instead. */
+    val visitorKind: String = "visitor",
+    /** When the visitor or student said they arrived. */
+    val arrivedAt: String? = null,
     val office: OfficeSummaryDto = OfficeSummaryDto(),
     val purpose: String = "",
     val subject: String = "",
@@ -165,7 +261,17 @@ data class AppointmentDto(
     val visitor: VisitorSummaryDto? = null,
     val additionalDetails: String = "",
     val rescheduleProposal: RescheduleProposalDto? = null,
-)
+    /** Set when this visit is with a teacher. */
+    val teacher: VisitTeacherDto? = null,
+    /** A walk-in request to a teacher closes at this time with no answer. */
+    val answerByAt: String? = null,
+    /** The teacher finished the meeting; the visitor is on their way out. */
+    val meetingDoneAt: String? = null,
+    /** Where the visitor can go when the teacher can't see them. */
+    val fallbackOffice: OfficeSummaryDto? = null,
+) {
+    val isStudentVisit: Boolean get() = visitorKind == "student"
+}
 
 /**
  * One campus trip with two or three office stops on the same day. Each stop is approved

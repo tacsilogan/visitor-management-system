@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . "/_bootstrap.php";
 
 api_require_method("POST", "DELETE");
-$user = api_require_visitor();
+$user = api_require_app_user();
 $input = api_body();
 $userId = (int) $user["id"];
 $installationId = api_text($input, "installation_id", 191);

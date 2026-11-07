@@ -36,7 +36,7 @@ function campus_map_office_details(mysqli $conn): array
 }
 
 api_require_method("GET");
-$user = api_require_visitor();
+$user = api_require_app_user();
 $appointmentId = max(0, (int) ($_GET["appointment_id"] ?? 0));
 if ($appointmentId <= 0) {
     api_fail("Select a valid appointment", 422);
@@ -67,15 +67,45 @@ $routes = campus_routes_load($conn);
 $routeEnds = campus_route_ends($routes);
 $place = function (array $stop) use ($pins, $offices, $directions, $arrivals, $routeEnds): array {
     $code = (string) $stop["office_code"];
-    $pin = $pins[$code] ?? null;
-    $point = $pin ? [(float) $pin["latitude"], (float) $pin["longitude"]] : ($routeEnds[$code] ?? null);
+    // A teacher has no pin, route or directions of their own: they use their course's, or else
+    // their department's. An office finds its own first, so nothing changes for an office.
+    $pin = null;
+    $point = null;
+    $inside = null;
+    foreach (appointment_office_chain($code) as $link) {
+        $pin = $pin ?? ($pins[$link] ?? null);
+        $point = $point ?? ($pin ? [(float) $pin["latitude"], (float) $pin["longitude"]] : ($routeEnds[$link] ?? null));
+        $inside = $inside ?? ($directions[$link] ?? null);
+    }
+    $inside = $inside ?? office_directions_blank();
     $arrival = $arrivals[(int) $stop["id"]] ?? arrival_public(null);
-    $inside = $directions[$code] ?? office_directions_blank();
+    $location = $offices[$code]["location"] ?? "";
+    if (appointment_is_teacher_code($code)) {
+        if (in_array((string) $stop["status"], ["approved", "checked_in", "completed"], true)) {
+            // The teacher's room replaces the course's, and becomes the last step.
+            $room = $location;
+            if ($room !== "") {
+                $inside["building"] = "";
+                $inside["floor"] = "";
+                $inside["room"] = $room;
+            }
+            $inside["steps"][] = [
+                "text" => ($room !== "" ? "Go to " . $room . ". " : "") . "Ask for " . teacher_short_label($code) . ".",
+                "photo" => "",
+            ];
+        } else {
+            // Where a teacher can be found is only for a visitor they accepted.
+            $pin = null;
+            $point = null;
+            $location = "";
+            $inside = office_directions_blank();
+        }
+    }
     return [
         "appointment_id" => (int) $stop["id"],
         "office_code" => $code,
         "label" => appointment_office_label($code),
-        "location" => $offices[$code]["location"] ?? "",
+        "location" => $location,
         "description" => $offices[$code]["description"] ?? "",
         // Where the office is inside its building, and how to get there from the door.
         "building" => $inside["building"],
@@ -90,6 +120,8 @@ $place = function (array $stop) use ($pins, $offices, $directions, $arrivals, $r
         "location_source" => $pin ? "pin" : ($point ? "route" : null),
         "status" => (string) $stop["status"],
         "visit_type" => (string) ($stop["visit_type"] ?? "appointment"),
+        // The teacher finished the meeting, so the visitor is only on their way out now.
+        "meeting_done" => !empty($stop["meeting_done_at"]),
         "scheduled_start_at" => $stop["scheduled_start_at"],
         "scheduled_end_at" => $stop["scheduled_end_at"],
         // Set once the visitor's arrival at this office was confirmed (arrival.php).
@@ -126,7 +158,7 @@ $gates = array_merge($gates, campus_route_start_gates($routes, $gates));
 // and the app guides the visitor back to a gate.
 $destination = null;
 foreach ($stops as $stop) {
-    if (in_array($stop["status"], ["checked_in", "approved"], true)) {
+    if (in_array($stop["status"], ["checked_in", "approved"], true) && !$stop["meeting_done"]) {
         $destination = $stop;
         break;
     }

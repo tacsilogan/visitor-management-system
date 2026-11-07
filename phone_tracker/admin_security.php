@@ -34,8 +34,8 @@ function admin_security_overview(mysqli $conn, string $filter): array
             (SELECT COUNT(*) FROM auth_login_attempts WHERE outcome = 'failure' AND created_at > NOW() - INTERVAL 24 HOUR) AS failed_24h,
             (SELECT COUNT(*) FROM auth_login_attempts WHERE outcome = 'success' AND created_at > NOW() - INTERVAL 24 HOUR) AS success_24h,
             (SELECT COUNT(*) FROM auth_lockouts WHERE released_at IS NULL AND locked_until > NOW()) AS active_lockouts,
-            (SELECT COUNT(*) FROM app_users WHERE role IN ('admin', 'security', 'offices') AND is_active = 1) AS staff_total,
-            (SELECT COUNT(*) FROM app_users WHERE role IN ('admin', 'security', 'offices') AND is_active = 1 AND totp_enabled_at IS NOT NULL) AS staff_two_factor,
+            (SELECT COUNT(*) FROM app_users WHERE role IN ('admin', 'security', 'offices', 'teacher') AND is_active = 1) AS staff_total,
+            (SELECT COUNT(*) FROM app_users WHERE role IN ('admin', 'security', 'offices', 'teacher') AND is_active = 1 AND totp_enabled_at IS NOT NULL) AS staff_two_factor,
             (SELECT COUNT(*) FROM app_users WHERE is_active = 1 AND must_change_password = 1) AS must_change"
     )->fetch_assoc();
 

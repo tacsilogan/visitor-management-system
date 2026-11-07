@@ -4,7 +4,7 @@ require_once __DIR__ . "/_bootstrap.php";
 require_once __DIR__ . "/_appointments.php";
 
 api_require_method("GET", "POST");
-$user = api_require_visitor();
+$user = api_require_app_user();
 refresh_appointment_time_states($conn);
 $visitorUserId = (int) $user["id"];
 
@@ -14,7 +14,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     try {
         $appointment = mobile_create_appointment($conn, $user, $input);
         $message = ($appointment["visit_type"] ?? "appointment") === "walk_in"
-            ? "Walk-in visitor pass created"
+            ? ($appointment["status"] === "pending_approval" ? "Request sent" : "Walk-in visitor pass created")
             : "Appointment request submitted";
         api_success(["appointment" => $appointment], 201, $message);
     } catch (InvalidArgumentException $error) {
@@ -50,7 +50,7 @@ if ($beforeId > 0) {
     $types .= "i";
     $params[] = $beforeId;
 }
-$visitColumns = visit_appointment_columns($conn);
+$visitColumns = visit_appointment_columns($conn) . mobile_teacher_columns($conn);
 $sql =
     "SELECT id, registration_code, public_token, office_code, visitor_full_name, visitor_email,
             contact_number, device_name, visit_type, purpose, destination, subject, additional_details,

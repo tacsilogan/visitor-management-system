@@ -20,7 +20,7 @@ $stmt = $conn->prepare(
     "SELECT id, username, email, password_hash, display_name, contact_number,
             email_verified_at, role, is_active, must_change_password
      FROM app_users
-     WHERE (LOWER(email) = ? OR LOWER(username) = ?) AND role = 'visitor'
+     WHERE (LOWER(email) = ? OR LOWER(username) = ?) AND role IN ('visitor', 'student')
      LIMIT 1"
 );
 $stmt->bind_param("ss", $identifier, $identifier);

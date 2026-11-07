@@ -17,16 +17,72 @@ paths:
   /auth/register.php:
     post:
       security: []
-      summary: Register a visitor account
+      summary: Start a visitor or ISATU student account and email it a 6-digit code
+      description: >
+        Nothing is created until the code is entered with confirm_signup.php. A student must use
+        an @students.isatu.edu.ph email; a visitor may use any other email. SCHOOL_ACCOUNTS.md.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/RegisterRequest" }
       responses:
-        "201": { $ref: "#/components/responses/Success" }
+        "202":
+          description: The code was sent. data holds request_id, email, expires_at and resend_after_seconds.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignupCode" }
         "409": { $ref: "#/components/responses/Error" }
         "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /auth/confirm_signup.php:
+    post:
+      security: []
+      summary: Enter the emailed code; the account is created and signed in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id, code]
+              properties:
+                request_id: { type: integer }
+                code: { type: string, pattern: "^[0-9]{6}$" }
+                installation_id: { type: string, maxLength: 191 }
+                device_name: { type: string, maxLength: 100 }
+      responses:
+        "201": { $ref: "#/components/responses/Success" }
+        "410": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /auth/resend_code.php:
+    post:
+      security: []
+      summary: Email a new code for a sign-up still waiting for one (after 60 seconds, at most 5 codes)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [request_id]
+              properties:
+                request_id: { type: integer }
+      responses:
+        "200":
+          description: A new code was sent; the old one no longer works.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SignupCode" }
+        "410": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
+  /auth/signup_options.php:
+    get:
+      security: []
+      summary: The student email domain, the years and every course by department, for the student form
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
   /auth/login.php:
     post:
       security: []
@@ -102,12 +158,32 @@ paths:
         "422": { $ref: "#/components/responses/Error" }
   /offices.php:
     get:
-      summary: List the five official offices and availability rules
+      summary: List the offices a visitor can book, with their availability rules
       responses:
         "200": { $ref: "#/components/responses/Success" }
+  /teachers.php:
+    get:
+      summary: List the teachers a visitor can book, or one teacher with its next free times
+      description: >
+        Only teachers who saved their hours are listed. Each says whether they can be seen now, or
+        their next free time, and never why. A teacher's room only comes with an accepted pass, from
+        campus_map.php. A walk-in to a teacher (appointments.php) gives no pass until they accept.
+      parameters:
+        - in: query
+          name: code
+          required: false
+          schema: { type: string }
+          description: One teacher's code. Adds next_free_slots and fallback_office.
+        - in: query
+          name: slots
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 8, default: 4 }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "404": { $ref: "#/components/responses/Error" }
   /availability.php:
     get:
-      summary: List bookable slots for one office and date
+      summary: List bookable slots for one office or teacher and date
       parameters:
         - in: query
           name: office_code
@@ -499,14 +575,32 @@ components:
         meta: { $ref: "#/components/schemas/Meta" }
     RegisterRequest:
       type: object
-      required: [email, full_name, password, tracking_consent, consent_version]
+      required: [email, full_name, password, consent_version]
       properties:
+        account_type: { type: string, enum: [visitor, student], default: visitor }
         email: { type: string, format: email, maxLength: 190 }
         full_name: { type: string, minLength: 2, maxLength: 100 }
         contact_number: { type: string, maxLength: 32 }
         password: { type: string, minLength: 10, maxLength: 128 }
-        tracking_consent: { type: boolean, enum: [true] }
+        tracking_consent: { type: boolean, description: "Visitors only: must be true. Students are never tracked." }
         consent_version: { type: string, maxLength: 32 }
+        student_number: { type: string, maxLength: 20, description: "Students: digits and dashes" }
+        course_code: { type: string, maxLength: 16, description: "Students: a course from signup_options.php" }
+        course_name: { type: string, maxLength: 100, description: "Students: their course, when it isn't listed" }
+        year_level: { type: integer, minimum: 1, maximum: 5 }
+        section: { type: string, maxLength: 10 }
+    SignupCode:
+      type: object
+      properties:
+        success: { type: boolean }
+        data:
+          type: object
+          properties:
+            verification_required: { type: boolean }
+            request_id: { type: integer }
+            email: { type: string }
+            expires_at: { type: string }
+            resend_after_seconds: { type: integer }
     LoginRequest:
       type: object
       required: [identifier, password]

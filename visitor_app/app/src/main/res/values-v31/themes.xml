@@ -1,0 +1,12 @@
+<resources>
+    <!-- Android 12 and later show their own splash screen. Plain blue, because the seal arrives
+         with the opening animation. -->
+    <style name="Theme.ISATUVisitor.Starting">
+        <item name="android:windowBackground">@color/opening_field</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/opening_field</item>
+        <item name="android:navigationBarColor">@color/opening_field</item>
+        <item name="android:windowSplashScreenBackground">@color/opening_field</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@android:color/transparent</item>
+    </style>
+</resources>

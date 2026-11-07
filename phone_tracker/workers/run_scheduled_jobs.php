@@ -9,7 +9,7 @@ if (PHP_SAPI !== "cli") {
 /*
  * Runs the background jobs the system needs while it is online:
  *   every minute  visit timing (ended slots, campus exits, end of day), queued emails,
- *                 queued push notifications
+ *                 queued push notifications, teachers' phone alerts
  *   once a day    location history older than the retention period is deleted (from 03:00)
  *
  *   php workers/run_scheduled_jobs.php          keeps running, one pass a minute (the Docker
@@ -86,6 +86,7 @@ function scheduler_jobs(array &$state): array
         ["name" => "Visit timing", "script" => "refresh_visit_states.php", "arguments" => [], "timeout" => 120],
         ["name" => "Email", "script" => "send_outbound_emails.php", "arguments" => [], "timeout" => 240],
         ["name" => "Push notifications", "script" => "send_push_notifications.php", "arguments" => [], "timeout" => 240],
+        ["name" => "Teacher phone alerts", "script" => "send_web_push.php", "arguments" => [], "timeout" => 120],
     ];
     $today = date("Y-m-d");
     if ((int) date("G") >= SCHEDULER_PURGE_HOUR && ($state["purged_on"] ?? "") !== $today

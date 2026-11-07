@@ -141,7 +141,13 @@ function api_bearer_token(): string
     return $match[1];
 }
 
-function api_require_visitor(): array
+/**
+ * The signed-in app user. Visitors and ISATU students both use the app; a student has no pass, gate
+ * scan or tracking, so the endpoints for those call api_require_visitor() instead.
+ *
+ * @param list<string> $roles
+ */
+function api_require_app_user(array $roles = ["visitor", "student"]): array
 {
     global $conn;
     $rawToken = api_bearer_token();
@@ -165,8 +171,13 @@ function api_require_visitor(): array
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-    if (!$row || !(int) $row["is_active"] || $row["role"] !== "visitor") {
+    if (!$row || !(int) $row["is_active"] || !in_array($row["role"], ["visitor", "student"], true)) {
         api_fail("Invalid or expired access token", 401);
+    }
+    if (!in_array($row["role"], $roles, true)) {
+        api_fail($row["role"] === "student"
+            ? "Students don't need this. It is only for visitors from outside ISATU."
+            : "This is only for ISATU students.", 403);
     }
     $tokenId = (int) $row["access_token_id"];
     $touch = $conn->prepare("UPDATE api_access_tokens SET last_used_at = NOW() WHERE id = ?");
@@ -180,6 +191,12 @@ function api_require_visitor(): array
     $GLOBALS["mobile_api_user"] = $row;
     $GLOBALS["mobile_api_access_token"] = $rawToken;
     return $row;
+}
+
+/** A visitor from outside ISATU: the endpoints for passes, visits to several offices and tracking. */
+function api_require_visitor(): array
+{
+    return api_require_app_user(["visitor"]);
 }
 
 function api_issue_access_token(mysqli $conn, int $userId, string $installationId, string $deviceName): array
@@ -316,14 +333,22 @@ function api_create_account_action_token(
 
 function api_user_payload(array $user): array
 {
-    return [
+    global $conn;
+    $role = (string) ($user["role"] ?? "visitor") === "student" ? "student" : "visitor";
+    $payload = [
         "id" => (int) $user["id"],
         "email" => $user["email"] ?: null,
         "full_name" => (string) $user["display_name"],
         "contact_number" => (string) ($user["contact_number"] ?? ""),
         "email_verified" => !empty($user["email_verified_at"]),
-        "role" => "visitor",
+        "role" => $role,
+        "student" => null,
     ];
+    if ($role === "student" && $conn instanceof mysqli) {
+        require_once dirname(__DIR__, 2) . "/school_accounts_service.php";
+        $payload["student"] = school_student_profiles($conn, [(int) $user["id"]])[(int) $user["id"]] ?? null;
+    }
+    return $payload;
 }
 
 function api_setting(mysqli $conn, string $key, int $default, int $minimum, int $maximum): int

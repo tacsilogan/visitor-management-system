@@ -2,6 +2,8 @@
 
 require_once __DIR__ . "/visit_service.php";
 require_once __DIR__ . "/presence_service.php";
+require_once __DIR__ . "/teacher_service.php";
+require_once __DIR__ . "/arrival_service.php";
 
 /**
  * Applies time-based appointment and multi-stop visit outcomes. This is safe to call
@@ -11,6 +13,7 @@ require_once __DIR__ . "/presence_service.php";
 function refresh_appointment_time_states(mysqli $conn): void
 {
     refresh_appointment_stop_time_states($conn);
+    refresh_teacher_answer_reminders($conn);
     refresh_visit_states($conn);
     refresh_presence_exits($conn);
     refresh_checked_in_end_of_day($conn);
@@ -23,12 +26,18 @@ function refresh_appointment_stop_time_states(mysqli $conn): void
     $skipOnCampus = visit_schema_ready($conn)
         ? "AND NOT (status = 'checked_in' AND visit_id IS NULL)"
         : "AND status <> 'checked_in'";
+    // A walk-in request to a teacher closes after a few minutes, long before its slot ends.
+    $answerClosed = teacher_schema_ready($conn)
+        ? "OR (status = 'pending_approval' AND answer_by_at IS NOT NULL AND answer_by_at < NOW())"
+        : "";
+    $studentColumns = arrival_has_visitor_kind($conn) ? ", visitor_kind, arrived_at" : ", 'visitor' AS visitor_kind, NULL AS arrived_at";
     $result = $conn->query(
-        "SELECT id, visitor_user_id, status, scheduled_end_at{$visitColumns}
+        "SELECT id, visitor_user_id, office_code, visitor_full_name, status, scheduled_end_at{$visitColumns}{$studentColumns}
          FROM appointments
-         WHERE scheduled_end_at < NOW()
+         WHERE (scheduled_end_at < NOW()
            AND status IN ('pending_approval', 'approved', 'checked_in')
-           {$skipOnCampus}
+           {$skipOnCampus})
+           {$answerClosed}
          ORDER BY id ASC
          LIMIT 200"
     );
@@ -52,13 +61,25 @@ function refresh_appointment_stop_time_states(mysqli $conn): void
         $note = "";
         $extraSet = "";
 
+        $officeCode = (string) $appointment["office_code"];
+        $isTeacher = appointment_is_teacher_code($officeCode);
+        $teacherName = $isTeacher ? teacher_short_label($officeCode) : "";
         if ($fromStatus === "pending_approval") {
             $toStatus = "unanswered";
-            $note = "Office did not respond before the scheduled appointment ended";
+            $note = $isTeacher
+                ? "Your request closed with no answer from {$teacherName}. You can pick another time."
+                : "Office did not respond before the scheduled appointment ended";
             $extraSet = ", unanswered_at = NOW()";
+        } elseif ($fromStatus === "approved" && $appointment["visitor_kind"] === "student" && !empty($appointment["arrived_at"])) {
+            // A student who said they were here: the visit happened, even if the teacher forgot "done".
+            $toStatus = "completed";
+            $note = "Your visit with {$teacherName} ended at its scheduled time.";
+            $extraSet = ", completed_at = scheduled_end_at, completed_by_user_id = NULL";
         } elseif ($fromStatus === "approved") {
             $toStatus = "window_closed";
-            $note = "Approved appointment window ended before check-in";
+            $note = $appointment["visitor_kind"] === "student"
+                ? "Your visit time with {$teacherName} ended."
+                : "Approved appointment window ended before check-in";
             $extraSet = ", window_closed_at = NOW()";
         } elseif ($fromStatus === "checked_in") {
             $toStatus = "completed";
@@ -127,12 +148,22 @@ function refresh_appointment_stop_time_states(mysqli $conn): void
         );
         if ($notification) {
             $title = $toStatus === "unanswered"
-                ? "Office did not respond"
+                ? ($isTeacher ? "No answer from {$teacherName}" : "Office did not respond")
                 : ($toStatus === "window_closed" ? "Appointment Done" : ($isVisitStop ? "Office stop completed" : "Visit completed"));
             $notificationType = "appointment." . $toStatus;
             $notification->bind_param("iisss", $visitorUserId, $appointmentId, $notificationType, $title, $note);
             $notification->execute();
             $notification->close();
+        }
+        if ($toStatus === "unanswered" && $isTeacher) {
+            visit_notify_office(
+                $conn,
+                $appointmentId,
+                $officeCode,
+                "appointment.unanswered",
+                "No answer in time",
+                trim((string) $appointment["visitor_full_name"]) . "'s request closed before you answered."
+            );
         }
 
         $audit = $conn->prepare(
@@ -225,7 +256,7 @@ function refresh_appointment_stop_time_states(mysqli $conn): void
                  (recipient_user_id, appointment_id, notification_type, title, message)
                  SELECT id, ?, 'appointment.reschedule_expired', 'Visitor did not respond', ?
                  FROM app_users
-                 WHERE role = 'offices' AND office_code = ? AND is_active = 1"
+                 WHERE role IN ('offices', 'teacher') AND office_code = ? AND is_active = 1"
             );
             $officeNotification->bind_param("iss", $appointmentId, $note, $officeCode);
             $officeNotification->execute();
@@ -247,5 +278,60 @@ function refresh_appointment_stop_time_states(mysqli $conn): void
         } catch (Throwable $error) {
             $conn->rollback();
         }
+    }
+}
+
+/**
+ * A booked request to a teacher with no answer this close to its time: tell both sides, once. The
+ * request stays open, because the teacher can still answer until the time has passed.
+ */
+function refresh_teacher_answer_reminders(mysqli $conn): void
+{
+    if (!teacher_schema_ready($conn)) {
+        return;
+    }
+    $minutes = TEACHER_ANSWER_REMINDER_MINUTES;
+    $result = $conn->query(
+        "SELECT a.id, a.office_code, a.visitor_user_id, a.visitor_full_name, a.scheduled_start_at, a.purpose, a.subject
+         FROM appointments a
+         INNER JOIN offices o ON o.code = a.office_code AND o.kind = 'teacher'
+         WHERE a.status = 'pending_approval' AND a.answer_by_at IS NULL AND a.answer_reminded_at IS NULL
+           AND a.scheduled_start_at < NOW() + INTERVAL {$minutes} MINUTE AND a.scheduled_end_at > NOW()
+           AND a.created_at < NOW() - INTERVAL 15 MINUTE
+         ORDER BY a.id ASC LIMIT 50"
+    );
+    if (!$result) {
+        return;
+    }
+    while ($row = $result->fetch_assoc()) {
+        $appointmentId = (int) $row["id"];
+        $mark = $conn->prepare("UPDATE appointments SET answer_reminded_at = NOW() WHERE id = ? AND answer_reminded_at IS NULL");
+        $mark->bind_param("i", $appointmentId);
+        $mark->execute();
+        $changed = $mark->affected_rows === 1;
+        $mark->close();
+        if (!$changed) {
+            continue;
+        }
+        $code = (string) $row["office_code"];
+        $teacherName = teacher_short_label($code);
+        $visitorName = trim((string) $row["visitor_full_name"]);
+        $time = date("g:i A", strtotime((string) $row["scheduled_start_at"]));
+        visit_notify_visitor(
+            $conn,
+            (int) $row["visitor_user_id"],
+            $appointmentId,
+            "appointment.no_answer_yet",
+            "No answer yet",
+            "{$teacherName} hasn't answered your request for {$time}. You'll get a notification when they do, or you can pick another time."
+        );
+        visit_notify_office($conn, $appointmentId, $code, "appointment.reminder", "Still needs your answer", "{$visitorName} is waiting to hear about {$time}.");
+        teacher_queue_alert_email($conn, $code, "teacher_reminder", "Still needs your answer: {$visitorName}, {$time}", [
+            "teacher" => $teacherName,
+            "visitor" => $visitorName,
+            "when" => date("l, F j \\a\\t g:i A", strtotime((string) $row["scheduled_start_at"])),
+            "purpose" => (string) $row["purpose"],
+            "subject" => (string) $row["subject"],
+        ]);
     }
 }

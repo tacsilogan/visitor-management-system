@@ -1,0 +1,21 @@
+{
+  "name": "ISATU Teacher Dashboard",
+  "short_name": "ISATU Teacher",
+  "start_url": "teacher.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f7fb",
+  "theme_color": "#0755b5",
+  "icons": [
+    {
+      "src": "assets/images/isatu-seal-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/images/isatu-seal-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

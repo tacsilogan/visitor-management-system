@@ -42,6 +42,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import kotlinx.coroutines.delay
 import ph.edu.isatu.visitor.data.AppointmentDto
 import ph.edu.isatu.visitor.data.CampusMapData
 import ph.edu.isatu.visitor.data.QrPassDto
+import ph.edu.isatu.visitor.data.TeacherDto
 import ph.edu.isatu.visitor.data.TrackingData
 import ph.edu.isatu.visitor.navigation.OfficeDirections
 import ph.edu.isatu.visitor.navigation.toDirections
@@ -70,6 +72,7 @@ fun AppointmentDetailScreen(
     viewModel: AppViewModel,
     campusMap: CampusMapData? = null,
     notice: String? = null,
+    teacherChoices: TeacherDto? = null,
 ) {
     BackHandler(onBack = viewModel::closeAppointment)
     val context = LocalContext.current
@@ -100,9 +103,23 @@ fun AppointmentDetailScreen(
     }
 
     LaunchedEffect(appointment.id, appointment.status) {
+        // A walk-in waiting for a teacher: the answer shows here as soon as it comes.
+        if (appointment.status == "pending_approval" && appointment.answerByAt != null) {
+            while (true) {
+                delay(3_000)
+                viewModel.pollSelectedAppointment(appointment.id)
+            }
+        }
         if (appointment.status == "approved" && appointment.qrPass != null) {
             while (true) {
                 delay(3_000)
+                viewModel.pollSelectedAppointment(appointment.id)
+            }
+        }
+        // A student's accepted visit: the teacher may mark it done or cancel it.
+        if (appointment.status == "approved" && appointment.isStudentVisit) {
+            while (true) {
+                delay(10_000)
                 viewModel.pollSelectedAppointment(appointment.id)
             }
         }
@@ -134,9 +151,11 @@ fun AppointmentDetailScreen(
 
     // The campus map: on opening, then every minute (an admin may move a pin). With a pass it is
     // loaded once ahead of the visit, for the directions and to keep them on the phone.
-    LaunchedEffect(appointment.id, appointment.status == "checked_in", appointment.qrPass != null) {
+    val studentAccepted = appointment.isStudentVisit && appointment.status == "approved"
+    LaunchedEffect(appointment.id, appointment.status == "checked_in", appointment.qrPass != null, studentAccepted) {
         if (appointment.status != "checked_in") {
-            if (appointment.qrPass != null) viewModel.loadCampusMap(appointment.id)
+            // A student has no pass, but once accepted the room and directions come with the map data.
+            if (appointment.qrPass != null || studentAccepted) viewModel.loadCampusMap(appointment.id)
             return@LaunchedEffect
         }
         while (true) {
@@ -193,6 +212,81 @@ fun AppointmentDetailScreen(
     var showDirections by remember(appointment.id) { mutableStateOf(false) }
     if (showDirections && directions != null) {
         DirectionsPreview(directions) { showDirections = false }
+        return
+    }
+
+    val teacher = appointment.teacher
+    if (teacher != null && appointment.status == "pending_approval" && appointment.answerByAt != null) {
+        var secondsLeft by remember(appointment.id) { mutableIntStateOf(walkInSecondsLeft(appointment.answerByAt)) }
+        LaunchedEffect(appointment.answerByAt) {
+            while (true) {
+                secondsLeft = walkInSecondsLeft(appointment.answerByAt)
+                delay(1_000)
+            }
+        }
+        DetailScaffold("Your request", viewModel::closeAppointment) { modifier ->
+            WalkInWaitingContent(teacher.name, appointment.subject, secondsLeft, busy, { showCancel = true }, modifier)
+        }
+        if (showCancel) {
+            CancelAppointmentDialog(
+                stop = false,
+                onDismiss = { showCancel = false },
+                onConfirm = { reason ->
+                    viewModel.cancelAppointment(appointment.id, reason)
+                    showCancel = false
+                },
+            )
+        }
+        return
+    }
+    if (teacher != null && appointment.status in listOf("rejected", "unanswered", "cancelled")) {
+        val choices = choicesFor(teacher.code, teacherChoices)
+        LaunchedEffect(appointment.id) { viewModel.loadTeacherChoices(teacher.code) }
+        DetailScaffold("Your request", viewModel::closeAppointment) { modifier ->
+            val notNow = appointment.status == "rejected"
+            TeacherAnswerContent(
+                teacherName = teacher.name,
+                pill = when (appointment.status) {
+                    "rejected" -> if (appointment.visitType == "walk_in") "Can't see you right now" else "Declined"
+                    "unanswered" -> "No answer"
+                    else -> "Cancelled"
+                },
+                pillIsRed = notNow || appointment.status == "cancelled",
+                message = teacherAnswerMessage(appointment),
+                slots = choices?.nextFreeSlots.orEmpty(),
+                fallback = appointment.fallbackOffice,
+                busy = busy,
+                onPickSlot = { slot -> viewModel.requestTeacherTime(appointment, slot) },
+                onMoreTimes = { viewModel.rebookWithTeacher(appointment) },
+                onFallback = { viewModel.goToFallbackOffice(appointment) },
+                modifier = modifier,
+            )
+        }
+        return
+    }
+
+    if (studentAccepted) {
+        DetailScaffold("Your visit", viewModel::closeAppointment) { modifier ->
+            StudentVisitContent(
+                appointment = appointment,
+                directions = directions,
+                busy = busy,
+                onDirections = { showDirections = true },
+                onImHere = { viewModel.sayImHere(appointment) },
+                onCancel = { showCancel = true },
+                modifier = modifier,
+            )
+        }
+        if (showCancel) {
+            CancelAppointmentDialog(
+                stop = false,
+                onDismiss = { showCancel = false },
+                onConfirm = { reason ->
+                    viewModel.cancelAppointment(appointment.id, reason)
+                    showCancel = false
+                },
+            )
+        }
         return
     }
 
@@ -260,7 +354,8 @@ fun AppointmentDetailScreen(
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("Request submitted", style = MaterialTheme.typography.titleMedium)
                                 Text(
-                                    "The office is reviewing your request. Its decision will appear in Notifications.",
+                                    teacher?.let { "You'll get a notification when ${it.shortName} answers." }
+                                        ?: "The office is reviewing your request. Its decision will appear in Notifications.",
                                     color = MutedInk,
                                 )
                             }
@@ -272,7 +367,14 @@ fun AppointmentDetailScreen(
                 DetailCard {
                     Text("Visit information", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark)
                     HorizontalDivider(color = BorderSoft)
-                    DetailLine("Visitor type", if (appointment.visitType == "walk_in") "Walk-in" else "Appointment")
+                    DetailLine(
+                        if (appointment.isStudentVisit) "Asked for" else "Visitor type",
+                        if (appointment.isStudentVisit) {
+                            if (appointment.visitType == "walk_in") "Now" else "A set time"
+                        } else {
+                            if (appointment.visitType == "walk_in") "Walk-in" else "Appointment"
+                        },
+                    )
                     DetailLine("Destination", appointment.office.name)
                     DetailLine("Schedule", formatDateTime(appointment.scheduledStartAt))
                     DetailLine("Until", formatDateTime(appointment.scheduledEndAt))
@@ -285,7 +387,7 @@ fun AppointmentDetailScreen(
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFE8E6)), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(16.dp)) {
-                            Text("Office response", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+                            Text(if (teacher != null) "${teacher.shortName}'s response" else "Office response", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
                             Text(appointment.rejectionReason)
                         }
                     }
@@ -297,7 +399,7 @@ fun AppointmentDetailScreen(
                     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF8DB)), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                if (singleSlot) "The office suggested another time" else "The office suggested other times",
+                                (teacher?.shortName ?: "The office") + if (singleSlot) " suggested another time" else " suggested other times",
                                 style = MaterialTheme.typography.titleLarge,
                             )
                             Text(proposal.reason, fontWeight = FontWeight.SemiBold)
@@ -466,4 +568,20 @@ private fun CancelAppointmentDialog(stop: Boolean, onDismiss: () -> Unit, onConf
         confirmButton = { TextButton(onClick = { onConfirm(reason) }) { Text("Cancel $what", color = MaterialTheme.colorScheme.error) } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Keep $what") } },
     )
+}
+
+/** The next free times, once they're for the teacher on screen. */
+private fun choicesFor(code: String, choices: TeacherDto?): TeacherDto? = choices?.takeIf { it.code == code }
+
+private fun teacherAnswerMessage(appointment: AppointmentDto): String {
+    val carryOn = "Pick another time. What you typed stays, so there's nothing to fill in again."
+    return when (appointment.status) {
+        "unanswered" -> "Your request closed with no answer. $carryOn"
+        "cancelled" -> "This visit was cancelled, so its pass no longer works. $carryOn"
+        else -> {
+            val reason = appointment.rejectionReason.trim()
+            // "Not now" sends a set sentence, which the pill above already says.
+            if (appointment.visitType == "walk_in" || reason.isEmpty()) carryOn else "\"$reason\" $carryOn"
+        }
+    }
 }

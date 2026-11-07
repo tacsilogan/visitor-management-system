@@ -15,7 +15,7 @@ date_default_timezone_set("Asia/Manila");
 
 $startSql = $start->format("Y-m-d H:i:s");
 $endSql = $now->format("Y-m-d H:i:s");
-$officeMap = appointment_office_map();
+$officeMap = appointment_office_long_map();
 
 function analytics_column_exists(mysqli $conn, string $table, string $column): bool
 {
@@ -56,7 +56,7 @@ if ($exportFormat === "csv" || $exportFormat === "xlsx") {
                 a.checked_in_at, a.completed_at, a.created_at,
                 {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}
          FROM appointments a
-         WHERE COALESCE(a.checked_in_at, a.appointment_at, a.created_at) BETWEEN ? AND ?
+         WHERE COALESCE(a.checked_in_at, a.appointment_at, a.created_at) BETWEEN ? AND ?" . appointment_visitors_only_sql($conn, "a") . "
          ORDER BY COALESCE(a.checked_in_at, a.appointment_at, a.created_at) DESC"
     );
     $exportStmt->bind_param("ss", $startSql, $endSql);
@@ -120,8 +120,8 @@ $recordStmt = $conn->prepare(
     "SELECT a.id, a.office_code, a.status, a.appointment_at, a.checked_in_at,
             a.completed_at, a.cancelled_at, {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}
      FROM appointments a
-     WHERE (a.checked_in_at BETWEEN ? AND ?)
-        OR (a.completed_at BETWEEN ? AND ?)
+     WHERE ((a.checked_in_at BETWEEN ? AND ?)
+        OR (a.completed_at BETWEEN ? AND ?))" . appointment_visitors_only_sql($conn, "a") . "
      ORDER BY COALESCE(a.checked_in_at, a.completed_at) ASC, a.id ASC"
 );
 $recordStmt->bind_param("ssss", $startSql, $endSql, $startSql, $endSql);
@@ -131,6 +131,25 @@ while ($row = $recordResult->fetch_assoc()) {
     $records[] = $row;
 }
 $recordStmt->close();
+
+// ISATU students' visits to teachers, counted apart from the visitors above.
+$studentVisits = ["completed" => 0, "requested" => 0];
+if (appointment_visitors_only_sql($conn) !== "") {
+    $studentStmt = $conn->prepare(
+        "SELECT SUM(status = 'completed' AND completed_at BETWEEN ? AND ?) AS completed_total,
+                SUM(created_at BETWEEN ? AND ?) AS requested_total
+         FROM appointments
+         WHERE visitor_kind = 'student'"
+    );
+    $studentStmt->bind_param("ssss", $startSql, $endSql, $startSql, $endSql);
+    $studentStmt->execute();
+    $studentRow = $studentStmt->get_result()->fetch_assoc();
+    $studentStmt->close();
+    $studentVisits = [
+        "completed" => (int) ($studentRow["completed_total"] ?? 0),
+        "requested" => (int) ($studentRow["requested_total"] ?? 0),
+    ];
+}
 
 $labels = [];
 $bucketKeys = [];
@@ -369,6 +388,7 @@ echo json_encode([
         "check_outs" => $checkOuts,
     ],
     "purpose_distribution" => $purposeDistribution,
+    "student_visits" => $studentVisits,
     "heatmap" => [
         "days" => ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
         "hours" => ["8 AM", "9 AM", "10 AM", "11 AM", "12 PM", "1 PM", "2 PM", "3 PM", "4 PM", "5 PM", "6 PM"],

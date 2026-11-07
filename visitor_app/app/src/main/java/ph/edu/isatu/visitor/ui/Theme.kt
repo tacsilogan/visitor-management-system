@@ -1,6 +1,9 @@
 package ph.edu.isatu.visitor.ui
 
-import android.app.Activity
+import android.graphics.Color as AndroidColor
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
@@ -83,16 +86,25 @@ private val AppShapes = Shapes(
 )
 
 @Composable
-fun ISATUVisitorTheme(content: @Composable () -> Unit) {
+fun ISATUVisitorTheme(barsOverBlue: Boolean = false, content: @Composable () -> Unit) {
     // The visitor portal intentionally keeps the approved white/blue institutional
     // appearance even when the device uses a dark system theme.
     val colors = LightColors
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
-            window.statusBarColor = colors.surface.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = true
+            val activity = view.context as ComponentActivity
+            if (barsOverBlue) {
+                // White icons, with nothing behind them, over the opening animation's blue.
+                activity.enableEdgeToEdge(
+                    statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+                    navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+                )
+            } else {
+                activity.enableEdgeToEdge()
+                activity.window.statusBarColor = colors.surface.toArgb()
+                WindowCompat.getInsetsController(activity.window, view).isAppearanceLightStatusBars = true
+            }
         }
     }
     MaterialTheme(

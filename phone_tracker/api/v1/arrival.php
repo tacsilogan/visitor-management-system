@@ -8,7 +8,7 @@ require_once dirname(__DIR__, 2) . "/arrival_service.php";
 // appointment_id is the stop (for a visit to several offices, the stop's own appointment).
 
 api_require_method("POST");
-$user = api_require_visitor();
+$user = api_require_app_user();
 $input = api_body();
 $appointmentId = (int) ($input["appointment_id"] ?? 0);
 if ($appointmentId <= 0) {

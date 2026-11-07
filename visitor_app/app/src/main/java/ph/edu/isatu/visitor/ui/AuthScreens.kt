@@ -33,7 +33,6 @@ import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,6 +51,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -59,7 +59,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 
-private enum class AuthMode { Login, Register, Recover }
+private enum class AuthMode { Login, Choose, Register, Student, Recover }
 
 private data class PendingRegistration(
     val email: String,
@@ -71,6 +71,8 @@ private data class PendingRegistration(
 @Composable
 fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
     var mode by remember { mutableStateOf(AuthMode.Login) }
+    var noticeOpen by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
     val showMode: (AuthMode) -> Unit = {
         viewModel.clearBanner()
         mode = it
@@ -91,9 +93,15 @@ fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (mode != AuthMode.Login) {
-                    IconButton(onClick = { showMode(AuthMode.Login) }) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back to sign in")
+                if (mode != AuthMode.Login || state.signup != null) {
+                    IconButton(onClick = {
+                        when {
+                            state.signup != null -> viewModel.cancelSignup()
+                            mode == AuthMode.Register || mode == AuthMode.Student -> showMode(AuthMode.Choose)
+                            else -> showMode(AuthMode.Login)
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 }
                 PortalBrand(
@@ -118,16 +126,42 @@ fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
                     ) {
                         state.error?.let { MessageCard(it, true, viewModel::clearBanner) }
                         state.message?.let { MessageCard(it, false, viewModel::clearBanner) }
-                        when (mode) {
+                        val openNotice = {
+                            focusManager.clearFocus()
+                            noticeOpen = true
+                        }
+                        val signup = state.signup
+                        if (signup != null) {
+                            SignupCodeForm(
+                                signup = signup,
+                                busy = state.busy,
+                                onConfirm = viewModel::confirmSignup,
+                                onResend = viewModel::resendSignupCode,
+                                onChangeDetails = viewModel::cancelSignup,
+                            )
+                        } else when (mode) {
                             AuthMode.Login -> LoginForm(
                                 busy = state.busy,
                                 onLogin = viewModel::login,
-                                onRegister = { showMode(AuthMode.Register) },
+                                onRegister = { showMode(AuthMode.Choose) },
                                 onRecover = { showMode(AuthMode.Recover) },
+                            )
+                            AuthMode.Choose -> SignupChoice(
+                                onStudent = { showMode(AuthMode.Student) },
+                                onVisitor = { showMode(AuthMode.Register) },
                             )
                             AuthMode.Register -> RegisterForm(
                                 busy = state.busy,
-                                onRegister = viewModel::register,
+                                onRegister = viewModel::registerVisitor,
+                                onOpenNotice = openNotice,
+                                onStudentInstead = { showMode(AuthMode.Student) },
+                            )
+                            AuthMode.Student -> StudentSignupForm(
+                                busy = state.busy,
+                                options = state.signupOptions,
+                                onLoadOptions = viewModel::loadSignupOptions,
+                                onRegister = viewModel::registerStudent,
+                                onOpenNotice = openNotice,
                             )
                             AuthMode.Recover -> RecoverForm(
                                 busy = state.busy,
@@ -140,12 +174,16 @@ fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
                 }
                 Spacer(Modifier.height(18.dp))
                 Text(
-                    "Your visit notifications and visitor passes will appear inside this app.",
+                    "Your visits and their updates appear in this app.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MutedInk,
                     textAlign = TextAlign.Center,
                 )
             }
+        }
+        // Over the form, which keeps what was typed.
+        if (noticeOpen) {
+            TermsNoticeScreen("Back to sign-up") { noticeOpen = false }
         }
     }
 }
@@ -181,15 +219,17 @@ private fun ColumnScope.LoginForm(
     )
     HorizontalDivider(color = BorderSoft)
     Row(Modifier.align(Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        Text("New visitor?", color = MutedInk)
+        Text("New here?", color = MutedInk)
         TextButton(onClick = onRegister) { Text("Create account") }
     }
 }
 
 @Composable
-private fun ColumnScope.RegisterForm(
+internal fun ColumnScope.RegisterForm(
     busy: Boolean,
     onRegister: (String, String, String, String) -> Unit,
+    onOpenNotice: () -> Unit,
+    onStudentInstead: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
@@ -197,7 +237,8 @@ private fun ColumnScope.RegisterForm(
     var contact by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var visible by remember { mutableStateOf(false) }
-    var trackingConsent by remember { mutableStateOf(false) }
+    var termsAgreed by remember { mutableStateOf(false) }
+    var locationAgreed by remember { mutableStateOf(false) }
     var permissionRequestInProgress by remember { mutableStateOf(false) }
     var pendingRegistration by remember { mutableStateOf<PendingRegistration?>(null) }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
@@ -229,29 +270,27 @@ private fun ColumnScope.RegisterForm(
         }
     }
 
-    AuthHeading("CREATE ACCOUNT", "Register once, then request and monitor your visits in the app.")
+    val studentEmail = isStudentEmail(email)
+    AuthHeading("VISITOR ACCOUNT", "Register once, then request and monitor your visits in the app.")
     PortalTextField(name, { name = it }, "Full name", { Icon(Icons.Rounded.Person, null) })
     PortalTextField(email, { email = it }, "Email address", { Icon(Icons.Rounded.Email, null) }, KeyboardType.Email)
+    if (studentEmail) {
+        // A student's school email: they have an account type of their own, with no pass or tracking.
+        FieldNote("This is a student email.", error = true)
+        TextButton(onClick = onStudentInstead) { Text("Sign up as an ISATU student instead") }
+    }
     PortalTextField(contact, { contact = it }, "Contact number", { Icon(Icons.Rounded.Phone, null) }, KeyboardType.Phone)
     PasswordField(password, { password = it }, visible, { visible = !visible }, "Password (at least 10 characters)")
-    Row(verticalAlignment = Alignment.Top) {
-        Checkbox(checked = trackingConsent, onCheckedChange = { trackingConsent = it })
-        Text(
-            "I agree to the Visitor Consent Notice, including location sharing only after Security checks me in and only until my visit ends.",
-            modifier = Modifier.padding(top = 11.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MutedInk,
-        )
-    }
+    NoticeChecks(termsAgreed, { termsAgreed = it }, locationAgreed, { locationAgreed = it }, onOpenNotice)
     PrimaryButton(
-        "Create account",
+        "Send code",
         submitRegistration,
         Modifier.fillMaxWidth(),
-        !busy && !permissionRequestInProgress && name.trim().length >= 2 && email.isNotBlank() &&
-            password.length >= 10 && trackingConsent,
+        !busy && !permissionRequestInProgress && name.trim().length >= 2 && email.isNotBlank() && !studentEmail &&
+            password.length >= 10 && termsAgreed && locationAgreed,
     )
     Text(
-        "Android will ask once for precise location access when you create the account. Location sharing still begins only after Security scans your visitor pass and ends with the visit.",
+        "We'll email you a code to confirm the address. Android will ask once for precise location access.",
         style = MaterialTheme.typography.bodySmall,
         color = MutedInk,
         textAlign = TextAlign.Center,
@@ -284,7 +323,7 @@ private fun ColumnScope.RecoverForm(
 }
 
 @Composable
-private fun AuthHeading(title: String, body: String) {
+internal fun AuthHeading(title: String, body: String) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -296,7 +335,7 @@ private fun AuthHeading(title: String, body: String) {
 }
 
 @Composable
-private fun PortalTextField(
+internal fun PortalTextField(
     value: String,
     onValueChange: (String) -> Unit,
     label: String,
@@ -321,7 +360,7 @@ private fun PortalTextField(
 }
 
 @Composable
-private fun PasswordField(
+internal fun PasswordField(
     value: String,
     onValueChange: (String) -> Unit,
     visible: Boolean,

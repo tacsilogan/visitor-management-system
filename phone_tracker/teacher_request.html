@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request a teacher account | ISATU Visitor Management System</title>
+    <link rel="stylesheet" href="style.css?v=20261107-1">
+</head>
+<body class="auth-page">
+    <header class="auth-header">
+        <div class="auth-brand" aria-label="ISATU Visitor Management System">
+            <span class="auth-brand-mark" aria-hidden="true">
+                <img src="assets/images/isatu-logo.png" alt="">
+            </span>
+            <span class="auth-brand-name">ISATU Visitor Management System</span>
+        </div>
+    </header>
+
+    <main class="auth-main">
+        <section class="auth-card">
+            <!-- 1. Who the teacher is -->
+            <div class="auth-panel auth-panel-step" id="requestPanel">
+                <h1 class="auth-panel-title auth-panel-title-small" tabindex="-1">Request a teacher account</h1>
+                <p class="auth-panel-subtitle">Your department's Dean's Office approves it.</p>
+
+                <form id="requestForm" class="auth-form auth-form-compact" novalidate>
+                    <div class="auth-field">
+                        <input type="email" id="reqEmail" autocomplete="email" autocapitalize="off" spellcheck="false" placeholder=" " required>
+                        <label for="reqEmail">School email</label>
+                    </div>
+                    <p class="auth-hint" id="reqEmailHint">Only @isatu.edu.ph emails.</p>
+                    <div class="auth-row">
+                        <div class="auth-field">
+                            <select id="reqTitle" required><option value="" disabled selected></option></select>
+                            <label for="reqTitle">Title</label>
+                        </div>
+                        <div class="auth-field">
+                            <input type="text" id="reqFirst" autocomplete="given-name" maxlength="60" placeholder=" " required>
+                            <label for="reqFirst">First name</label>
+                        </div>
+                    </div>
+                    <div class="auth-field">
+                        <input type="text" id="reqLast" autocomplete="family-name" maxlength="60" placeholder=" " required>
+                        <label for="reqLast">Last name</label>
+                    </div>
+                    <div class="auth-field">
+                        <select id="reqDepartment" required><option value="" disabled selected></option></select>
+                        <label for="reqDepartment">Department</label>
+                    </div>
+                    <div class="auth-field">
+                        <select id="reqCourse" required disabled><option value="" disabled selected></option></select>
+                        <label for="reqCourse">Course</label>
+                    </div>
+                    <div class="auth-field auth-password-field">
+                        <input type="password" id="reqPassword" autocomplete="new-password" placeholder=" " required>
+                        <label for="reqPassword">Password</label>
+                        <button class="auth-password-toggle" type="button" data-password-toggle="reqPassword" aria-label="Show password" aria-pressed="false">
+                            <img src="assets/icons/visibility_icon.svg" alt="" aria-hidden="true">
+                        </button>
+                    </div>
+                    <div class="auth-strength" id="reqStrength" data-score="0" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+                    <p class="auth-strength-label" id="reqStrengthLabel">Password strength</p>
+                    <ul class="auth-rules" id="reqRules">
+                        <li data-rule="length" data-state="idle">At least 10 characters</li>
+                        <li data-rule="mix" data-state="idle">A letter and a number</li>
+                        <li data-rule="identity" data-state="idle">Doesn't include your name or email</li>
+                        <li data-rule="match" data-state="idle">Both passwords match</li>
+                    </ul>
+                    <div class="auth-field auth-password-field">
+                        <input type="password" id="reqConfirm" autocomplete="new-password" placeholder=" " required>
+                        <label for="reqConfirm">Confirm password</label>
+                        <button class="auth-password-toggle" type="button" data-password-toggle="reqConfirm" aria-label="Show password" aria-pressed="false">
+                            <img src="assets/icons/visibility_icon.svg" alt="" aria-hidden="true">
+                        </button>
+                    </div>
+                    <p class="auth-message" id="requestMessage" role="alert" hidden></p>
+                </form>
+
+                <button class="auth-submit" id="requestBtn" type="submit" form="requestForm">Send code</button>
+                <div class="auth-links">
+                    <a class="auth-text-button" href="login.html">Back to sign in</a>
+                </div>
+            </div>
+
+            <!-- No department can take requests yet -->
+            <div class="auth-panel auth-panel-step" id="closedPanel" hidden>
+                <span class="auth-step-badge" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg>
+                </span>
+                <h1 class="auth-panel-title auth-panel-title-small" tabindex="-1">Not open yet</h1>
+                <p class="auth-panel-subtitle">No department's Dean's Office is taking teacher requests yet. Ask the administrator to add your account.</p>
+                <a class="auth-submit" href="login.html">Back to sign in</a>
+            </div>
+
+            <!-- 2. The emailed code -->
+            <div class="auth-panel auth-panel-step" id="codePanel" hidden>
+                <span class="auth-step-badge" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+                </span>
+                <h1 class="auth-panel-title auth-panel-title-small" tabindex="-1">Check your email</h1>
+                <p class="auth-panel-subtitle">We sent a 6-digit code to <strong id="codeEmail"></strong>. It works for 10 minutes.</p>
+                <form id="codeForm" class="auth-form auth-form-compact" novalidate>
+                    <div class="auth-otp" id="codeGroup">
+                        <input id="codeInput" class="auth-otp-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" spellcheck="false" aria-label="6-digit code from your email">
+                        <div class="auth-otp-slots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                    </div>
+                    <p class="auth-message" id="codeMessage" role="alert" hidden></p>
+                </form>
+                <button class="auth-submit" id="codeBtn" type="submit" form="codeForm">Confirm</button>
+                <div class="auth-links">
+                    <button class="auth-text-button" id="resendBtn" type="button">Send the code again</button>
+                    <button class="auth-text-button" id="changeBtn" type="button">Change my details</button>
+                </div>
+            </div>
+
+            <!-- 3. Waiting for the Dean's Office -->
+            <div class="auth-panel auth-panel-step" id="sentPanel" hidden>
+                <span class="auth-step-badge is-success" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg>
+                </span>
+                <h1 class="auth-panel-title auth-panel-title-small" tabindex="-1">Request sent</h1>
+                <p class="auth-panel-subtitle" id="sentText"></p>
+                <dl class="auth-summary" id="sentSummary"></dl>
+                <a class="auth-submit" href="login.html">Back to sign in</a>
+            </div>
+        </section>
+    </main>
+
+    <script src="auth.js?v=20261106-1"></script>
+    <script src="auth_ui.js?v=20261003-1"></script>
+    <script src="teacher_request.js?v=20261107-1"></script>
+</body>
+</html>

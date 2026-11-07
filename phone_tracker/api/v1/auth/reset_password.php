@@ -25,7 +25,7 @@ try {
          FROM account_action_tokens t
          INNER JOIN app_users u ON u.id = t.user_id
          WHERE t.token_hash = ? AND t.purpose = 'password_reset' AND t.consumed_at IS NULL
-           AND t.expires_at > NOW() AND u.email = ? AND u.role = 'visitor'
+           AND t.expires_at > NOW() AND u.email = ? AND u.role IN ('visitor', 'student')
          FOR UPDATE"
     );
     $stmt->bind_param("ss", $hash, $email);

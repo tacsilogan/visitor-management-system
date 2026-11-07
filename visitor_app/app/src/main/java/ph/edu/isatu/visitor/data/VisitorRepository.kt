@@ -18,13 +18,35 @@ class VisitorRepository(
     private val directionPhotos: DirectionPhotoStore,
 ) {
     val signedIn: StateFlow<Boolean> = tokenStore.signedIn
+    val savedName: String? get() = tokenStore.savedName
 
-    suspend fun register(email: String, fullName: String, contactNumber: String, password: String): RegisterData =
-        apiClient.requireData(
-            apiClient.api.register(
-                RegisterRequest(email, fullName, contactNumber, password, true, BuildConfig.CONSENT_VERSION),
+    /** Starts an account and emails a code to it. Nothing is created until [confirmSignup]. */
+    suspend fun register(request: RegisterRequest): SignupCodeData =
+        apiClient.requireData(apiClient.api.register(request))
+
+    suspend fun resendCode(requestId: Long): SignupCodeData =
+        apiClient.requireData(apiClient.api.resendCode(ResendCodeRequest(requestId)))
+
+    suspend fun signupOptions(): SignupOptionsData = apiClient.requireData(apiClient.api.signupOptions())
+
+    /** The code from the email: the account is created and signed in, with the notice agreed to at sign-up. */
+    suspend fun confirmSignup(requestId: Long, code: String): UserDto {
+        val result = apiClient.requireData(
+            apiClient.api.confirmSignup(
+                ConfirmSignupRequest(requestId, code, installationStore.installationId, installationStore.deviceName),
             ),
         )
+        saveNoticeAgreement(result.user.id)
+        tokenStore.saveToken(result.accessToken)
+        tokenStore.savedName = result.user.fullName
+        return result.user
+    }
+
+    /** Has this account agreed to the current notice on this phone? The server sees it with their next visit. */
+    fun agreedToNotice(userId: Long): Boolean =
+        installationStore.agreedNotice(userId) == BuildConfig.CONSENT_VERSION
+
+    fun saveNoticeAgreement(userId: Long) = installationStore.saveAgreedNotice(userId, BuildConfig.CONSENT_VERSION)
 
     suspend fun login(identifier: String, password: String): UserDto {
         val result = apiClient.requireData(
@@ -33,6 +55,7 @@ class VisitorRepository(
             ),
         )
         tokenStore.saveToken(result.accessToken)
+        tokenStore.savedName = result.user.fullName
         return result.user
     }
 
@@ -55,12 +78,18 @@ class VisitorRepository(
         apiClient.requireData(apiClient.api.resetPassword(ResetPasswordRequest(email, token, password)))
     }
 
-    suspend fun profile(): UserDto = apiClient.requireData(apiClient.api.me()).user
+    suspend fun profile(): UserDto =
+        apiClient.requireData(apiClient.api.me()).user.also { tokenStore.savedName = it.fullName }
 
     suspend fun updateProfile(fullName: String, contactNumber: String): UserDto =
         apiClient.requireData(apiClient.api.updateProfile(ProfileUpdateRequest(fullName, contactNumber))).user
+            .also { tokenStore.savedName = it.fullName }
 
     suspend fun offices(): List<OfficeDto> = apiClient.requireData(apiClient.api.offices()).offices
+
+    suspend fun teachers(): List<TeacherDto> = apiClient.requireData(apiClient.api.teachers()).teachers
+
+    suspend fun teacher(code: String): TeacherDto = apiClient.requireData(apiClient.api.teacher(code)).teacher
 
     suspend fun availability(officeCode: String, date: String): AvailabilityData =
         apiClient.requireData(apiClient.api.availability(officeCode, date))

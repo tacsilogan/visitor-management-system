@@ -17,13 +17,7 @@ function office_availability_get_settings(mysqli $conn, string $officeCode): arr
         $insert->close();
     }
 
-    $stmt = $conn->prepare(
-        "SELECT office_code, accepting_visitors, slot_duration_minutes,
-                maximum_visitors_per_slot, unavailable_reason, available_again_at,
-                updated_at
-         FROM office_availability_settings
-         WHERE office_code = ? LIMIT 1"
-    );
+    $stmt = $conn->prepare("SELECT * FROM office_availability_settings WHERE office_code = ? LIMIT 1");
     if (!$stmt) {
         throw new RuntimeException("Availability settings are not installed");
     }
@@ -41,6 +35,12 @@ function office_availability_get_settings(mysqli $conn, string $officeCode): arr
         "available_again_at" => null,
         "updated_at" => null,
     ];
+}
+
+/** A teacher's calendar has rules of its own in a few places here (teacher_service.php). */
+function office_is_teacher_calendar(string $officeCode): bool
+{
+    return function_exists("appointment_is_teacher_code") && appointment_is_teacher_code($officeCode);
 }
 
 /**
@@ -137,7 +137,8 @@ function office_availability_check(
 
         // Existing installations had no weekly rules. Until an office saves a
         // schedule, remain backward compatible and allow times under the global setting.
-        if ($ruleCount === 0) {
+        // A teacher with no saved hours is simply not open yet.
+        if ($ruleCount === 0 && !office_is_teacher_calendar($officeCode)) {
             $scheduleAllowed = true;
             $source = "default";
         } else {
@@ -784,10 +785,14 @@ function office_next_opening(DateTimeImmutable $now, array $windowsByDay, array 
 /** office_open_state_at() for an office as saved now. */
 function office_open_state(mysqli $conn, string $officeCode, DateTimeImmutable $now): array
 {
+    $windowsByDay = office_windows_by_day(office_load_rule_rows($conn, $officeCode));
+    if (!$windowsByDay && office_is_teacher_calendar($officeCode)) {
+        return office_state("closed", "Closed", null);
+    }
     return office_open_state_at(
         $now,
         office_availability_get_settings($conn, $officeCode),
-        office_windows_by_day(office_load_rule_rows($conn, $officeCode)),
+        $windowsByDay,
         office_breaks_by_day(office_load_break_rows($conn, $officeCode)),
         office_load_exceptions_between($conn, $officeCode, $now, $now->modify("+8 days"))
     );

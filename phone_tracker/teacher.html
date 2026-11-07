@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0755b5">
+    <title>ISATU Teacher Dashboard</title>
+    <link rel="manifest" href="teacher.webmanifest">
+    <link rel="icon" href="assets/images/isatu-seal-192.png">
+    <link rel="apple-touch-icon" href="assets/images/isatu-seal-192.png">
+    <link rel="stylesheet" href="style.css?v=20261106-1">
+    <link rel="stylesheet" href="teacher.css?v=20261107-1">
+</head>
+<body class="admin-page office-page teacher-page">
+    <header class="admin-topbar">
+        <a class="admin-brand" href="#today" data-act="nav" data-view="today" aria-label="Teacher dashboard home">
+            <span class="admin-brand-mark"><img src="assets/images/isatu-logo.png" alt="ISATU"></span>
+            <span>ISATU Teacher Dashboard</span>
+        </a>
+        <div class="admin-topbar-actions">
+            <button class="admin-icon-button" id="teacherBell" type="button" data-act="bell" aria-label="Notifications">
+                <img src="assets/icons/notification_icon.svg" alt="" aria-hidden="true">
+                <span class="admin-notification-count" id="teacherBellCount" hidden>0</span>
+            </button>
+            <button class="admin-profile-button" id="officeProfileBtn" type="button" aria-expanded="false" aria-controls="officeProfileMenu">
+                <span class="admin-avatar"><img id="teacherAvatar" src="assets/icons/profile_icon.svg" alt="" aria-hidden="true"></span>
+                <span class="admin-profile-copy">
+                    <strong id="teacherName">Teacher</strong>
+                    <small id="teacherPlace"></small>
+                </span>
+                <svg class="admin-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+            </button>
+            <div class="admin-profile-menu" id="officeProfileMenu" hidden>
+                <p>Signed in as <strong id="teacherUsername"></strong></p>
+                <button class="office-profile-edit-button" type="button" data-act="nav" data-view="profile">Profile</button>
+                <button class="office-profile-signout-button" id="officeLogoutBtn" type="button">Sign out</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="admin-layout office-layout">
+        <aside class="admin-sidebar office-sidebar">
+            <nav aria-label="Teacher dashboard sections">
+                <button class="admin-nav-item" type="button" data-act="nav" data-view="today">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
+                    <span>Today</span>
+                    <span class="office-nav-count" id="teacherNavCount" hidden>0</span>
+                </button>
+                <button class="admin-nav-item" type="button" data-act="nav" data-view="visits">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"/></svg>
+                    <span>Visits</span>
+                </button>
+                <button class="admin-nav-item" type="button" data-act="nav" data-view="hours">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM8 2v4M16 2v4M5 9h14M9 13h2M13 13h2M9 17h2"/></svg>
+                    <span>My hours</span>
+                </button>
+            </nav>
+        </aside>
+        <main class="admin-main office-main">
+            <p class="admin-message is-error" id="teacherPageError" role="alert" hidden></p>
+            <div class="t-wrap" id="teacherMain"><p class="t-empty">Loading…</p></div>
+        </main>
+    </div>
+
+    <dialog class="t-sheet" id="teacherSheet" aria-labelledby="sheetTitle"></dialog>
+    <div class="t-toast" id="teacherToast" role="status" aria-live="polite" hidden></div>
+
+    <script src="auth.js?v=20261106-1"></script>
+    <script src="auth_ui.js?v=20261003-1"></script>
+    <script src="account_security.js?v=20261004-1"></script>
+    <script src="teacher.js?v=20261107-1"></script>
+</body>
+</html>

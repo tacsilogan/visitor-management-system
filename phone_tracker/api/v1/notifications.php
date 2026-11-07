@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . "/_bootstrap.php";
 
 api_require_method("GET");
-$user = api_require_visitor();
+$user = api_require_app_user();
 $userId = (int) $user["id"];
 $limit = max(1, min(100, (int) ($_GET["limit"] ?? 30)));
 $beforeId = max(0, (int) ($_GET["before_id"] ?? 0));

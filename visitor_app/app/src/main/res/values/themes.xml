@@ -1,5 +1,6 @@
 <resources>
     <color name="launcher_background">#FFFFFF</color>
+    <color name="opening_field">#1336B8</color>
 
     <style name="Theme.ISATUVisitor" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
@@ -7,5 +8,13 @@
         <item name="android:statusBarColor">#FFFFFF</item>
         <item name="android:navigationBarColor">#FFFFFF</item>
         <item name="android:windowActionModeOverlay">true</item>
+    </style>
+
+    <!-- From the tap on the icon until the app draws: the blue the opening animation starts on. -->
+    <style name="Theme.ISATUVisitor.Starting">
+        <item name="android:windowBackground">@color/opening_field</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/opening_field</item>
+        <item name="android:navigationBarColor">@color/opening_field</item>
     </style>
 </resources>

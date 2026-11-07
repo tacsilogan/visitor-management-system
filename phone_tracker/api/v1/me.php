@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . "/_bootstrap.php";
 
 api_require_method("GET", "PATCH");
-$user = api_require_visitor();
+$user = api_require_app_user();
 if ($_SERVER["REQUEST_METHOD"] === "GET") {
     api_success(["user" => api_user_payload($user)]);
 }
@@ -15,7 +15,7 @@ if (strlen($fullName) < 2) {
     api_fail("Enter your full name", 422, ["full_name" => "Full name is required"]);
 }
 $userId = (int) $user["id"];
-$stmt = $conn->prepare("UPDATE app_users SET display_name = ?, contact_number = ? WHERE id = ? AND role = 'visitor'");
+$stmt = $conn->prepare("UPDATE app_users SET display_name = ?, contact_number = ? WHERE id = ? AND role IN ('visitor', 'student')");
 $stmt->bind_param("ssi", $fullName, $contactNumber, $userId);
 $stmt->execute();
 $stmt->close();

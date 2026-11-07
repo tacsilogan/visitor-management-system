@@ -86,7 +86,64 @@
     let personDialogUserId = null;
 
     function activeOffices() {
-        return directoryState.offices.filter(function (office) { return office.is_active; });
+        return directoryState.offices.filter(function (office) { return office.is_active && office.assignable !== false; });
+    }
+
+    /** Office Personnel choose one office, or a course, which gives that course an office. */
+    function fillOfficeOptions(select, placeholder) {
+        const current = select.value;
+        select.replaceChildren();
+        if (placeholder) {
+            select.appendChild(new Option(placeholder, ""));
+        }
+        const offices = activeOffices();
+        const plain = offices.filter(function (office) { return office.kind !== "course"; });
+        const courses = offices.filter(function (office) { return office.kind === "course"; });
+        if (courses.length) {
+            const group = document.createElement("optgroup");
+            group.label = "Offices";
+            plain.forEach(function (office) { group.appendChild(new Option(office.name, office.code)); });
+            select.appendChild(group);
+            const courseGroup = document.createElement("optgroup");
+            courseGroup.label = "Courses";
+            courses.forEach(function (office) { courseGroup.appendChild(new Option(office.code, office.code)); });
+            select.appendChild(courseGroup);
+        } else {
+            plain.forEach(function (office) { select.appendChild(new Option(office.name, office.code)); });
+        }
+        select.value = Array.from(select.options).some(function (option) { return option.value === current; }) ? current : (placeholder ? "" : select.value);
+    }
+
+    /** The departments that hold courses, and each one's courses, for the Teacher fields. */
+    function departmentOptions() {
+        return directoryState.offices.filter(function (office) { return office.kind === "department" && office.is_active; });
+    }
+
+    function courseOptions(departmentCode) {
+        return directoryState.offices.filter(function (office) {
+            return office.kind === "course" && office.is_active && (!departmentCode || office.parent_code === departmentCode);
+        });
+    }
+
+    function fillCourseSelect(select, departmentCode) {
+        const current = select.value;
+        select.replaceChildren();
+        courseOptions(departmentCode).forEach(function (office) { select.appendChild(new Option(office.code, office.code)); });
+        if (Array.from(select.options).some(function (option) { return option.value === current; })) {
+            select.value = current;
+        }
+    }
+
+    function fillTeacherSelects() {
+        const department = document.getElementById("newDepartment");
+        const current = department.value;
+        department.replaceChildren();
+        departmentOptions().forEach(function (office) { department.appendChild(new Option(office.code + ", " + office.name, office.code)); });
+        if (Array.from(department.options).some(function (option) { return option.value === current; })) {
+            department.value = current;
+        }
+        fillCourseSelect(document.getElementById("newCourse"), department.value);
+        fillCourseSelect(document.getElementById("editCourse"), "");
     }
 
     /** Fills every <select data-department-select> with Administration, Security, and each office. */
@@ -105,22 +162,9 @@
             }
             select.value = Array.from(select.options).some(function (option) { return option.value === current; }) ? current : "";
         });
-        const officeSelects = [
-            [document.getElementById("newUserOfficeCode"), "Select department"],
-            [document.getElementById("editDepartment"), ""],
-        ];
-        officeSelects.forEach(function (pair) {
-            const select = pair[0];
-            const current = select.value;
-            select.replaceChildren();
-            if (pair[1]) {
-                select.appendChild(new Option(pair[1], ""));
-            }
-            activeOffices().forEach(function (office) {
-                select.appendChild(new Option(office.name, office.code));
-            });
-            select.value = Array.from(select.options).some(function (option) { return option.value === current; }) ? current : (pair[1] ? "" : select.value);
-        });
+        fillOfficeOptions(document.getElementById("newUserOfficeCode"), "Select office");
+        fillOfficeOptions(document.getElementById("editDepartment"), "");
+        fillTeacherSelects();
         const routeSelect = document.getElementById("routeOfficeFilter");
         const routeCurrent = routeSelect.value;
         routeSelect.replaceChildren(new Option("All destinations", ""));
@@ -145,7 +189,7 @@
     }
 
     function departmentKey(user) {
-        return user.role === "offices" ? user.office_code : user.role;
+        return user.department_key || (user.role === "offices" ? user.office_code : user.role);
     }
 
     function initials(name) {
@@ -190,11 +234,18 @@
         return data;
     }
 
+    /** Visitors and ISATU students sign up in the app themselves; they are not staff. */
+    function isAppAccount(user) {
+        return user.role === "visitor" || user.role === "student";
+    }
+
     function roleLabel(role) {
         const labels = {
-            admin: "Admin",
+            admin: "Administrator",
             security: "Security",
-            offices: "Office",
+            offices: "Office Personnel",
+            teacher: "Teacher",
+            student: "Student",
             visitor: "Visitor",
         };
         return labels[role] || role || "—";
@@ -589,17 +640,21 @@
             const identity = document.createElement("span");
             const strong = document.createElement("strong");
             strong.textContent = displayName;
-            if (!user.has_name && user.role !== "visitor") {
+            if (!user.has_name && !isAppAccount(user)) {
                 strong.appendChild(element("span", "sec-badge is-warn person-no-name", "No name on file"));
             }
             const small = document.createElement("small");
-            small.textContent = (user.username || "") + (user.position ? " · " + user.position : "");
+            // Visitors and students are known by their email; their usernames are made up for them.
+            small.textContent = isAppAccount(user) ? (user.email || user.username || "") : (user.username || "") + (user.position ? " · " + user.position : "");
             identity.append(strong, small);
             userCell.append(avatar, identity);
             row.appendChild(userCell);
 
             appendCell(row, roleLabel(user.role));
             appendCell(row, user.role === "visitor" ? "—" : (user.department || "—"));
+            if (user.role === "student" && user.student_number) {
+                row.lastChild.title = "Student number " + user.student_number;
+            }
 
             const statusCell = document.createElement("td");
             const status = document.createElement("span");
@@ -1205,6 +1260,9 @@
             text("analyticsTotalVisitors", summary.total_visitors || 0);
             text("analyticsGpsTracked", summary.gps_tracked_now || 0);
             text("analyticsAverageDuration", formatDuration(summary.average_duration_minutes));
+            const studentVisits = data.student_visits || { completed: 0, requested: 0 };
+            text("analyticsStudentVisits", studentVisits.completed || 0);
+            text("analyticsStudentNote", (studentVisits.requested || 0) + " booked in this period. Students are not counted as visitors.");
             renderTrendChart(data.trend || {});
             renderPurposeDistribution(data.purpose_distribution, Boolean(data.capabilities && data.capabilities.purpose_collected));
             renderHeatmap(data.heatmap || {});
@@ -1229,7 +1287,7 @@
         } else if (user.must_change_password) {
             badges.push([user.temp_password_expires_at ? "Temporary password" : "Default password", "is-warn"]);
         }
-        if (user.role !== "visitor") {
+        if (!isAppAccount(user)) {
             if (user.two_factor_enabled) {
                 badges.push(["2-step on", "is-good"]);
             } else {
@@ -1264,6 +1322,7 @@
         text("tempPasswordValue", info.password);
         text("tempPasswordExpires", info.expires ? UI.formatDateTime(info.expires) : "in 24 hours");
         document.getElementById("tempPasswordTwoFactor").hidden = !info.twoFactor;
+        document.getElementById("tempPasswordTeacher").hidden = !info.teacher;
         document.getElementById("copyTempPasswordBtn").textContent = "Copy";
         tempPasswordDialog.showModal();
     }
@@ -1300,8 +1359,8 @@
                 ? "Temporary, expires " + UI.formatDateTime(user.temp_password_expires_at)
                 : "Default password, must be changed at sign-in";
         }
-        let twoFactor = "Not used for visitor accounts";
-        if (user.role !== "visitor") {
+        let twoFactor = user.role === "student" ? "Not used for student accounts" : "Not used for visitor accounts";
+        if (!isAppAccount(user)) {
             twoFactor = user.two_factor_enabled ? "On" : (user.two_factor_required ? "Required, set up at next sign-in" : "Off");
         }
         const details = document.getElementById("manageUserDetails");
@@ -1310,7 +1369,7 @@
             ["Name", user.has_name ? user.first_name + " " + user.last_name : "No name on file — add it with Edit details"],
             ["Position", user.position || "—"],
             ["Username", user.username],
-            ["Role", roleLabel(user.role) + (user.role === "offices" ? " · " + (officeNames[user.office_code] || user.office_code) : "")],
+            ["Role", roleLabel(user.role) + (user.role === "offices" || user.role === "teacher" ? " · " + (user.department || user.office_code) : "")],
             ["Contact", [user.contact_number, user.email].filter(Boolean).join(" · ") || "—"],
             ["Status", (Number(user.is_active) === 1 ? "Active" : "Suspended") + (user.online ? " · online now" : (user.last_seen_at ? " · last seen " + UI.formatRelative(user.last_seen_at) : ""))],
             ["Last sign-in", user.last_login_at ? UI.formatDateTime(user.last_login_at) + " · " + UI.formatIp(user.last_login_ip) : "Never"],
@@ -1333,10 +1392,10 @@
         const actions = document.getElementById("manageUserActions");
         actions.replaceChildren();
         const label = user.display_name || user.username;
-        addManageAction(actions, "Edit details", "Name, position, contact details" + (user.role === "offices" ? ", and department." : "."), "Edit details", function () {
+        addManageAction(actions, "Edit details", "Name, position, contact details" + (user.role === "offices" ? ", and office." : (user.role === "teacher" ? ", course and room." : ".")), "Edit details", function () {
             openEditDetails(user);
         });
-        if (user.role !== "visitor") {
+        if (!isAppAccount(user)) {
             addManageAction(actions, "View activity", "Sign-ins, approvals, check-ins, and other actions by this person.", "View activity", function () {
                 manageUserDialog.close();
                 openPersonDialog(user.id);
@@ -1378,7 +1437,17 @@
         document.getElementById("editContactNumber").value = user.contact_number || "";
         document.getElementById("editEmail").value = user.email || "";
         const isOffice = user.role === "offices";
+        const isTeacher = user.role === "teacher";
         document.getElementById("editDepartmentField").hidden = !isOffice;
+        ["editTitleField", "editCourseField", "editRoomField"].forEach(function (id) {
+            document.getElementById(id).hidden = !isTeacher;
+        });
+        document.getElementById("editEmail").previousElementSibling.innerHTML = isTeacher ? "Email" : 'Email <small>(optional)</small>';
+        if (isTeacher) {
+            document.getElementById("editNameTitle").value = user.name_title || "";
+            document.getElementById("editCourse").value = user.course_code || "";
+            document.getElementById("editRoom").value = user.room || "";
+        }
         if (isOffice) {
             const select = document.getElementById("editDepartment");
             // Keep the person's current department selectable even if it was archived.
@@ -1416,13 +1485,18 @@
         if (user.role === "offices") {
             payload.office_code = document.getElementById("editDepartment").value;
         }
+        if (user.role === "teacher") {
+            payload.name_title = document.getElementById("editNameTitle").value;
+            payload.course_code = document.getElementById("editCourse").value;
+            payload.room = document.getElementById("editRoom").value.trim();
+        }
         if (!payload.first_name || !payload.last_name) {
             showMessage("manageUserError", "Enter the person's first and last name.");
             return;
         }
         if (user.role === "offices" && payload.office_code !== user.office_code
             && !window.confirm("Move " + (user.display_name || user.username) + " to " + (officeNames[payload.office_code] || payload.office_code)
-                + "? They will be signed out and will only see that department's appointments.")) {
+                + "? They will be signed out and will only see that office's appointments.")) {
             return;
         }
         const button = document.getElementById("saveEditDetailsBtn");
@@ -1457,101 +1531,274 @@
 
     /* ---------- Department directory ---------- */
 
+    function departmentFlags(department) {
+        const flags = element("div", "dept-flags");
+        if (department.is_active) {
+            flags.appendChild(element("span", "sec-badge " + (department.accepting_visitors ? "is-good" : "is-warn"),
+                department.accepting_visitors ? "Accepting visitors" : "Not accepting visitors"));
+        }
+        if (department.has_map_pin) {
+            flags.appendChild(element("span", "sec-badge is-good", "On campus map"));
+        } else {
+            const pin = element("button", "sec-badge is-warn dept-pin-link", "No map pin — add one");
+            pin.type = "button";
+            pin.dataset.deptAction = "pin";
+            flags.appendChild(pin);
+        }
+        if (department.is_active && department.personnel.filter(function (p) { return p.is_active; }).length === 0) {
+            flags.appendChild(element("span", "sec-badge is-warn", "Hidden from visitors: no one to answer"));
+        }
+        return flags;
+    }
+
+    function departmentPeople(department) {
+        const people = element("ul", "dept-people");
+        department.personnel.forEach(function (person) {
+            const item = element("li");
+            const button = element("button", "dept-person");
+            button.type = "button";
+            button.dataset.personId = String(person.id);
+            button.title = "Show " + person.name + "'s activity";
+            button.append(
+                element("span", "dept-dot" + (person.online ? " is-online" : ""), ""),
+                element("span", "dept-person-name", person.name + (person.position ? " · " + person.position : "")),
+            );
+            if (!person.has_name) {
+                button.appendChild(element("span", "sec-badge is-warn", "No name"));
+            }
+            if (!person.is_active) {
+                button.appendChild(element("span", "sec-badge is-muted", "Suspended"));
+            }
+            item.appendChild(button);
+            people.appendChild(item);
+        });
+        if (!department.personnel.length) {
+            people.appendChild(element("li", "dept-empty", "No Office Personnel yet"));
+        }
+        return people;
+    }
+
+    function departmentActions(className, department, list) {
+        const actions = element(className ? "div" : "footer", className || "dept-actions");
+        list.forEach(function (pair) {
+            const button = element("button", pair[2] || "sec-manage-button", pair[0]);
+            button.type = "button";
+            button.dataset.deptAction = pair[1];
+            if (department) {
+                button.dataset.code = department.code;
+            }
+            actions.appendChild(button);
+        });
+        return actions;
+    }
+
+    function standardDepartmentActions(department) {
+        const list = [];
+        if (department.is_active) {
+            list.push(["Add personnel", "add-person"]);
+        }
+        list.push(["Edit", "edit"]);
+        list.push([department.is_active ? "Archive" : "Restore", department.is_active ? "archive" : "restore"]);
+        if (department.total_appointments === 0 && department.personnel.length === 0
+            && !department.teachers.length && !department.offices.length && !department.courses.length) {
+            list.push(["Delete", "delete", "sec-manage-button is-danger"]);
+        }
+        return list;
+    }
+
+    /** One office or course inside a department's card. */
+    function renderChildOffice(child) {
+        const box = element("section", "dept-course dept-sub" + (child.is_active ? "" : " is-archived"));
+        box.dataset.code = child.code;
+        const heading = element("h4");
+        heading.append(document.createTextNode(child.name + " "), element("span", "dept-code", child.code));
+        box.appendChild(heading);
+        box.appendChild(departmentPeople(child));
+        const flags = departmentFlags(child);
+        if (child.approves_teachers) {
+            flags.insertBefore(element("span", "sec-badge is-good", "Approves teachers"), flags.firstChild);
+        }
+        box.appendChild(flags);
+        box.appendChild(departmentActions("dept-mini", child, standardDepartmentActions(child)));
+        return box;
+    }
+
+    function teacherBadge(teacher) {
+        if (!teacher.is_active) {
+            return ["Suspended", "is-muted"];
+        }
+        if (!teacher.signed_in) {
+            return ["Hasn't signed in", "is-warn"];
+        }
+        return teacher.has_hours ? ["Hours set", "is-good"] : ["No hours yet", "is-warn"];
+    }
+
+    function renderCourse(course) {
+        const box = element("section", "dept-course dept-sub" + (course.is_active ? "" : " is-archived"));
+        box.dataset.code = course.code;
+        const heading = element("h4");
+        heading.append(
+            document.createTextNode(course.code),
+            element("small", "", course.teachers.length + (course.teachers.length === 1 ? " teacher" : " teachers")),
+        );
+        box.appendChild(heading);
+        const activeStaff = course.personnel.filter(function (person) { return person.is_active; });
+        const office = element("p", "dept-office-line" + (activeStaff.length ? "" : " is-none"));
+        if (activeStaff.length) {
+            office.append(
+                element("span", "dept-dot" + (activeStaff[0].online ? " is-online" : ""), ""),
+                document.createTextNode("Has an office: " + activeStaff.map(function (person) { return person.name; }).join(", ")),
+            );
+        } else {
+            office.appendChild(document.createTextNode("No office"));
+            const add = element("button", "dept-add-link", "Add personnel");
+            add.type = "button";
+            add.dataset.deptAction = "add-person";
+            add.dataset.code = course.code;
+            office.appendChild(add);
+        }
+        box.appendChild(office);
+        const list = element("ul", "dept-teachers");
+        course.teachers.forEach(function (teacher) {
+            const row = element("li");
+            const name = element("button", "dept-person", "");
+            name.type = "button";
+            name.dataset.personId = String(teacher.id);
+            name.title = "Show " + teacher.name + "'s activity";
+            name.appendChild(element("span", "dept-person-name", teacher.name));
+            const badge = teacherBadge(teacher);
+            row.append(name, element("span", "sec-badge " + badge[1], badge[0]));
+            list.appendChild(row);
+        });
+        if (!course.teachers.length) {
+            list.appendChild(element("li", "dept-empty", "No teachers yet"));
+        }
+        box.appendChild(list);
+        const actions = [["Edit", "edit"], [course.is_active ? "Archive" : "Restore", course.is_active ? "archive" : "restore"]];
+        if (course.total_appointments === 0 && !course.personnel.length && !course.teachers.length) {
+            actions.push(["Delete", "delete", "sec-manage-button is-danger"]);
+        }
+        box.appendChild(departmentActions("dept-mini", course, actions));
+        return box;
+    }
+
+    function renderDepartmentCard(department) {
+        const hasChildren = department.kind === "department";
+        const card = element("article", "dept-card" + (department.is_active ? "" : " is-archived") + (hasChildren ? " is-wide" : ""));
+        const header = element("header", "dept-card-header");
+        const title = element("div");
+        title.append(element("h3", "", department.name), element("span", "dept-code", department.code));
+        header.append(title, element("span", "sec-badge " + (department.is_active ? "is-good" : "is-muted"), department.is_active ? "Active" : "Archived"));
+        card.appendChild(header);
+        card.appendChild(element("p", "dept-location", department.location || "No location set"));
+        if (department.description) {
+            card.appendChild(element("p", "dept-description", department.description));
+        }
+        const stats = element("div", "dept-stats" + (hasChildren ? " is-four" : ""));
+        (hasChildren
+            ? [[department.office_total, department.office_total === 1 ? "Office" : "Offices"],
+                [department.teacher_total, department.teacher_total === 1 ? "Teacher" : "Teachers"],
+                [department.pending_appointments, "Waiting for approval"],
+                [department.open_appointments, "Open appointments"]]
+            : [[department.personnel.length, department.personnel.length === 1 ? "Person" : "People"],
+                [department.pending_appointments, "Waiting for approval"],
+                [department.open_appointments, "Open appointments"]]
+        ).forEach(function (stat) {
+            const box = element("div");
+            box.append(element("strong", "", stat[0]), element("span", "", stat[1]));
+            stats.appendChild(box);
+        });
+        card.appendChild(stats);
+        if (!hasChildren) {
+            card.appendChild(departmentFlags(department));
+            card.appendChild(departmentPeople(department));
+            card.dataset.code = department.code;
+            card.appendChild(departmentActions("", department, standardDepartmentActions(department)));
+            return card;
+        }
+        if (!department.has_map_pin) {
+            const flags = element("div", "dept-flags");
+            const pin = element("button", "sec-badge is-warn dept-pin-link", "No map pin — add one");
+            pin.type = "button";
+            pin.dataset.deptAction = "pin";
+            pin.title = "Teachers use their course's pin, or this one if the course has none.";
+            flags.appendChild(pin);
+            card.appendChild(flags);
+        }
+        card.appendChild(departmentApprovalNote(department));
+        card.appendChild(element("p", "dept-group-title", "Offices"));
+        const offices = element("div", "dept-courses is-two");
+        department.offices.forEach(function (child) { offices.appendChild(renderChildOffice(child)); });
+        if (!department.offices.length) {
+            offices.appendChild(element("p", "dept-empty", "No offices yet."));
+        }
+        card.appendChild(offices);
+        card.appendChild(element("p", "dept-group-title", "Courses and teachers"));
+        const courses = element("div", "dept-courses");
+        department.courses.forEach(function (course) { courses.appendChild(renderCourse(course)); });
+        if (!department.courses.length) {
+            courses.appendChild(element("p", "dept-empty", "No courses yet."));
+        }
+        card.appendChild(courses);
+        const actions = [];
+        if (department.is_active) {
+            actions.push(["Add teacher", "add-teacher"], ["Add office", "add-office"], ["Add course", "add-course"]);
+        }
+        actions.push(["Edit", "edit"], [department.is_active ? "Archive" : "Restore", department.is_active ? "archive" : "restore"]);
+        card.appendChild(departmentActions("", department, actions));
+        return card;
+    }
+
+    /** Who approves the department's teachers, whether they can yet, and how many requests wait. */
+    function departmentApprovalNote(department) {
+        const note = element("p", "dept-approval" + (department.approver_staffed ? "" : " is-warn"));
+        if (!department.approver_code) {
+            note.textContent = "No office approves this department's teachers yet. Teachers can't request accounts here; add them with Add teacher.";
+            return note;
+        }
+        if (!department.approver_staffed) {
+            note.appendChild(element("strong", "", "Teachers can't request accounts here yet. "));
+            note.appendChild(document.createTextNode("Add Office Personnel to the " + department.approver_name + " first. They approve the department's teachers. "));
+            const add = element("button", "dept-add-link", "Add personnel");
+            add.type = "button";
+            add.dataset.deptAction = "add-person";
+            add.dataset.code = department.approver_code;
+            note.appendChild(add);
+            return note;
+        }
+        note.textContent = department.teacher_requests > 0
+            ? department.teacher_requests + (department.teacher_requests === 1 ? " teacher request is" : " teacher requests are") + " waiting for the " + department.approver_name + "."
+            : "The " + department.approver_name + " approves the department's teachers when they request an account.";
+        return note;
+    }
+
     function renderDepartments() {
         const grid = document.getElementById("departmentsGrid");
         grid.replaceChildren();
         departmentState.departments.forEach(function (department) {
-            const card = element("article", "dept-card" + (department.is_active ? "" : " is-archived"));
-            const header = element("header", "dept-card-header");
-            const title = element("div");
-            title.append(element("h3", "", department.name), element("span", "dept-code", department.code));
-            header.append(title, element("span", "sec-badge " + (department.is_active ? "is-good" : "is-muted"), department.is_active ? "Active" : "Archived"));
-            card.appendChild(header);
-            card.appendChild(element("p", "dept-location", department.location || "No location set"));
-            if (department.description) {
-                card.appendChild(element("p", "dept-description", department.description));
-            }
-
-            const stats = element("div", "dept-stats");
-            [
-                [department.personnel.length, department.personnel.length === 1 ? "Person" : "People"],
-                [department.pending_appointments, "Waiting for approval"],
-                [department.open_appointments, "Open appointments"],
-            ].forEach(function (stat) {
-                const box = element("div");
-                box.append(element("strong", "", stat[0]), element("span", "", stat[1]));
-                stats.appendChild(box);
-            });
-            card.appendChild(stats);
-
-            const flags = element("div", "dept-flags");
-            if (department.is_active) {
-                flags.appendChild(element("span", "sec-badge " + (department.accepting_visitors ? "is-good" : "is-warn"),
-                    department.accepting_visitors ? "Accepting visitors" : "Not accepting visitors"));
-            }
-            if (department.has_map_pin) {
-                flags.appendChild(element("span", "sec-badge is-good", "On campus map"));
-            } else {
-                const pin = element("button", "sec-badge is-warn dept-pin-link", "No map pin — add one");
-                pin.type = "button";
-                pin.dataset.deptAction = "pin";
-                flags.appendChild(pin);
-            }
-            if (department.is_active && department.personnel.filter(function (p) { return p.is_active; }).length === 0) {
-                flags.appendChild(element("span", "sec-badge is-warn", "No one to approve requests"));
-            }
-            card.appendChild(flags);
-
-            const people = element("ul", "dept-people");
-            department.personnel.forEach(function (person) {
-                const item = element("li");
-                const button = element("button", "dept-person");
-                button.type = "button";
-                button.dataset.personId = String(person.id);
-                button.title = "Show " + person.name + "'s activity";
-                button.append(
-                    element("span", "dept-dot" + (person.online ? " is-online" : ""), ""),
-                    element("span", "dept-person-name", person.name + (person.position ? " · " + person.position : "")),
-                );
-                if (!person.has_name) {
-                    button.appendChild(element("span", "sec-badge is-warn", "No name"));
-                }
-                if (!person.is_active) {
-                    button.appendChild(element("span", "sec-badge is-muted", "Suspended"));
-                }
-                item.appendChild(button);
-                people.appendChild(item);
-            });
-            if (!department.personnel.length) {
-                people.appendChild(element("li", "dept-empty", "No Office Personnel yet"));
-            }
-            card.appendChild(people);
-
-            const actions = element("footer", "dept-actions");
-            const addAction = function (label, action, className) {
-                const button = element("button", className || "sec-manage-button", label);
-                button.type = "button";
-                button.dataset.deptAction = action;
-                actions.appendChild(button);
-            };
-            if (department.is_active) {
-                addAction("Add personnel", "add-person");
-            }
-            addAction("Edit", "edit");
-            addAction(department.is_active ? "Archive" : "Restore", department.is_active ? "archive" : "restore");
-            if (department.total_appointments === 0 && department.personnel.length === 0) {
-                addAction("Delete", "delete", "sec-manage-button is-danger");
-            }
-            card.dataset.code = department.code;
-            card.appendChild(actions);
-            grid.appendChild(card);
+            grid.appendChild(renderDepartmentCard(department));
         });
         if (!departmentState.departments.length) {
             grid.appendChild(element("p", "dept-empty", "No departments yet. Add the first one."));
         }
     }
 
-    async function loadDepartments() {
+    /** A department, or any office or course inside one. */
+    function findDepartment(code) {
+        for (let i = 0; i < departmentState.departments.length; i += 1) {
+            const top = departmentState.departments[i];
+            if (top.code === code) {
+                return top;
+            }
+            const inside = top.offices.concat(top.courses).find(function (child) { return child.code === code; });
+            if (inside) {
+                return inside;
+            }
+        }
+        return null;
+    }
+
+        async function loadDepartments() {
         try {
             const data = await fetchJson("admin_departments.php");
             if (!data || !data.success) {
@@ -1568,18 +1815,43 @@
         }
     }
 
-    function openDepartmentDialog(department) {
+    /**
+     * Adds or edits a department, an office, or a course. Under a parent, [adding] says which:
+     * { kind: "office" | "course", parent: department }.
+     */
+    function openDepartmentDialog(department, adding) {
         departmentState.editingCode = department ? department.code : "";
         departmentState.codeEdited = Boolean(department);
-        text("departmentDialogTitle", department ? "Edit " + department.name : "Add department");
-        text("saveDepartmentBtn", department ? "Save changes" : "Add department");
+        departmentState.adding = adding || null;
+        const isCourse = Boolean(adding && adding.kind === "course");
+        const isNewDepartment = Boolean(adding && adding.kind === "department");
+        const noun = isNewDepartment ? "department" : (isCourse ? "course" : "office");
+        text("departmentDialogTitle", department ? "Edit " + department.name : "Add " + noun);
+        text("saveDepartmentBtn", department ? "Save changes" : "Add " + noun);
+        text("departmentNameLabel", isCourse ? "Course"
+            : (isNewDepartment || (department && department.kind === "department") ? "Department name"
+                : (department ? "Name" : "Office name")));
+        document.getElementById("departmentName").placeholder = isCourse ? "e.g. BSEMC"
+            : (isNewDepartment ? "e.g. College of Education" : (adding ? "e.g. CCI Library" : "e.g. Registrar's Office"));
+        document.getElementById("departmentCode").placeholder = isNewDepartment ? "e.g. COED" : "e.g. REGISTRAR";
+        document.getElementById("departmentCode").maxLength = isNewDepartment ? 10 : 16;
+        const under = document.getElementById("departmentDialogUnder");
+        under.hidden = !adding;
+        under.textContent = isNewDepartment
+            ? "Holds offices, courses and teachers, like CCI. Its Dean's Office is made with it and approves its teachers."
+            : (adding ? "Under " + adding.parent.name : "");
+        ["departmentCodeField", "departmentLocationField", "departmentDescriptionField"].forEach(function (id) {
+            document.getElementById(id).hidden = isCourse;
+        });
         document.getElementById("departmentName").value = department ? department.name : "";
         const code = document.getElementById("departmentCode");
         code.value = department ? department.code : "";
         code.readOnly = Boolean(department);
         text("departmentCodeHint", department
             ? "The short code is permanent because appointments and accounts store it."
-            : "Used in records and reports. It cannot be changed later.");
+            : (isNewDepartment
+                ? "2–10 letters or numbers, like CCI. It cannot be changed later."
+                : "Used in records and reports. It cannot be changed later."));
         const locationField = document.getElementById("departmentLocation");
         locationField.value = department ? department.location : "";
         // A department with directions takes its location from them (Campus Map > Inside).
@@ -1593,6 +1865,13 @@
 
     function suggestDepartmentCode() {
         if (departmentState.editingCode || departmentState.codeEdited) {
+            return;
+        }
+        if (departmentState.adding && departmentState.adding.kind === "department") {
+            // A department is known by its initials, like CCI: "College of Computing and Informatics".
+            const words = document.getElementById("departmentName").value.toUpperCase().split(/[^A-Z0-9]+/)
+                .filter(function (word) { return word && ["OF", "THE", "AND", "FOR"].indexOf(word) === -1; });
+            document.getElementById("departmentCode").value = words.map(function (word) { return word[0]; }).join("").slice(0, 10);
             return;
         }
         window.clearTimeout(departmentState.suggestTimer);
@@ -1620,8 +1899,14 @@
             location: document.getElementById("departmentLocation").value.trim(),
             description: document.getElementById("departmentDescription").value.trim(),
         };
+        if (departmentState.adding && !departmentState.editingCode) {
+            payload.kind = departmentState.adding.kind;
+            if (departmentState.adding.parent) {
+                payload.parent_code = departmentState.adding.parent.code;
+            }
+        }
         if (payload.name.length < 2) {
-            showMessage("departmentFormError", "Enter the department name.");
+            showMessage("departmentFormError", departmentState.adding && departmentState.adding.kind === "course" ? "Enter the course's short name." : "Enter the name.");
             return;
         }
         const button = document.getElementById("saveDepartmentBtn");
@@ -1662,22 +1947,33 @@
     }
 
     async function handleDepartmentAction(button) {
-        const card = button.closest(".dept-card");
-        const department = departmentState.departments.find(function (item) { return item.code === (card && card.dataset.code); });
+        const action = button.dataset.deptAction;
+        if (action === "pin") {
+            switchView("campus");
+            return;
+        }
+        const department = findDepartment(button.dataset.code || (button.closest("[data-code]") || {dataset: {}}).dataset.code);
         if (!department) {
             return;
         }
-        const action = button.dataset.deptAction;
+        if (action === "add-teacher") {
+            openAddUser("teacher", "");
+            return;
+        }
+        if (action === "add-office") {
+            openDepartmentDialog(null, { kind: "office", parent: department });
+            return;
+        }
+        if (action === "add-course") {
+            openDepartmentDialog(null, { kind: "course", parent: department });
+            return;
+        }
         if (action === "edit") {
             openDepartmentDialog(department);
             return;
         }
         if (action === "add-person") {
             openAddUser("offices", department.code);
-            return;
-        }
-        if (action === "pin") {
-            switchView("campus");
             return;
         }
         let confirmText = "";
@@ -1764,7 +2060,7 @@
                     return false;
                 }
                 if (!activityState.department) {
-                    return user.role !== "visitor";
+                    return !isAppAccount(user);
                 }
                 return departmentKey(user) === activityState.department;
             })
@@ -2385,14 +2681,57 @@
         }
     }
 
+    const ADD_USER_ROLES = {
+        teacher: {
+            add: "Add teacher",
+            where: "Where do they teach?",
+            position: "e.g. Assistant Professor",
+            callout: "A one-time password is created. It expires in 24 hours. They choose their own password at first sign-in, then set their hours. Visitors can't find them until they do.",
+        },
+        offices: {
+            add: "Add office personnel",
+            where: "Where do they work?",
+            position: "e.g. Office Secretary",
+            callout: "A one-time password is created. It expires in 24 hours, and they choose their own password at first sign-in.",
+        },
+        security: {
+            add: "Add security",
+            where: "",
+            position: "e.g. Gate guard",
+            callout: "A one-time password is created. It expires in 24 hours, and they choose their own password at first sign-in.",
+        },
+        admin: {
+            add: "Add administrator",
+            where: "",
+            position: "e.g. System administrator",
+            callout: "A one-time password is created. It expires in 24 hours, and they choose their own password at first sign-in. Administrators also set up two-step verification.",
+        },
+    };
+
+    /** The role comes first, and only that role's fields show. */
     function updateOfficeField() {
-        document.getElementById("newUserTwoFactorNote").hidden = document.getElementById("newUserRole").value !== "admin";
-        const showOffice = document.getElementById("newUserRole").value === "offices";
-        const field = document.getElementById("newUserOfficeField");
+        const role = ADD_USER_ROLES[document.getElementById("newUserRole").value] ? document.getElementById("newUserRole").value : "teacher";
+        document.getElementById("newUserRole").value = role;
+        const details = ADD_USER_ROLES[role];
+        document.querySelectorAll("#newRoleCards .role-card").forEach(function (card) {
+            const on = card.dataset.role === role;
+            card.classList.toggle("is-on", on);
+            card.querySelector("input").checked = on;
+        });
+        addUserDialog.querySelectorAll("[data-only]").forEach(function (field) {
+            field.hidden = field.dataset.only.split(" ").indexOf(role) === -1;
+        });
+        document.getElementById("newNameGrid").classList.toggle("has-title", role === "teacher");
+        text("addUserTitle", details.add);
+        text("addUserBtn", details.add);
+        text("newWhereHeading", details.where);
+        document.getElementById("newPosition").placeholder = details.position;
+        document.getElementById("newEmailLabel").innerHTML = role === "teacher" ? "Email" : 'Email <small>(optional)</small>';
+        document.getElementById("newEmailHint").hidden = role !== "teacher";
+        text("newUserCallout", details.callout);
         const select = document.getElementById("newUserOfficeCode");
-        field.hidden = !showOffice;
-        select.required = showOffice;
-        if (!showOffice) {
+        select.required = role === "offices";
+        if (role !== "offices") {
             select.value = "";
         }
     }
@@ -2789,9 +3128,8 @@
     function openAddUser(role, officeCode) {
         document.getElementById("addUserForm").reset();
         usernameEdited = false;
-        if (role) {
-            document.getElementById("newUserRole").value = role;
-        }
+        document.getElementById("newUserRole").value = role || "teacher";
+        fillDepartmentSelects();
         updateOfficeField();
         if (officeCode) {
             document.getElementById("newUserOfficeCode").value = officeCode;
@@ -2812,7 +3150,13 @@
     });
     document.getElementById("closeAddUserBtn").addEventListener("click", closeAddUserDialog);
     document.getElementById("cancelAddUserBtn").addEventListener("click", closeAddUserDialog);
-    document.getElementById("newUserRole").addEventListener("change", updateOfficeField);
+    document.getElementById("newRoleCards").addEventListener("change", function (event) {
+        document.getElementById("newUserRole").value = event.target.value;
+        updateOfficeField();
+    });
+    document.getElementById("newDepartment").addEventListener("change", function (event) {
+        fillCourseSelect(document.getElementById("newCourse"), event.target.value);
+    });
     addUserDialog.addEventListener("click", function (event) {
         if (event.target === addUserDialog) {
             closeAddUserDialog();
@@ -2833,6 +3177,11 @@
             role: document.getElementById("newUserRole").value,
             office_code: document.getElementById("newUserOfficeCode").value,
         };
+        if (payload.role === "teacher") {
+            payload.name_title = document.getElementById("newNameTitle").value;
+            payload.course_code = document.getElementById("newCourse").value;
+            payload.room = document.getElementById("newRoom").value.trim();
+        }
         if (!payload.first_name || !payload.last_name) {
             showMessage("adminFormError", "Enter the person's first and last name so every action can be traced to them.");
             return;
@@ -2846,7 +3195,15 @@
             return;
         }
         if (payload.role === "offices" && !payload.office_code) {
-            showMessage("adminFormError", "Select the department this person works in.");
+            showMessage("adminFormError", "Select the office this person works in.");
+            return;
+        }
+        if (payload.role === "teacher" && !payload.email) {
+            showMessage("adminFormError", "Enter the teacher's email. New visit requests are sent there.");
+            return;
+        }
+        if (payload.role === "teacher" && !payload.course_code) {
+            showMessage("adminFormError", "Select the course this teacher belongs to.");
             return;
         }
         addButton.disabled = true;
@@ -2872,6 +3229,7 @@
                 password: data.temporary_password,
                 expires: data.expires_at,
                 twoFactor: data.two_factor_required,
+                teacher: payload.role === "teacher",
             });
             await loadUsers();
             loadDepartments();
@@ -3073,6 +3431,10 @@
     });
 
     document.getElementById("addDepartmentBtn").addEventListener("click", function () {
+        showMessage("departmentsSuccess", "");
+        openDepartmentDialog(null, { kind: "department" });
+    });
+    document.getElementById("addOfficeBtn").addEventListener("click", function () {
         showMessage("departmentsSuccess", "");
         openDepartmentDialog(null);
     });

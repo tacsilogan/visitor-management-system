@@ -28,7 +28,7 @@ try {
         api_fail("Invalid or expired verification token", 422);
     }
     $userId = (int) $row["user_id"];
-    $update = $conn->prepare("UPDATE app_users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ? AND role = 'visitor'");
+    $update = $conn->prepare("UPDATE app_users SET email_verified_at = COALESCE(email_verified_at, NOW()) WHERE id = ? AND role IN ('visitor', 'student')");
     $update->bind_param("i", $userId);
     $update->execute();
     $update->close();

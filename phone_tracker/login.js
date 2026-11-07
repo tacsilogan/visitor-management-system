@@ -1,7 +1,7 @@
 /*
  * Sign-in page: username/password, then any extra steps the server asks for
- * (two-step code, new password, two-step setup, backup codes), with a
- * 4-second logo animation while it signs in (see "The sign-in animation").
+ * (two-step code, new password, two-step setup, backup codes). The logo
+ * animation plays only once the sign-in has succeeded (see "The sign-in animation").
  * The server decides everything; this file only presents each step.
  */
 (function () {
@@ -11,26 +11,26 @@
         admin: "admin.html",
         security: "dashboard.html",
         offices: "offices.html",
+        teacher: "teacher.html",
         visitor: "index.html",
     };
     const ROLE_PLACE = {
         admin: "the Admin dashboard",
         security: "the Security dashboard",
         offices: "the Office dashboard",
+        teacher: "your dashboard",
         visitor: "your visitor page",
     };
-    // The animation's timeline, in ms from the moment the user signs in.
+    // The animation's timeline in ms. The first beat is the password check, which is done
+    // before the animation opens, so it opens at that beat.
     const CHECK_BEATS = [560, 1000, 1440, 1880];
     const LEAVE_AT = 3600;
     const OPEN_MS = 420;
     const LEAVE_MS = 400;
     const CLOSE_MS = 340;
-    // A slow server shortens what comes after it, but never below these.
+    // Each part waits for its moment on the timeline, but never less than these.
     const MIN_CHECK_MS = 240;
     const MIN_WELCOME_MS = 1420;
-    // How long a refusal, or word of a further step, shows before the animation closes.
-    const FAIL_MS = 950;
-    const STEP_NOTICE_MS = 700;
 
     const UI = window.PhoneTrackerAuthUI;
     const Auth = window.PhoneTrackerAuth;
@@ -109,10 +109,14 @@
     }
 
     /* ---------- The sign-in animation ----------
-       The seal in the header comes to the middle of the screen wound back: its gear four teeth
-       behind and its centre closed, while the same gear grows behind it to fill the window.
-       Each check that passes turns the gear one tooth and opens the centre further. The fourth
-       brings the gear upright, the torch lights, and everything returns to the header. */
+       It plays only once the sign-in has succeeded: straight after the password, or after the
+       last further step, such as the two-step code. A refused sign-in and each further step
+       show on the form without it.
+       The seal in the header comes to the middle of the screen wound back: its gear three teeth
+       behind, as the first of the four checks (the password) has passed, while the same gear
+       grows behind it to fill the window. Each further check turns the gear one tooth and opens
+       the centre further. The fourth brings the gear upright, the torch lights, and everything
+       returns to the header. */
 
     const progress = (function () {
         const CHECKS = ["Checking your password", "Checking account security", "Securing your session"];
@@ -123,7 +127,6 @@
         const splash = $("splash");
         const seal = $("splashSeal");
         const field = $("splashField");
-        const gear = $("splashGear");
         const title = $("splashTitle");
         const note = $("splashNote");
         const live = $("splashLive");
@@ -237,7 +240,6 @@
                 startedAt = performance.now() - (passed ? CHECK_BEATS[passed - 1] : 0);
                 wordsFrom = performance.now() + OPEN_MS / 2;
                 clearWords();
-                seal.dataset.state = "working";
                 splash.getAnimations().forEach(function (animation) { animation.cancel(); });
                 splash.classList.remove("is-covered");
                 splash.hidden = false;
@@ -284,24 +286,10 @@
             pass: function () {
                 setClicks(clicks + 1);
             },
-            info: function (text) {
-                say(text);
-            },
             note: function (text) {
                 note.textContent = text;
                 if (!reduceMotion) {
                     note.animate({ opacity: [0, 1] }, { duration: 300 });
-                }
-            },
-            /* The check is refused: the gear jams and the centre turns red. */
-            fail: function (text) {
-                seal.dataset.state = "failed";
-                say(text);
-                if (!reduceMotion) {
-                    gear.animate(
-                        { rotate: ["0deg", "-5deg", "3.5deg", "-2deg", "1deg", "0deg"] },
-                        { duration: 460, easing: "ease-out" }
-                    );
                 }
             },
             /* The torch lights. */
@@ -327,7 +315,6 @@
                 document.body.classList.remove("auth-splash-open");
                 outside.forEach(function (element) { element.inert = false; });
                 fadeWords();
-                seal.dataset.state = "working";
                 seal.dataset.lit = "true";
                 seal.classList.add("is-winding");
                 setClicks(4);
@@ -431,9 +418,11 @@
 
         busy = true;
         showNotice("");
-        progress.open(0);
-        const outcome = await Promise.all([api("login.php", { username: username, password: password }), progress.run(0)]);
-        await route(outcome[0], "signin");
+        // No animation yet: if the server asks for a further step, that step shows straight away.
+        const result = await withButton(signInBtn, "Signing in…", function () {
+            return api("login.php", { username: username, password: password });
+        });
+        await route(result, "signin");
         busy = false;
     });
 
@@ -442,38 +431,25 @@
     async function route(result, origin) {
         const data = result.data || {};
         if (data.status === "authenticated") {
-            return completeSignIn(data, origin);
+            return completeSignIn(data);
         }
         const steps = {
-            two_factor_required: ["twoFactor", "Two-step verification required"],
-            password_change_required: ["password", data.reason === "temporary" ? "A new password is required" : "Your password must be updated"],
-            two_factor_setup_required: ["setup", "Two-step verification must be set up"],
+            two_factor_required: "twoFactor",
+            password_change_required: "password",
+            two_factor_setup_required: "setup",
         };
         if (steps[data.status]) {
-            if (origin === "signin") {
-                progress.pass();
-                progress.info(steps[data.status][1]);
-                await wait(STEP_NOTICE_MS);
-            }
-            openStep(steps[data.status][0], data);
+            openStep(steps[data.status], data);
             return undefined;
         }
         return origin === "signin" ? signInFailed(result) : stepFailed(result);
     }
 
-    async function signInFailed(result) {
+    function signInFailed(result) {
         const data = result.data || {};
         const code = data.code || (result.status === 0 ? "network" : "error");
-        const short = {
-            locked: "Too many failed attempts",
-            invalid_credentials: "Incorrect username or password",
-            temporary_password_expired: "Temporary password expired",
-            network: "Can't reach the server",
-            migration_required: "The database needs an update",
-        };
-        progress.fail(short[code] || "Sign-in failed");
-        await wait(FAIL_MS);
-        returnToSignIn();
+        passwordInput.value = "";
+        passwordInput.focus();
         if (code === "locked") {
             startLock(data.retry_after, data.message, data.lock_scope);
             return;
@@ -512,17 +488,13 @@
         }
     }
 
-    async function completeSignIn(data, origin) {
+    async function completeSignIn(data) {
         Auth.setSessionFromLogin(data);
         if (Array.isArray(data.backup_codes) && data.backup_codes.length) {
             await showBackupCodes(data.backup_codes, data.username);
-            origin = "step";
         }
-        if (origin === "signin") {
-            progress.pass();
-        } else {
-            progress.open(1);
-        }
+        // The animation starts here, and only here: the sign-in is complete.
+        progress.open(1);
 
         const checked = progress.run(1);
         const notes = [];

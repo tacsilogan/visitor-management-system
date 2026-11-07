@@ -1,5 +1,9 @@
 package ph.edu.isatu.visitor.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Card
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -7,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -27,6 +32,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -35,11 +42,21 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
 import com.android.tools.screenshot.PreviewTest
 import java.time.LocalDate
+import ph.edu.isatu.visitor.R
 import ph.edu.isatu.visitor.data.AppointmentDto
+import ph.edu.isatu.visitor.data.AvailabilitySlotDto
+import ph.edu.isatu.visitor.data.TeacherDto
+import ph.edu.isatu.visitor.data.VisitTeacherDto
 import ph.edu.isatu.visitor.data.OfficeSummaryDto
 import ph.edu.isatu.visitor.data.QrPassDto
 import ph.edu.isatu.visitor.data.UserDto
@@ -358,3 +375,217 @@ fun HelpNoStaff() = ISATUVisitorTheme {
 fun LeavingBuilding() = ISATUVisitorTheme {
     HeadingOutScreen(sampleDirections, true, samplePhoto(), {}, {}, {}, {})
 }
+
+/** Every twentieth of a second of the opening animation. */
+class OpeningMoments : PreviewParameterProvider<Long> {
+    override val values = generateSequence(0L) { it + 50L }.takeWhile { it <= OpeningTimeline.TOTAL_MS }
+}
+
+/** One moment of the opening animation, over the Home screen it opens onto. */
+@Composable
+private fun OpeningOverHome(ms: Long, greeting: String = "Welcome back, Juan") {
+    val art = loadSealArt(LocalContext.current)
+    // Where PortalBrand puts the logo in this top bar, with no status bar above it in a picture.
+    val landing = with(LocalDensity.current) { Rect(16.dp.toPx(), 16.dp.toPx(), 48.dp.toPx(), 48.dp.toPx()) }
+    val home = remember { SealHome(away = true) }
+    CompositionLocalProvider(LocalSealHome provides home) {
+        Box(Modifier.fillMaxSize()) {
+            HomeFrame(listOf(approvedToday))
+            OpeningStage(
+                art = art,
+                frame = { OpeningTimeline.at(ms) },
+                landing = landing,
+                words = greeting.takeIf { ms >= OpeningTimeline.WORDS_AT },
+            )
+        }
+    }
+}
+
+@PreviewTest
+@Preview(name = "Opening animation", widthDp = 360, heightDp = 780)
+@Composable
+fun OpeningMoment(@PreviewParameter(OpeningMoments::class) ms: Long) = OpeningOverHome(ms)
+
+@PreviewTest
+@Preview(name = "Opening animation, small phone", widthDp = 320, heightDp = 568)
+@Composable
+fun OpeningSmallPhone() = OpeningOverHome(2600L, greeting = "Welcome back, Maximiliano Cristobal")
+
+@PreviewTest
+@Preview(name = "Opening animation, large phone", widthDp = 412, heightDp = 915)
+@Composable
+fun OpeningLargePhone() = OpeningOverHome(2600L, greeting = "Welcome to ISATU")
+
+/** The real app icon, as Android builds it from the resources and masks it. */
+@PreviewTest
+@Preview(name = "App icon", widthDp = 240, heightDp = 240, showBackground = true, backgroundColor = 0xFF6B5B4A)
+@Composable
+fun AppIcon() {
+    val context = LocalContext.current
+    val icon = remember { context.getDrawable(R.mipmap.ic_launcher)!! }
+    ISATUVisitorTheme {
+        Column(Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Canvas(Modifier.size(144.dp)) {
+                drawIntoCanvas { canvas ->
+                    icon.setBounds(0, 0, size.width.toInt(), size.height.toInt())
+                    icon.draw(canvas.nativeCanvas)
+                }
+            }
+            Text("${icon.javaClass.simpleName}: ${icon.intrinsicWidth} x ${icon.intrinsicHeight}", color = Color.White)
+        }
+    }
+}
+
+@PreviewTest
+@Preview(name = "Create account", widthDp = 360, heightDp = 860)
+@Composable
+fun CreateAccount() = ISATUVisitorTheme {
+    Column(Modifier.fillMaxSize().background(AppBackground).padding(20.dp)) {
+        Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 26.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                RegisterForm(false, { _, _, _, _ -> }, {})
+            }
+        }
+    }
+}
+
+@PreviewTest
+@Preview(name = "The two checkboxes, ticked", widthDp = 320, heightDp = 170, showBackground = true)
+@Composable
+fun NoticeChecksTicked() = ISATUVisitorTheme {
+    Column(Modifier.padding(16.dp)) { NoticeChecks(true, {}, true, {}, onOpenNotice = {}) }
+}
+
+@PreviewTest
+@Preview(name = "Terms and Privacy Notice", widthDp = 360, heightDp = 780)
+@Composable
+fun NoticeTop() = ISATUVisitorTheme { TermsNoticeScreen("Back to sign-up") {} }
+
+@PreviewTest
+@Preview(name = "Terms and Privacy Notice, most of it", widthDp = 360, heightDp = 3000)
+@Composable
+fun NoticeWhole() = ISATUVisitorTheme { TermsNoticeScreen("Back to sign-up") {} }
+
+@PreviewTest
+@Preview(name = "Terms and Privacy Notice, the end", widthDp = 360, heightDp = 1000)
+@Composable
+fun NoticeEnd() = ISATUVisitorTheme {
+    Column(Modifier.fillMaxSize().background(AppBackground).padding(18.dp)) {
+        TermsNotice.BLOCKS.takeLast(15).forEach { NoticeBlockView(it) }
+    }
+}
+
+@PreviewTest
+@Preview(name = "Agreeing, an existing account", widthDp = 360, heightDp = 780)
+@Composable
+fun NoticeAgreement() = ISATUVisitorTheme { TermsAgreementScreen(false, {}, {}) }
+
+@PreviewTest
+@Preview(name = "Agreeing, on a small phone", widthDp = 320, heightDp = 568)
+@Composable
+fun NoticeAgreementSmallPhone() = ISATUVisitorTheme { TermsAgreementScreen(false, {}, {}) }
+
+@PreviewTest
+@Preview(name = "The link in Profile", widthDp = 320, heightDp = 80, showBackground = true)
+@Composable
+fun NoticeLinkInProfile() = ISATUVisitorTheme {
+    Column(Modifier.padding(16.dp)) { NoticeLink {} }
+}
+
+/* ---------- Visits to a teacher ---------- */
+
+private val sampleTeachers = listOf(
+    TeacherDto(code = "T1", name = "Prof. Elena Reyes", shortName = "Prof. Reyes", course = "IT", department = "CCI", departmentName = "College of Computing and Informatics", availableNow = true, canWalkIn = true),
+    TeacherDto(code = "T2", name = "Mr. Paolo Dizon", shortName = "Mr. Dizon", course = "IT", department = "CCI", departmentName = "College of Computing and Informatics", nextFreeAt = at(today, "13:00")),
+    TeacherDto(code = "T3", name = "Dr. Ana Salazar", shortName = "Dr. Salazar", course = "CS", department = "CCI", departmentName = "College of Computing and Informatics", availableNow = true, canWalkIn = true),
+    TeacherDto(code = "T4", name = "Engr. Marco Villanueva", shortName = "Engr. Villanueva", course = "CS", department = "CCI", departmentName = "College of Computing and Informatics", nextFreeAt = at(today.plusDays(3), "09:00"), acceptsWalkIns = false),
+    TeacherDto(code = "T5", name = "Prof. Rosa Tan", shortName = "Prof. Tan", course = "IS", department = "CCI", departmentName = "College of Computing and Informatics", nextFreeAt = at(today, "14:00")),
+    TeacherDto(code = "T6", name = "Mr. Ken Aquino", shortName = "Mr. Aquino", course = "IS", department = "CCI", departmentName = "College of Computing and Informatics", availableNow = true, acceptsWalkIns = false),
+)
+
+private val sampleTeacherVisit = VisitTeacherDto(code = "T1", name = "Prof. Elena Reyes", shortName = "Prof. Reyes", course = "IT", department = "CCI")
+
+private fun teacherVisit(status: String, pass: QrPassDto? = null, answerBy: String? = null, type: String = "appointment") =
+    sampleVisit(status, office = "Prof. Elena Reyes", start = "10:30", end = "11:00", pass = pass).copy(
+        teacher = sampleTeacherVisit,
+        answerByAt = answerBy,
+        visitType = type,
+        subject = "Thesis consultation",
+        purpose = "Academic Concern",
+    )
+
+private val nextTimes = listOf("13:30", "14:00").map { AvailabilitySlotDto(at(today, it), at(today, it)) } +
+    listOf("09:30", "10:30").map { AvailabilitySlotDto(at(today.plusDays(1), it), at(today.plusDays(1), it)) }
+
+@PreviewTest
+@Preview(name = "Find a teacher", widthDp = 360, heightDp = 780)
+@Composable
+fun TeacherFind() = ISATUVisitorTheme {
+    Column(Modifier.fillMaxSize().background(AppBackground)) {
+        FindTeacherContent(sampleTeachers, false, {}, {}, {})
+    }
+}
+
+@PreviewTest
+@Preview(name = "The teacher field on the form", widthDp = 360, heightDp = 320)
+@Composable
+fun TeacherFormParts() = ISATUVisitorTheme {
+    Column(Modifier.fillMaxSize().background(AppBackground).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FindTeacherButton {}
+        TeacherChoiceCard(sampleTeachers[0]) {}
+        TeacherChoiceCard(sampleTeachers[4]) {}
+    }
+}
+
+@PreviewTest
+@Preview(name = "Waiting for the teacher to answer", widthDp = 360, heightDp = 780)
+@Composable
+fun TeacherWaiting() = ISATUVisitorTheme {
+    DetailScaffold("Your request", onBack = {}) { modifier ->
+        WalkInWaitingContent("Prof. Elena Reyes", "Thesis consultation", 582, false, {}, modifier)
+    }
+}
+
+@PreviewTest
+@Preview(name = "The teacher said not now", widthDp = 360, heightDp = 780)
+@Composable
+fun TeacherNotNow() = ISATUVisitorTheme {
+    DetailScaffold("Your request", onBack = {}) { modifier ->
+        TeacherAnswerContent(
+            "Prof. Elena Reyes", "Can't see you right now", true,
+            "Pick another time. What you typed stays, so there's nothing to fill in again.",
+            nextTimes, OfficeSummaryDto("IT", "CCI IT Office"), false, {}, {}, {}, modifier,
+        )
+    }
+}
+
+@PreviewTest
+@Preview(name = "No answer from the teacher", widthDp = 360, heightDp = 780)
+@Composable
+fun TeacherNoAnswer() = ISATUVisitorTheme {
+    DetailScaffold("Your request", onBack = {}) { modifier ->
+        TeacherAnswerContent(
+            "Prof. Elena Reyes", "No answer", false,
+            "Your request closed with no answer. Pick another time. What you typed stays, so there's nothing to fill in again.",
+            nextTimes, OfficeSummaryDto("DEANS", "CCI Dean's Office"), false, {}, {}, {}, modifier,
+        )
+    }
+}
+
+@PreviewTest
+@Preview(name = "Home, waiting for a teacher's answer", widthDp = 360, heightDp = 800)
+@Composable
+fun HomeTeacherWaitingAnswer() = HomeFrame(listOf(teacherVisit("pending_approval", answerBy = at(today, "23:59"), type = "walk_in")))
+
+@PreviewTest
+@Preview(name = "Home, booked with a teacher", widthDp = 360, heightDp = 800)
+@Composable
+fun HomeTeacherBooked() = HomeFrame(listOf(teacherVisit("pending_approval")))
+
+@PreviewTest
+@Preview(name = "Home, a teacher accepted", widthDp = 360, heightDp = 800)
+@Composable
+fun HomeTeacherAccepted() = HomeFrame(listOf(teacherVisit("approved", pass = readyPass)))

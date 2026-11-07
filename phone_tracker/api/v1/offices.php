@@ -5,7 +5,11 @@ require_once dirname(__DIR__, 2) . "/appointment_offices.php";
 require_once dirname(__DIR__, 2) . "/office_availability_service.php";
 
 api_require_method("GET");
-api_require_visitor();
+$user = api_require_app_user();
+if ($user["role"] === "student") {
+    // Students walk in to offices; the app only books teachers for them.
+    api_success(["offices" => [], "timezone" => "Asia/Manila"]);
+}
 $offices = [];
 $now = new DateTimeImmutable("now");
 // Where each office is, so the booking form can say it before the visitor comes.
@@ -18,7 +22,7 @@ try {
 } catch (Throwable $ignored) {
     // The offices table is not installed yet.
 }
-foreach (appointment_office_active_map() as $code => $label) {
+foreach (appointment_office_bookable_map() as $code => $label) {
     try {
         $settings = office_availability_get_settings($conn, $code);
     } catch (Throwable $error) {

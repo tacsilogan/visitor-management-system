@@ -92,8 +92,102 @@ function mail_configuration_problem(?array $settings = null): ?string
  *
  * @return array{text: string, html: string}
  */
+/** The alerts a teacher gets by email: no code, just who wants to see them and a link to answer. */
+const MAIL_TEACHER_TEMPLATES = [
+    "teacher_request" => ["%s asked to see you on %s.", "Answer this request"],
+    "teacher_walk_in" => ["%s wants to see you now. The request closes in 10 minutes.", "Answer this walk-in"],
+    "teacher_booked" => ["%s booked a visit with you on %s. It was accepted automatically.", "See your visits"],
+    "teacher_reminder" => ["%s is still waiting to hear from you about %s.", "Answer this request"],
+];
+
+function mail_render_teacher_alert(string $templateKey, array $payload): array
+{
+    [$sentence, $action] = MAIL_TEACHER_TEMPLATES[$templateKey];
+    $visitor = (string) ($payload["visitor"] ?? "A visitor");
+    $when = (string) ($payload["when"] ?? "");
+    $intro = sprintf($sentence, $visitor, $when);
+    $reason = trim(implode(". ", array_filter([(string) ($payload["purpose"] ?? ""), (string) ($payload["subject"] ?? "")])));
+    $greeting = "Hello " . trim((string) ($payload["teacher"] ?? "")) . ",";
+    $link = (string) ($payload["link"] ?? "");
+
+    $text = $greeting . "\n\n" . $intro . ($reason !== "" ? "\nReason: " . $reason . "." : "")
+        . ($link !== "" ? "\n\n" . $action . ": " . $link : "") . "\n\nISATU Visitor Management\n";
+
+    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
+    $html = '<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;color:#1f2937">'
+        . '<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:28px">'
+        . '<p style="margin:0 0 6px;font-size:13px;font-weight:bold;letter-spacing:.06em;color:#1d4ed8">ISATU VISITOR MANAGEMENT</p>'
+        . '<p style="margin:16px 0">' . $escape($greeting) . '</p>'
+        . '<p style="margin:0 0 8px;line-height:1.5">' . $escape($intro) . '</p>'
+        . ($reason !== "" ? '<p style="margin:0 0 18px;line-height:1.5;color:#64748b">Reason: ' . $escape($reason) . '.</p>' : '')
+        . ($link !== "" ? '<a href="' . $escape($link) . '" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#0755b5;color:#ffffff;font-weight:bold;text-decoration:none">' . $escape($action) . '</a>' : '')
+        . '</div></body></html>';
+    return ["text" => $text, "html" => $html];
+}
+
+/**
+ * The emails about an account that does not exist yet (school_accounts_service.php): the 6-digit code
+ * that confirms an email address, and the Dean's Office's answer to a teacher's request.
+ */
+const MAIL_ACCOUNT_TEMPLATES = ["account_code", "teacher_request_approved", "teacher_request_rejected"];
+
+function mail_render_account(string $templateKey, array $payload, string $recipientName): array
+{
+    $name = trim((string) ($payload["name"] ?? "")) ?: $recipientName;
+    $greeting = $name !== "" ? "Hello " . $name . "," : "Hello,";
+    $code = "";
+    $outro = "";
+    if ($templateKey === "account_code") {
+        $code = (string) ($payload["code"] ?? "");
+        if (!preg_match('/^\d{6}$/', $code)) {
+            throw new InvalidArgumentException("The email has no valid code to send.");
+        }
+        $minutes = max(1, (int) ($payload["minutes"] ?? 10));
+        $intro = match ((string) ($payload["account_type"] ?? "")) {
+            "student" => "Enter this code in the ISATU app to finish creating your student account:",
+            "teacher" => "Enter this code on the ISATU website to send your teacher account request:",
+            default => "Enter this code in the ISATU app to finish creating your visitor account:",
+        };
+        $after = "The code works once and expires in " . $minutes . " minutes.";
+        $outro = "If you didn't ask for an ISATU account, ignore this email. Nothing is created without the code.";
+    } elseif ($templateKey === "teacher_request_approved") {
+        $office = (string) ($payload["office"] ?? "Your Dean's Office");
+        $intro = $office . " approved your teacher account. Sign in with your school email and the password you chose, then set your hours. Students and visitors can find you once you have.";
+        $after = (string) ($payload["link"] ?? "");
+    } else {
+        $office = (string) ($payload["office"] ?? "Your Dean's Office");
+        $reason = trim((string) ($payload["reason"] ?? ""));
+        $intro = $office . " did not approve your teacher account request" . ($reason !== "" ? ": " . $reason . "." : ".");
+        $after = "If this is a mistake, contact " . $office . ", then request an account again.";
+    }
+
+    $text = $greeting . "\n\n" . $intro . ($code !== "" ? "\n\n" . $code : "") . ($after !== "" ? "\n\n" . $after : "")
+        . ($outro !== "" ? "\n\n" . $outro : "") . "\n\nISATU Visitor Management\n";
+
+    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
+    $isLink = str_starts_with($after, "http");
+    $html = '<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;color:#1f2937">'
+        . '<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:28px">'
+        . '<p style="margin:0 0 6px;font-size:13px;font-weight:bold;letter-spacing:.06em;color:#1d4ed8">ISATU VISITOR MANAGEMENT</p>'
+        . '<p style="margin:16px 0">' . $escape($greeting) . '</p>'
+        . '<p style="margin:0 0 16px;line-height:1.5">' . $escape($intro) . '</p>'
+        . ($code !== "" ? '<p style="margin:0 0 16px;padding:14px;background:#eef2ff;border-radius:8px;font-family:Consolas,Menlo,monospace;font-size:28px;font-weight:bold;letter-spacing:.3em;text-align:center">' . $escape($code) . '</p>' : '')
+        . ($isLink
+            ? '<a href="' . $escape($after) . '" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#0755b5;color:#ffffff;font-weight:bold;text-decoration:none">Sign in</a>'
+            : ($after !== "" ? '<p style="margin:0 0 16px;line-height:1.5">' . $escape($after) . '</p>' : ''))
+        . ($outro !== "" ? '<p style="margin:16px 0 0;line-height:1.5;color:#64748b">' . $escape($outro) . '</p>' : '')
+        . '</div></body></html>';
+    return ["text" => $text, "html" => $html];
+}
+
 function mail_render(string $templateKey, array $payload, string $recipientName): array
 {
+    if (isset(MAIL_TEACHER_TEMPLATES[$templateKey])) {
+        return mail_render_teacher_alert($templateKey, $payload);
+    }
+    if (in_array($templateKey, MAIL_ACCOUNT_TEMPLATES, true)) {
+        return mail_render_account($templateKey, $payload, $recipientName);
+    }
     $code = (string) ($payload["token"] ?? "");
     if (!preg_match('/^[a-f0-9]{64}$/', $code)) {
         throw new InvalidArgumentException("The email has no valid code to send.");
@@ -273,57 +367,93 @@ function mail_process_queue(mysqli $conn, array $settings, int $limit = 25): arr
     );
 
     while ($email = $result->fetch_assoc()) {
-        $emailId = (int) $email["id"];
-        $claim = $conn->prepare(
-            "UPDATE outbound_emails SET status = 'sending', attempt_count = attempt_count + 1
-             WHERE id = ? AND status IN ('queued', 'failed')"
-        );
-        $claim->bind_param("i", $emailId);
-        $claim->execute();
-        $claimed = $claim->affected_rows === 1;
-        $claim->close();
-        if (!$claimed) {
-            continue;
-        }
-        $attempt = (int) $email["attempt_count"] + 1;
-        $payload = json_decode((string) $email["payload_json"], true);
-        $payload = is_array($payload) ? $payload : [];
-
-        $expiresAt = strtotime((string) ($payload["expires_at"] ?? ""));
-        if ($expiresAt !== false && $expiresAt <= time()) {
-            mail_finish($conn, $emailId, "failed", "Not sent: the code expired before it could be delivered.", true);
-            $counts["expired"]++;
-            continue;
-        }
-
-        try {
-            $message = mail_render((string) $email["template_key"], $payload, trim((string) $email["display_name"]));
-        } catch (InvalidArgumentException $error) {
-            mail_finish($conn, $emailId, "failed", "Not sent: " . $error->getMessage(), true);
-            $counts["failed"]++;
-            continue;
-        }
-
-        try {
-            mail_send(
-                $settings,
-                (string) $email["recipient_email"],
-                trim((string) $email["display_name"]),
-                (string) $email["subject"],
-                $message["text"],
-                $message["html"]
-            );
-            mail_finish($conn, $emailId, "sent", "", true);
-            $counts["sent"]++;
-        } catch (Throwable $error) {
-            $giveUp = $attempt >= $maxAttempts;
-            $delayMinutes = 2 ** min(4, $attempt - 1);
-            mail_finish($conn, $emailId, "failed", $error->getMessage(), $giveUp, $delayMinutes);
-            error_log("Email " . $emailId . " was not sent (attempt " . $attempt . "): " . $error->getMessage());
-            $counts["failed"]++;
-        }
+        mail_deliver_row($conn, $settings, $email, $counts);
     }
     return $counts;
+}
+
+/**
+ * Sends one queued email straight away, for a code someone is waiting for on screen. When email is
+ * not set up, or the send fails, the email stays queued for the next run of the queue.
+ */
+function mail_send_now(mysqli $conn, int $emailId): bool
+{
+    $settings = mail_settings();
+    if (mail_configuration_problem($settings) !== null) {
+        return false;
+    }
+    $maxAttempts = MAIL_MAX_ATTEMPTS;
+    $stmt = $conn->prepare(
+        "SELECT e.id, e.recipient_email, e.template_key, e.subject, e.payload_json, e.attempt_count,
+                COALESCE(u.display_name, '') AS display_name
+         FROM outbound_emails e
+         LEFT JOIN app_users u ON u.id = e.user_id
+         WHERE e.id = ? AND e.status IN ('queued', 'failed') AND e.attempt_count < {$maxAttempts}"
+    );
+    $stmt->bind_param("i", $emailId);
+    $stmt->execute();
+    $email = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$email) {
+        return false;
+    }
+    $counts = ["sent" => 0, "failed" => 0, "expired" => 0];
+    mail_deliver_row($conn, $settings, $email, $counts);
+    return $counts["sent"] === 1;
+}
+
+/** Claims one queued email and sends it. Another run that claimed it first wins. */
+function mail_deliver_row(mysqli $conn, array $settings, array $email, array &$counts): void
+{
+    $emailId = (int) $email["id"];
+    $claim = $conn->prepare(
+        "UPDATE outbound_emails SET status = 'sending', attempt_count = attempt_count + 1
+         WHERE id = ? AND status IN ('queued', 'failed')"
+    );
+    $claim->bind_param("i", $emailId);
+    $claim->execute();
+    $claimed = $claim->affected_rows === 1;
+    $claim->close();
+    if (!$claimed) {
+        return;
+    }
+    $attempt = (int) $email["attempt_count"] + 1;
+    $payload = json_decode((string) $email["payload_json"], true);
+    $payload = is_array($payload) ? $payload : [];
+
+    $expiresAt = strtotime((string) ($payload["expires_at"] ?? ""));
+    if ($expiresAt !== false && $expiresAt <= time()) {
+        mail_finish($conn, $emailId, "failed", "Not sent: the code expired before it could be delivered.", true);
+        $counts["expired"]++;
+        return;
+    }
+
+    try {
+        $message = mail_render((string) $email["template_key"], $payload, trim((string) $email["display_name"]));
+    } catch (InvalidArgumentException $error) {
+        mail_finish($conn, $emailId, "failed", "Not sent: " . $error->getMessage(), true);
+        $counts["failed"]++;
+        return;
+    }
+
+    try {
+        mail_send(
+            $settings,
+            (string) $email["recipient_email"],
+            trim((string) $email["display_name"]),
+            (string) $email["subject"],
+            $message["text"],
+            $message["html"]
+        );
+        mail_finish($conn, $emailId, "sent", "", true);
+        $counts["sent"]++;
+    } catch (Throwable $error) {
+        $giveUp = $attempt >= MAIL_MAX_ATTEMPTS;
+        $delayMinutes = 2 ** min(4, $attempt - 1);
+        mail_finish($conn, $emailId, "failed", $error->getMessage(), $giveUp, $delayMinutes);
+        error_log("Email " . $emailId . " was not sent (attempt " . $attempt . "): " . $error->getMessage());
+        $counts["failed"]++;
+    }
 }
 
 /** Records the outcome of one email; $final removes its code from the queue. */

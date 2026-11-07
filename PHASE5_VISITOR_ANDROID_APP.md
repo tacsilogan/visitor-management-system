@@ -18,11 +18,12 @@ endpoints correctly returned HTTP 401 without a bearer token.
 
 ## Product rules preserved
 
-- Visitor signup exists only in the visitor app, not on the staff login page.
-- Signup requires the visitor tracking consent but does not require a separate email
-  verification code. Email is retained for sign-in and password recovery. Visit
-  decisions, proposed schedules, reminders, and cancellations are delivered through
-  Notifications and Firebase push notifications.
+- Visitor and ISATU student signup exists only in the app. The staff sign-in page only lets a
+  teacher request an account, which their department's Dean's Office approves.
+- Since app 0.8.0, every new account confirms its email with a 6-digit code before it exists. A
+  visitor agrees to tracking; a student is never tracked, has no pass, books teachers only and
+  says "I'm here" instead (SCHOOL_ACCOUNTS.md). Visit decisions, proposed schedules, reminders,
+  and cancellations are delivered through Notifications and Firebase push notifications.
 - Bookable destinations come from the API and remain limited to IT Department,
   IS Department, CS Department, Dean's Office, and Tech Support.
 - Walk-ins receive an immediate pass when the selected office is accepting visitors.
@@ -34,6 +35,14 @@ endpoints correctly returned HTTP 401 without a bearer token.
 - Tracking consent is accepted during account creation and copied into an auditable
   visit record. Android's required operating-system location permission is requested as
   part of signup; it is separate from legal consent and does not start collection.
+- Signup has two required checkboxes: the Terms and Privacy Notice (`ui/TermsNotice.kt`, with
+  a link to read it) and location sharing. `CONSENT_VERSION` in `app/build.gradle.kts` names
+  the notice's version and goes to the server with signup and each visit's consent. An account
+  that hasn't agreed to this version on this phone sees the notice once before the app opens,
+  and can agree or sign out. That agreement is saved on the phone; the server first sees it
+  with the account's next visit. The notice quotes server settings (listed at the top of
+  `TermsNotice.kt`), so update it when they change. Its highlighted blanks still need ISATU's
+  answers before real visitors use it.
 - A foreground notification remains visible while tracking. Offline points stay on the
   phone until the API accepts them.
 - Android 13 and newer users receive an in-app explanation and button for enabling
@@ -79,3 +88,7 @@ endpoints correctly returned HTTP 401 without a bearer token.
 
 Do not finalize Phase 6 analytics until the core physical workflow passes. Those tests
 confirm that the event data used by analytics is actually produced correctly.
+
+- Visits to a teacher (TEACHER_VISITS.md): the Book tab asks Office or Teacher. A visitor finds a teacher by
+  name or course, and sees only "Available now" or the next free time. A walk-in to a teacher waits for them
+  to accept, with a 10-minute timer, and if they can't, the visitor can pick another time or go to an office.
