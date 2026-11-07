@@ -47,7 +47,8 @@ teacher only after the Dean's Office approves.
 A department is offered on the request page only while its Dean's Office has active Office
 Personnel. The Dean's Office can also turn off the account of a teacher who left (their open
 requests and visits are cancelled, and each person is told) and turn it back on. The admin's Add
-user → Teacher still works, for exceptions.
+user → Teacher still works, for exceptions. Removing a teacher's account (admin) cancels the same
+visits and also removes their hours; see AUTH_SECURITY.md, "Removing an account".
 
 ## Departments
 

@@ -476,8 +476,9 @@ function teacher_queue_alert_email(mysqli $conn, string $code, string $template,
  * The caller owns the transaction, and has locked the row.
  *
  * @param array{id:int|string, office_code:string, visitor_user_id:int|string, status:string, scheduled_start_at:string} $appointment
+ * @param string|null $historyNote the note in the visit's history, when someone other than the teacher cancelled it
  */
-function teacher_cancel_visit(mysqli $conn, array $appointment, int $actorId, string $reason): void
+function teacher_cancel_visit(mysqli $conn, array $appointment, int $actorId, string $reason, ?string $historyNote = null): void
 {
     $appointmentId = (int) $appointment["id"];
     $from = (string) $appointment["status"];
@@ -496,7 +497,7 @@ function teacher_cancel_visit(mysqli $conn, array $appointment, int $actorId, st
         throw new RuntimeException("The visit changed before this could be saved");
     }
     visit_withdraw_open_proposals($conn, $appointmentId);
-    $note = "Cancelled by the teacher" . ($reason !== "" ? ": " . $reason : "");
+    $note = $historyNote ?? ("Cancelled by the teacher" . ($reason !== "" ? ": " . $reason : ""));
     $history = $conn->prepare(
         "INSERT INTO appointment_status_history (appointment_id, from_status, to_status, changed_by_user_id, note)
          VALUES (?, ?, 'cancelled', ?, ?)"
@@ -518,6 +519,46 @@ function teacher_cancel_visit(mysqli $conn, array $appointment, int $actorId, st
             : "Your visit on {$time} was cancelled, so your pass no longer works. You can book another time."
     );
     teacher_audit($conn, $actorId, $appointmentId, "teacher.visit_cancelled", ["from_status" => $from]);
+}
+
+/**
+ * The teacher stops taking visits, because their account was turned off or removed: each open
+ * request is refused and each upcoming visit cancelled, with a message to the visitor. $why finishes
+ * "The teacher's account was …" in the visit history. The caller owns the transaction. Returns how
+ * many visits it closed.
+ */
+function teacher_close_open_visits(mysqli $conn, string $code, int $actorId, string $why): int
+{
+    $teacherName = teacher_short_label($code);
+    $note = "The teacher's account was {$why}";
+    $open = $conn->prepare(
+        "SELECT * FROM appointments
+         WHERE office_code = ? AND status IN ('pending_approval', 'reschedule_proposed', 'approved') AND scheduled_end_at > NOW()
+         FOR UPDATE"
+    );
+    $open->bind_param("s", $code);
+    $open->execute();
+    $appointments = $open->get_result()->fetch_all(MYSQLI_ASSOC);
+    $open->close();
+    foreach ($appointments as $appointment) {
+        $appointmentId = (int) $appointment["id"];
+        if ($appointment["status"] === "pending_approval") {
+            $reason = $teacherName . " is no longer taking visits.";
+            $reject = $conn->prepare(
+                "UPDATE appointments SET status = 'rejected', status_updated_at = NOW(), rejection_reason = ?
+                 WHERE id = ? AND status = 'pending_approval'"
+            );
+            $reject->bind_param("si", $reason, $appointmentId);
+            $reject->execute();
+            $reject->close();
+            visit_history($conn, $appointmentId, "pending_approval", "rejected", $actorId, $note);
+            visit_notify_visitor($conn, (int) $appointment["visitor_user_id"], $appointmentId, "appointment.rejected",
+                "{$teacherName} can't see you", "{$teacherName} is no longer taking visits. You can book another teacher.");
+        } else {
+            teacher_cancel_visit($conn, $appointment, $actorId, "", "Cancelled because the teacher's account was {$why}");
+        }
+    }
+    return count($appointments);
 }
 
 /**

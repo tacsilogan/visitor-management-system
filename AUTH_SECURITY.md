@@ -139,6 +139,33 @@ others call `api_require_app_user()`. The Dean's Office approves teachers only f
 - Command line recovery when no admin can sign in: `phone_tracker/tools/auth_recovery.php`
   (`unlock`, `reset-password`, `reset-2fa`). Every action is written to `audit_logs`.
 
+## Removing an account
+
+User Management → **Remove** works for any account, even one with years of visits
+(`delete_user.php`, `account_removal_service.php`). It asks the administrator to confirm it's them
+and does everything in one transaction, so it either all happens or nothing changes.
+
+- **Goes with the account:** sign-in, sessions, phones, app sign-ins, notifications, location
+  sharing, trusted browsers, backup codes, the student profile, and emails still waiting to be sent.
+- **Stays in the records:** every visit, under the name and email it was booked with; consent
+  records; what staff did (approvals, suggested times, check-ins, pass overrides); the activity log.
+  These rows only stop pointing at the account (`ON DELETE SET NULL`, from
+  `account_removal_migration.sql`). GPS positions stay with their visit until the 90-day cleanup.
+- **Closed first:** a visitor's or student's open requests and visits are cancelled, and the office
+  or teacher is told about each one still to come. Their open visits are closed, so a saved picture
+  of the pass no longer works at the gate. A teacher's upcoming visits are cancelled and each visitor
+  is told; their hours are removed and their calendar is archived, or deleted if it never had a visit.
+- **Waits:** a visitor who is inside the campus. The guard ends the visit first (End visit on the
+  Security dashboard), or the administrator removes the account after they leave.
+- Nobody can remove their own account or the last active administrator.
+
+Removing is for accounts that should not exist, like test accounts or people who asked to be
+deleted. To keep someone out, **suspend** the account instead: it signs them out and can be undone,
+while a removed person can sign up again with the same email, as a new account with no history.
+
+`php phone_tracker/tools/account_removal_test.php` checks all of this on the database with throwaway
+accounts that it removes again. The server check on GitHub runs it on every push.
+
 ## Other protections
 
 - The four old endpoints that returned visitor locations without signing in, and the

@@ -141,11 +141,12 @@ function refresh_appointment_stop_time_states(mysqli $conn): void
             $history->close();
         }
 
-        $notification = $conn->prepare(
+        // A removed account's visits stay in the records with no visitor left to tell.
+        $notification = $visitorUserId > 0 ? $conn->prepare(
             "INSERT INTO app_notifications
              (recipient_user_id, appointment_id, notification_type, title, message)
              VALUES (?, ?, ?, ?, ?)"
-        );
+        ) : false;
         if ($notification) {
             $title = $toStatus === "unanswered"
                 ? ($isTeacher ? "No answer from {$teacherName}" : "Office did not respond")
@@ -242,14 +243,16 @@ function refresh_appointment_stop_time_states(mysqli $conn): void
             $history->execute();
             $history->close();
 
-            $visitorNotification = $conn->prepare(
-                "INSERT INTO app_notifications
-                 (recipient_user_id, appointment_id, notification_type, title, message)
-                 VALUES (?, ?, 'appointment.reschedule_expired', 'Schedule proposal expired', ?)"
-            );
-            $visitorNotification->bind_param("iis", $visitorUserId, $appointmentId, $note);
-            $visitorNotification->execute();
-            $visitorNotification->close();
+            if ($visitorUserId > 0) {
+                $visitorNotification = $conn->prepare(
+                    "INSERT INTO app_notifications
+                     (recipient_user_id, appointment_id, notification_type, title, message)
+                     VALUES (?, ?, 'appointment.reschedule_expired', 'Schedule proposal expired', ?)"
+                );
+                $visitorNotification->bind_param("iis", $visitorUserId, $appointmentId, $note);
+                $visitorNotification->execute();
+                $visitorNotification->close();
+            }
 
             $officeNotification = $conn->prepare(
                 "INSERT INTO app_notifications

@@ -355,6 +355,10 @@ function visit_notify_office(mysqli $conn, int $appointmentId, string $officeCod
 
 function visit_notify_visitor(mysqli $conn, int $visitorUserId, ?int $appointmentId, string $type, string $title, string $message, array $data = []): void
 {
+    if ($visitorUserId <= 0) {
+        // The visitor's account was removed; the visit stays in the records with no one to tell.
+        return;
+    }
     $notify = $conn->prepare(
         "INSERT INTO app_notifications
          (recipient_user_id, appointment_id, notification_type, title, message, data_json)

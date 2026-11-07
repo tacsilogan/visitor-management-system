@@ -775,38 +775,7 @@ function school_set_teacher_active(mysqli $conn, int $teacherUserId, string $dep
     $update->bind_param("ii", $value, $teacherUserId);
     $update->execute();
     $update->close();
-    $cancelled = 0;
-    if (!$active) {
-        $teacherName = teacher_short_label($code);
-        $open = $conn->prepare(
-            "SELECT * FROM appointments
-             WHERE office_code = ? AND status IN ('pending_approval', 'reschedule_proposed', 'approved') AND scheduled_end_at > NOW()
-             FOR UPDATE"
-        );
-        $open->bind_param("s", $code);
-        $open->execute();
-        $appointments = $open->get_result()->fetch_all(MYSQLI_ASSOC);
-        $open->close();
-        foreach ($appointments as $appointment) {
-            if ($appointment["status"] === "pending_approval") {
-                $reject = $conn->prepare(
-                    "UPDATE appointments SET status = 'rejected', status_updated_at = NOW(), rejection_reason = ?
-                     WHERE id = ? AND status = 'pending_approval'"
-                );
-                $reason = $teacherName . " is no longer taking visits.";
-                $appointmentId = (int) $appointment["id"];
-                $reject->bind_param("si", $reason, $appointmentId);
-                $reject->execute();
-                $reject->close();
-                visit_history($conn, $appointmentId, "pending_approval", "rejected", $actorId, "The teacher's account was turned off by the Dean's Office");
-                visit_notify_visitor($conn, (int) $appointment["visitor_user_id"], $appointmentId, "appointment.rejected",
-                    "{$teacherName} can't see you", "{$teacherName} is no longer taking visits. You can book another teacher.");
-            } else {
-                teacher_cancel_visit($conn, $appointment, $actorId, "the teacher's account was turned off");
-            }
-            $cancelled++;
-        }
-    }
+    $cancelled = $active ? 0 : teacher_close_open_visits($conn, $code, $actorId, "turned off by the Dean's Office");
     school_audit($conn, $actorId, $active ? "teacher.turned_on" : "teacher.turned_off", "app_user", (string) $teacherUserId, [
         "department" => $departmentCode,
         "cancelled_visits" => $cancelled,

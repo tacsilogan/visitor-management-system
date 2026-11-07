@@ -239,6 +239,19 @@
         return user.role === "visitor" || user.role === "student";
     }
 
+    /** The confirmation before removing an account: what goes, and what stays in the records. */
+    function removalWarning(user, label) {
+        let effect = "What they did stays in the records.";
+        if (user && isAppAccount(user)) {
+            effect = "Their upcoming visits are cancelled, and the office or teacher is told. "
+                + "Past visits stay in the records under their name.";
+        } else if (user && user.role === "teacher") {
+            effect = "Their upcoming visits are cancelled, and each visitor is told. "
+                + "Their hours are removed; past visits keep their name.";
+        }
+        return "Remove " + label + "?\n\n" + effect + "\n\nThey are signed out everywhere. This cannot be undone.";
+    }
+
     function roleLabel(role) {
         const labels = {
             admin: "Administrator",
@@ -3251,6 +3264,7 @@
             return Number(item.id) === Number(button.dataset.userId);
         });
         const label = user ? (user.display_name || user.username) : "this user";
+        showMessage("adminListSuccess", "");
         if (button.dataset.action === "manage") {
             openManageUser(Number(button.dataset.userId));
             return;
@@ -3285,7 +3299,7 @@
             }
             return;
         }
-        if (!window.confirm("Remove " + label + "? This cannot be undone.")) {
+        if (!window.confirm(removalWarning(user, label))) {
             return;
         }
         button.disabled = true;
@@ -3299,16 +3313,20 @@
             });
             if (!data || !data.success) {
                 if (!data || !data.cancelled) {
-                    window.alert((data && data.message) || "Could not remove user.");
+                    window.alert((data && data.message) || "Could not remove " + label + ".");
                 }
                 button.disabled = false;
                 return;
             }
             await loadUsers();
             loadSecurity();
+            showMessage("adminListSuccess", data.message || "Removed " + label + ".");
         } catch (error) {
             if (error.message !== "Not authenticated") {
-                window.alert("Could not reach the server. Please try again.");
+                // fetch() fails with a TypeError only when the server can't be reached at all.
+                window.alert(error instanceof TypeError
+                    ? "Could not reach the server. Please try again."
+                    : "Could not remove " + label + ". " + error.message);
                 button.disabled = false;
             }
         }

@@ -46,6 +46,7 @@ const SETUP_FILES = [
     "indoor_directions_migration.sql" => null,
     "teacher_visits_migration.sql" => null,
     "school_accounts_migration.sql" => null,
+    "account_removal_migration.sql" => null,
 ];
 const SETUP_CAMPUS_SEED = "campus_map_isatu_seed.sql";
 const SETUP_PUBLISHED_PASSWORD = "password";
