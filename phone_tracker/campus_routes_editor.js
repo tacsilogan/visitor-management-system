@@ -563,9 +563,16 @@
         });
     }
 
-    function cancelRecording(skipConfirm) {
+    // Asks only when there is something to lose; without a question it finishes straight away.
+    async function cancelRecording(skipConfirm) {
         if (!skipConfirm && routes.recorder && routes.recorder.status().points.length > 1
-            && !window.confirm("Discard this recording?")) {
+            && !(await AppDialog.confirm({
+                title: "Discard this recording?",
+                message: "The path recorded so far will be lost.",
+                confirmLabel: "Discard recording",
+                cancelLabel: "Keep recording",
+                danger: true,
+            }))) {
             return;
         }
         if (routes.recorder) {
@@ -704,9 +711,15 @@
         });
     }
 
-    function cancelDrawing() {
+    async function cancelDrawing() {
         if (routes.drawing && !routes.drawing.editingId && routes.drawing.points.length > 1
-            && !window.confirm("Discard this drawing?")) {
+            && !(await AppDialog.confirm({
+                title: "Discard this drawing?",
+                message: "The points you placed will be lost.",
+                confirmLabel: "Discard drawing",
+                cancelLabel: "Keep drawing",
+                danger: true,
+            }))) {
             return;
         }
         routes.drawing = null;
@@ -860,8 +873,11 @@
         routes.draft = null;
     }
 
-    function discardReview() {
-        if (!window.confirm(routes.draft && routes.draft.editingId ? "Discard these changes?" : "Discard this route?")) {
+    async function discardReview() {
+        const editing = Boolean(routes.draft && routes.draft.editingId);
+        if (!(await AppDialog.confirm(editing
+            ? { title: "Discard these changes?", message: "The route stays as it was.", confirmLabel: "Discard changes", cancelLabel: "Keep editing", danger: true }
+            : { title: "Discard this route?", message: "It hasn't been saved and will be lost.", confirmLabel: "Discard route", cancelLabel: "Keep route", danger: true }))) {
             return;
         }
         routes.draft = null;
@@ -951,7 +967,12 @@
     }
 
     async function deleteRoute(route) {
-        if (!window.confirm("Delete the route \"" + route.name + "\"? This cannot be undone.")) {
+        if (!(await AppDialog.confirm({
+            title: "Delete the route “" + route.name + "”?",
+            message: "This cannot be undone.",
+            confirmLabel: "Delete route",
+            danger: true,
+        }))) {
             return;
         }
         try {

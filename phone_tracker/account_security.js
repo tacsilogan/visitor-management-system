@@ -645,7 +645,11 @@
     });
 
     async function regenerateCodes() {
-        if (!window.confirm("Create new backup codes? Your old backup codes will stop working.")) {
+        if (!(await AppDialog.confirm({
+            title: "Create new backup codes?",
+            message: "Your old backup codes will stop working.",
+            confirmLabel: "Create new codes",
+        }))) {
             return;
         }
         show($("acctTwoFactorError"), "");
@@ -658,7 +662,12 @@
     }
 
     async function disableTwoFactor() {
-        if (!window.confirm("Turn off two-step verification? Your account will be protected by your password only.")) {
+        if (!(await AppDialog.confirm({
+            title: "Turn off two-step verification?",
+            message: "Your account will be protected by your password only.",
+            confirmLabel: "Turn off",
+            danger: true,
+        }))) {
             return;
         }
         show($("acctTwoFactorError"), "");
@@ -680,13 +689,21 @@
         await request("account_security.php", body);
         loadOverview();
     }
-    $("acctForgetAll").addEventListener("click", function () {
-        if (window.confirm("Forget all trusted browsers? Each one will ask for a two-step code again.")) {
+    $("acctForgetAll").addEventListener("click", async function () {
+        if (await AppDialog.confirm({
+            title: "Forget all trusted browsers?",
+            message: "Each one will ask for a two-step code again.",
+            confirmLabel: "Forget browsers",
+        })) {
             forgetDevices(null);
         }
     });
     $("acctSignOutOthers").addEventListener("click", async function () {
-        if (!window.confirm("Sign out of every other browser and device? This one stays signed in.")) {
+        if (!(await AppDialog.confirm({
+            title: "Sign out of every other browser and device?",
+            message: "This one stays signed in.",
+            confirmLabel: "Sign out others",
+        }))) {
             return;
         }
         const data = await request("account_security.php", { action: "sign_out_others" });

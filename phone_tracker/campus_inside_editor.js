@@ -585,7 +585,7 @@
         area.setSelectionRange(area.value.length, area.value.length);
     });
 
-    el("insideStepList").addEventListener("click", function (event) {
+    el("insideStepList").addEventListener("click", async function (event) {
         const row = event.target.closest(".inside-step");
         if (!row) {
             return;
@@ -598,7 +598,13 @@
         }
         const steps = state.draft.steps;
         if (action.dataset.act === "remove") {
-            if (steps[index].text.trim() && !window.confirm("Remove step " + (index + 1) + "?")) {
+            const text = steps[index].text.trim();
+            if (text && !(await AppDialog.confirm({
+                title: "Remove step " + (index + 1) + "?",
+                message: "“" + (text.length > 140 ? text.slice(0, 140).trim() + "…" : text) + "”",
+                confirmLabel: "Remove step",
+                danger: true,
+            }))) {
                 return;
             }
             steps.splice(index, 1);
@@ -659,14 +665,20 @@
         markChanged();
     });
 
-    el("insideCopyFrom").addEventListener("change", function () {
+    el("insideCopyFrom").addEventListener("change", async function () {
         const from = state.saved[this.value];
         const name = officeName(this.value);
         this.value = "";
         if (!from) {
             return;
         }
-        if (state.draft.steps.length && !window.confirm("Replace the steps here with the " + from.steps.length + " from " + name + "?")) {
+        if (state.draft.steps.length && !(await AppDialog.confirm({
+            title: "Replace the steps here?",
+            message: from.steps.length === 1
+                ? "The 1 step from " + name + " takes their place."
+                : "The " + from.steps.length + " steps from " + name + " take their place.",
+            confirmLabel: "Replace steps",
+        }))) {
             return;
         }
         state.draft.steps = from.steps.map(function (step) {
@@ -679,10 +691,17 @@
         showMessage("Copied " + from.steps.length + " steps from " + name + ". Change what's different, then save.", false);
     });
 
-    el("insideDepartment").addEventListener("change", function () {
-        const code = this.value;
-        if (state.dirty && !window.confirm("Discard your changes to " + officeName(state.code) + "?")) {
-            this.value = state.code;
+    el("insideDepartment").addEventListener("change", async function () {
+        const select = this;
+        const code = select.value;
+        if (state.dirty && !(await AppDialog.confirm({
+            title: "Discard your changes?",
+            message: "Your changes to " + officeName(state.code) + " aren't saved yet.",
+            confirmLabel: "Discard changes",
+            cancelLabel: "Keep editing",
+            danger: true,
+        }))) {
+            select.value = state.code;
             return;
         }
         openDepartment(code);

@@ -439,7 +439,11 @@
     }
 
     async function completeVisit(appointmentId, name, button) {
-        if (!window.confirm("End the visit for " + (name || "this visitor") + "? Use this only if they cannot show their pass at the gate.")) {
+        if (!(await AppDialog.confirm({
+            title: "End the visit for " + (name || "this visitor") + "?",
+            message: "Use this only if they cannot show their pass at the gate.",
+            confirmLabel: "End visit",
+        }))) {
             return false;
         }
         if (button) {
@@ -452,14 +456,16 @@
                 body: JSON.stringify({ id: appointmentId }),
             });
             if (!data || !data.success) {
-                window.alert((data && data.message) || "Could not end the visit.");
+                AppDialog.alert({ title: "Couldn't end the visit", message: (data && data.message) || "Please try again." });
                 return false;
             }
             await Promise.all([loadSecurityDashboard(), loadLiveLocations(true)]);
             return true;
         } catch (error) {
             if (error.message !== "Not authenticated") {
-                window.alert(error.message || "Could not reach the server.");
+                AppDialog.alert(error instanceof TypeError
+                    ? { title: "Couldn't reach the server", message: "Check your connection and try again." }
+                    : { title: "Couldn't end the visit", message: error.message || "Please try again." });
             }
             return false;
         } finally {

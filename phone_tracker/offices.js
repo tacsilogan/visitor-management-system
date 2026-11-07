@@ -1547,8 +1547,12 @@
     });
 
     byId("closeOfficeAppointmentBtn").addEventListener("click", function () { byId("officeAppointmentDialog").close(); });
-    byId("approveOfficeAppointmentBtn").addEventListener("click", function () {
-        if (window.confirm("Approve this appointment and issue the visitor's QR pass?")) {
+    byId("approveOfficeAppointmentBtn").addEventListener("click", async function () {
+        if (await AppDialog.confirm({
+            title: "Approve this appointment?",
+            message: "This issues the visitor's QR pass.",
+            confirmLabel: "Approve",
+        })) {
             processAppointment("approve", "");
         }
     });
@@ -1570,8 +1574,12 @@
         processAppointment("reject", reason);
     });
 
-    byId("completeOfficeStopBtn").addEventListener("click", function () {
-        if (window.confirm("Mark this meeting as done? The visitor's campus visit continues until Security checks them out.")) {
+    byId("completeOfficeStopBtn").addEventListener("click", async function () {
+        if (await AppDialog.confirm({
+            title: "Mark this meeting as done?",
+            message: "The visitor's campus visit continues until Security checks them out.",
+            confirmLabel: "Mark as done",
+        })) {
             processAppointment("complete", "");
         }
     });
@@ -1669,7 +1677,11 @@
             byId("officePauseDialog").showModal();
             return;
         }
-        if (!window.confirm("Resume visits now? Visitors can book and walk in again.")) {
+        if (!(await AppDialog.confirm({
+            title: "Resume visits now?",
+            message: "Visitors can book and walk in again.",
+            confirmLabel: "Resume visits",
+        }))) {
             return;
         }
         button.disabled = true;
@@ -1759,7 +1771,12 @@
     });
     byId("officeExceptionList").addEventListener("click", async function (event) {
         const button = event.target.closest("button[data-exception-id]");
-        if (!button || !window.confirm("Remove this temporary schedule change?")) {
+        if (!button || !(await AppDialog.confirm({
+            title: "Remove this temporary schedule change?",
+            message: "The regular weekly hours apply again for that time.",
+            confirmLabel: "Remove change",
+            danger: true,
+        }))) {
             return;
         }
         button.disabled = true;
@@ -2146,7 +2163,13 @@
 
     async function toggleTeacherAccount(teacher, button) {
         const turnOn = !teacher.account_active;
-        if (!turnOn && !window.confirm("Turn off " + teacher.name + "'s account? They can't sign in, and students and visitors can't book them. Their open visits are cancelled and each person is told. You can turn it back on.")) {
+        if (!turnOn && !(await AppDialog.confirm({
+            title: "Turn off " + teacher.name + "'s account?",
+            message: "They can't sign in, and students and visitors can't book them. Their open visits are cancelled and each person is told."
+                + "\n\nYou can turn it back on.",
+            confirmLabel: "Turn off account",
+            danger: true,
+        }))) {
             return;
         }
         button.disabled = true;

@@ -70,6 +70,12 @@ Only the computer that runs the PHP push worker needs the server service-account
 and `phone_tracker/config/mobile_api.php`. Ordinary Android testers do not need either
 server secret.
 
+**On the website, ask with the system's own dialog.** For a question before an action, or
+an error message, use `AppDialog.confirm()` or `AppDialog.alert()` from
+`phone_tracker/dialogs.js` instead of the browser's `confirm()` or `alert()`. They open in
+the middle of the screen in the system's style, and the button names the action. A new page
+that needs them loads `dialogs.js` right after `auth.js`.
+
 ## Sign-in security
 
 The full design is in `AUTH_SECURITY.md`. What you will notice:

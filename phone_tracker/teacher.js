@@ -900,7 +900,13 @@
         },
         "cancel-visit": async function (target, id) {
             const visit = findVisit(id);
-            if (!visit || !window.confirm("Cancel " + visit.visitor + "'s visit on " + whenLabel(visit.start) + "? They'll be told" + (visit.is_student ? "." : ", and their pass stops working."))) {
+            if (!visit || !(await AppDialog.confirm({
+                title: "Cancel " + visit.visitor + "'s visit on " + whenLabel(visit.start) + "?",
+                message: "They'll be told" + (visit.is_student ? "." : ", and their pass stops working."),
+                confirmLabel: "Cancel visit",
+                cancelLabel: "Keep visit",
+                danger: true,
+            }))) {
                 return;
             }
             const data = await action(id, "cancel", "", target, "Cancelled. " + visit.visitor + " was told.");

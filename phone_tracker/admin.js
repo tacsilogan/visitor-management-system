@@ -240,7 +240,7 @@
     }
 
     /** The confirmation before removing an account: what goes, and what stays in the records. */
-    function removalWarning(user, label) {
+    function removalQuestion(user, label) {
         let effect = "What they did stays in the records.";
         if (user && isAppAccount(user)) {
             effect = "Their upcoming visits are cancelled, and the office or teacher is told. "
@@ -249,8 +249,16 @@
             effect = "Their upcoming visits are cancelled, and each visitor is told. "
                 + "Their hours are removed; past visits keep their name.";
         }
-        return "Remove " + label + "?\n\n" + effect + "\n\nThey are signed out everywhere. This cannot be undone.";
+        return {
+            title: "Remove " + label + "?",
+            message: effect + "\n\nThey are signed out everywhere. This cannot be undone.",
+            confirmLabel: "Remove account",
+            danger: true,
+        };
     }
+
+    /** fetch() fails with a TypeError only when the server can't be reached at all. */
+    const NO_CONNECTION = { title: "Couldn't reach the server", message: "Check your connection and try again." };
 
     function roleLabel(role) {
         const labels = {
@@ -1423,21 +1431,35 @@
         }
         if (user.locked) {
             addManageAction(actions, "Unlock sign-in", "Lets this account sign in again right away.", "Unlock", function () {
-                runManageAction("unlock_user", user, "");
+                runManageAction("unlock_user", user, null);
             });
         }
         addManageAction(actions, "Reset password", "Creates a one-time temporary password and signs the user out everywhere.", "Reset password", function () {
-            runManageAction("reset_password", user, "Reset the password for " + label + "? They will be signed out on every device.");
+            runManageAction("reset_password", user, {
+                title: "Reset the password for " + label + "?",
+                message: "This creates a one-time temporary password and signs them out on every device.",
+                confirmLabel: "Reset password",
+            });
         });
         if (user.two_factor_enabled) {
             addManageAction(actions, "Reset two-step verification", user.two_factor_required
                 ? "For a lost phone. They set it up again at their next sign-in."
                 : "For a lost phone. Turns two-step verification off for this account.", "Reset 2-step", function () {
-                runManageAction("reset_two_factor", user, "Reset two-step verification for " + label + "?");
+                runManageAction("reset_two_factor", user, {
+                    title: "Reset two-step verification for " + label + "?",
+                    message: user.two_factor_required
+                        ? "They set it up again at their next sign-in."
+                        : "This turns two-step verification off for this account.",
+                    confirmLabel: "Reset 2-step",
+                });
             });
         }
         addManageAction(actions, "Sign out everywhere", "Ends this user's open sessions on every device.", "Sign out", function () {
-            runManageAction("force_logout", user, "Sign " + label + " out on every device?");
+            runManageAction("force_logout", user, {
+                title: "Sign " + label + " out on every device?",
+                message: "This ends their open sessions everywhere.",
+                confirmLabel: "Sign out",
+            });
         });
     }
 
@@ -1508,8 +1530,11 @@
             return;
         }
         if (user.role === "offices" && payload.office_code !== user.office_code
-            && !window.confirm("Move " + (user.display_name || user.username) + " to " + (officeNames[payload.office_code] || payload.office_code)
-                + "? They will be signed out and will only see that office's appointments.")) {
+            && !(await AppDialog.confirm({
+                title: "Move " + (user.display_name || user.username) + " to " + (officeNames[payload.office_code] || payload.office_code) + "?",
+                message: "They will be signed out and will only see that office's appointments.",
+                confirmLabel: "Move",
+            }))) {
             return;
         }
         const button = document.getElementById("saveEditDetailsBtn");
@@ -1989,18 +2014,22 @@
             openAddUser("offices", department.code);
             return;
         }
-        let confirmText = "";
+        let question = null;
         if (action === "archive") {
             const people = department.personnel.filter(function (p) { return p.is_active; }).length;
-            confirmText = "Archive " + department.name + "?\n\nVisitors will no longer be able to book it. Its history stays."
-                + (department.open_appointments ? "\n" + department.open_appointments + " open appointment(s) will still need to be handled." : "")
-                + (people ? "\n" + people + " active personnel are still assigned — move or suspend them afterwards." : "");
+            question = {
+                title: "Archive " + department.name + "?",
+                message: "Visitors will no longer be able to book it. Its history stays."
+                    + (department.open_appointments ? "\n\n" + department.open_appointments + " open appointment(s) will still need to be handled." : "")
+                    + (people ? "\n\n" + people + " active personnel are still assigned. Move or suspend them afterwards." : ""),
+                confirmLabel: "Archive",
+            };
         } else if (action === "delete") {
-            confirmText = "Delete " + department.name + "? This cannot be undone.";
+            question = { title: "Delete " + department.name + "?", message: "This cannot be undone.", confirmLabel: "Delete", danger: true };
         } else if (action === "restore") {
-            confirmText = "Make " + department.name + " active again so visitors can book it?";
+            question = { title: "Make " + department.name + " active again?", message: "Visitors will be able to book it.", confirmLabel: "Make active" };
         }
-        if (confirmText && !window.confirm(confirmText)) {
+        if (question && !(await AppDialog.confirm(question))) {
             return;
         }
         button.disabled = true;
@@ -2468,8 +2497,9 @@
         host.appendChild(row);
     }
 
-    async function runManageAction(action, user, confirmText) {
-        if (confirmText && !window.confirm(confirmText)) {
+    /** question: what AppDialog.confirm() asks first, or null to run it straight away. */
+    async function runManageAction(action, user, question) {
+        if (question && !(await AppDialog.confirm(question))) {
             return;
         }
         showMessage("manageUserError", "");
@@ -3272,7 +3302,14 @@
         if (button.dataset.action === "status") {
             const nextActive = Number(button.dataset.nextActive) === 1;
             const actionLabel = nextActive ? "activate" : "suspend";
-            if (!window.confirm("Do you want to " + actionLabel + " " + label + "?")) {
+            if (!(await AppDialog.confirm(nextActive
+                ? { title: "Activate " + label + "?", message: "They can sign in again.", confirmLabel: "Activate account" }
+                : {
+                    title: "Suspend " + label + "?",
+                    message: "They are signed out everywhere and can't sign in until you activate the account again.",
+                    confirmLabel: "Suspend account",
+                    danger: true,
+                }))) {
                 return;
             }
             button.disabled = true;
@@ -3286,20 +3323,20 @@
                     }),
                 });
                 if (!statusData || !statusData.success) {
-                    window.alert((statusData && statusData.message) || "Could not update account status.");
                     button.disabled = false;
+                    AppDialog.alert({ title: "Couldn't " + actionLabel + " " + label, message: (statusData && statusData.message) || "Please try again." });
                     return;
                 }
                 await loadUsers();
             } catch (error) {
                 if (error.message !== "Not authenticated") {
-                    window.alert("Could not reach the server. Please try again.");
                     button.disabled = false;
+                    AppDialog.alert(error instanceof TypeError ? NO_CONNECTION : { title: "Couldn't " + actionLabel + " " + label, message: error.message });
                 }
             }
             return;
         }
-        if (!window.confirm(removalWarning(user, label))) {
+        if (!(await AppDialog.confirm(removalQuestion(user, label)))) {
             return;
         }
         button.disabled = true;
@@ -3312,10 +3349,10 @@
                 });
             });
             if (!data || !data.success) {
-                if (!data || !data.cancelled) {
-                    window.alert((data && data.message) || "Could not remove " + label + ".");
-                }
                 button.disabled = false;
+                if (!data || !data.cancelled) {
+                    AppDialog.alert({ title: "Couldn't remove " + label, message: (data && data.message) || "Please try again." });
+                }
                 return;
             }
             await loadUsers();
@@ -3323,11 +3360,8 @@
             showMessage("adminListSuccess", data.message || "Removed " + label + ".");
         } catch (error) {
             if (error.message !== "Not authenticated") {
-                // fetch() fails with a TypeError only when the server can't be reached at all.
-                window.alert(error instanceof TypeError
-                    ? "Could not reach the server. Please try again."
-                    : "Could not remove " + label + ". " + error.message);
                 button.disabled = false;
+                AppDialog.alert(error instanceof TypeError ? NO_CONNECTION : { title: "Couldn't remove " + label, message: error.message });
             }
         }
     });
@@ -3361,13 +3395,13 @@
                 body: JSON.stringify({ action: "unlock", lockout_id: Number(button.dataset.lockId) }),
             });
             if (!data || !data.success) {
-                window.alert((data && data.message) || "Could not unlock.");
+                AppDialog.alert({ title: "Couldn't unlock this sign-in", message: (data && data.message) || "Please try again." });
             }
             await loadSecurity();
             loadUsers();
         } catch (error) {
             if (error.message !== "Not authenticated") {
-                window.alert("Could not reach the server. Please try again.");
+                AppDialog.alert(error instanceof TypeError ? NO_CONNECTION : { title: "Couldn't unlock this sign-in", message: error.message });
             }
         } finally {
             button.disabled = false;

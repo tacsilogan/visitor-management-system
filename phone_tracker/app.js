@@ -366,9 +366,15 @@
                     removeBtn.type = "button";
                     removeBtn.className = "button-danger button-small";
                     removeBtn.textContent = "Cancel";
-                    removeBtn.addEventListener("click", function (ev) {
+                    removeBtn.addEventListener("click", async function (ev) {
                         ev.stopPropagation();
-                        if (!window.confirm("Cancel this appointment? It will remain in your appointment history.")) {
+                        if (!(await AppDialog.confirm({
+                            title: "Cancel this appointment?",
+                            message: "It will remain in your appointment history.",
+                            confirmLabel: "Cancel appointment",
+                            cancelLabel: "Keep appointment",
+                            danger: true,
+                        }))) {
                             return;
                         }
                         deleteAppointment(item.id).then(function (ok) {

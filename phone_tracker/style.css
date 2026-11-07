@@ -11595,3 +11595,104 @@ a.auth-submit { display: flex; align-items: center; justify-content: center; tex
 @media (min-width: 1100px) {
     .analytics-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+
+/* Confirmation dialogs (dialogs.js): the system's own confirm() and alert(). A modal dialog sits
+   in the middle of the screen; this keeps the look of the other dialogs, a little narrower. */
+.admin-dialog.app-dialog {
+    width: min(92vw, 460px);
+    color: #142033;
+}
+
+.app-dialog [hidden] {
+    display: none !important;
+}
+
+.app-dialog[open] {
+    animation: app-dialog-in 160ms ease-out;
+}
+
+.app-dialog[open]::backdrop {
+    animation: app-dialog-fade 160ms ease-out;
+}
+
+@keyframes app-dialog-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+}
+
+@keyframes app-dialog-fade {
+    from { opacity: 0; }
+}
+
+.app-dialog .admin-dialog-header {
+    margin-bottom: 12px;
+}
+
+.app-dialog .admin-dialog-header h2 {
+    font-size: 19px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+}
+
+.app-dialog-message p {
+    margin: 0 0 10px;
+    color: #475467;
+    font-size: 13.5px;
+    line-height: 1.6;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+
+.app-dialog-message p:last-child {
+    margin-bottom: 0;
+}
+
+.app-dialog .admin-dialog-actions {
+    flex-wrap: wrap;
+    margin-top: 22px;
+}
+
+.app-dialog .admin-dialog-actions button {
+    min-height: 40px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.app-dialog-danger {
+    border: 1px solid #ba2525;
+    background: #ba2525;
+    color: #ffffff;
+}
+
+.app-dialog-danger:hover {
+    border-color: #9f1d1d;
+    background: #9f1d1d;
+}
+
+.app-dialog button:focus-visible {
+    outline: 3px solid rgba(7, 85, 181, 0.35);
+    outline-offset: 2px;
+}
+
+.app-dialog .app-dialog-danger:focus-visible {
+    outline-color: rgba(186, 37, 37, 0.4);
+}
+
+@media (max-width: 420px) {
+    .app-dialog .admin-dialog-actions {
+        flex-direction: column-reverse;
+    }
+
+    .app-dialog .admin-dialog-actions button {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-dialog[open],
+    .app-dialog[open]::backdrop {
+        animation: none;
+    }
+}
