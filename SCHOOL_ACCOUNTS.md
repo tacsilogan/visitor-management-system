@@ -28,7 +28,10 @@ teacher only after the Dean's Office approves.
   gate. If the teacher forgets, `appointment_maintenance.php` completes it at its end time when the
   student said they were there, and closes it as missed when they didn't.
 - **Limits:** one open visit per student per teacher.
-- **What the teacher sees:** name, student number, course, year and section ("IT 3-B", from
+- **Student ID:** as printed on the ISATU ID card, 4 digits, 4 digits and a letter (`2023-4363-I`).
+  The server stores it with a capital letter and the dashes in place
+  (`school_student_number_normalize()`); anything else is refused. The app types it into boxes.
+- **What the teacher sees:** name, Student ID, course, year and section ("IT 3-B", from
   `student_profiles`), reason and note. No email or phone number.
 - **Who else:** students never appear on the guard's lists or the live map, and are left out of the
   visitor numbers (`appointment_visitors_only_sql()`). Analytics counts student visits separately.
@@ -82,3 +85,5 @@ emails a day, shared with password resets and teacher alerts.
 | App | `SignupScreens.kt`, `StudentVisitScreens.kt`, `BookingScreen.kt`, `TeacherScreens.kt`, `MainScreens.kt` |
 
 Apps from before 0.8.0 can still sign in, but can't create accounts, because they don't know the code step.
+Student sign-up needs app 0.9.0 or newer: older apps can't type the letter at the end of a Student ID,
+which the server now requires.

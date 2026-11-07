@@ -584,7 +584,7 @@ components:
         password: { type: string, minLength: 10, maxLength: 128 }
         tracking_consent: { type: boolean, description: "Visitors only: must be true. Students are never tracked." }
         consent_version: { type: string, maxLength: 32 }
-        student_number: { type: string, maxLength: 20, description: "Students: digits and dashes" }
+        student_number: { type: string, maxLength: 20, description: "Students: their ISATU Student ID, 4 digits, 4 digits and a letter, like 2023-4363-I" }
         course_code: { type: string, maxLength: 16, description: "Students: a course from signup_options.php" }
         course_name: { type: string, maxLength: 100, description: "Students: their course, when it isn't listed" }
         year_level: { type: integer, minimum: 1, maximum: 5 }

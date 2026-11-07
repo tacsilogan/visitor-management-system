@@ -48,7 +48,7 @@ if ($accountType === "visitor" && !$trackingConsent) {
 
 $student = [];
 if ($accountType === "student") {
-    $studentNumber = api_text($input, "student_number", 20);
+    $studentNumber = school_student_number_normalize(api_text($input, "student_number", 20));
     $numberProblem = school_student_number_problem($studentNumber);
     if ($numberProblem !== "") {
         $errors["student_number"] = $numberProblem;

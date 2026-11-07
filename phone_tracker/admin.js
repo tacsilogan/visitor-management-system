@@ -674,7 +674,7 @@
             appendCell(row, roleLabel(user.role));
             appendCell(row, user.role === "visitor" ? "—" : (user.department || "—"));
             if (user.role === "student" && user.student_number) {
-                row.lastChild.title = "Student number " + user.student_number;
+                row.lastChild.title = "Student ID " + user.student_number;
             }
 
             const statusCell = document.createElement("td");

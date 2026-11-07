@@ -86,7 +86,7 @@ $result = $conn->prepare(
 $result->bind_param("s", $code);
 $result->execute();
 $visitRows = $result->get_result()->fetch_all(MYSQLI_ASSOC);
-// A student's course, year and section, and student number: what a teacher needs to know who came.
+// A student's course, year and section, and Student ID: what a teacher needs to know who came.
 $studentProfiles = school_student_profiles($conn, array_map(
     fn(array $row): int => (int) $row["visitor_user_id"],
     array_filter($visitRows, fn(array $row): bool => $row["visitor_kind"] === "student")

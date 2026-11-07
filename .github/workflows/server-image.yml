@@ -167,15 +167,18 @@ jobs:
 
           # An ISATU student signs up with their school email, is never offered offices, and can't be tracked.
           student="ci-student-$(date +%s)@students.isatu.edu.ph"
-          reply=$(signup "$student" "{\"account_type\":\"student\",\"email\":\"$student\",\"full_name\":\"CI Student\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-00001\",\"course_name\":\"BS Information Technology\",\"year_level\":3,\"section\":\"B\"}")
+          reply=$(signup "$student" "{\"account_type\":\"student\",\"email\":\"$student\",\"full_name\":\"CI Student\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-0001-a\",\"course_name\":\"BS Information Technology\",\"year_level\":3,\"section\":\"B\"}")
           contains "$reply" '"role":"student"' || fail "Confirming the student's code failed: ${reply:0:300}"
+          contains "$reply" '"student_number":"2023-0001-A"' || fail "The Student ID was not stored as 2023-0001-A: ${reply:0:300}"
           student_token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
           reply=$(send -H "Authorization: Bearer $student_token" "$api/offices.php")
           contains "$reply" '"offices":[]' || fail "A student was offered offices: ${reply:0:300}"
           status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $student_token" "$api/tracking.php?appointment_id=1")
           [ "$status" = "403" ] || fail "A student reached tracking.php (HTTP $status)"
-          reply=$(send -d "{\"account_type\":\"student\",\"email\":\"ci-outsider@example.test\",\"full_name\":\"CI Outsider\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-00002\",\"course_name\":\"BSIT\",\"year_level\":1,\"section\":\"A\"}" "$api/auth/register.php")
+          reply=$(send -d "{\"account_type\":\"student\",\"email\":\"ci-outsider@example.test\",\"full_name\":\"CI Outsider\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-0002-A\",\"course_name\":\"BSIT\",\"year_level\":1,\"section\":\"A\"}" "$api/auth/register.php")
           contains "$reply" 'students.isatu.edu.ph' || fail "A non-school email made a student sign-up: ${reply:0:300}"
+          reply=$(send -d "{\"account_type\":\"student\",\"email\":\"ci-old-id@students.isatu.edu.ph\",\"full_name\":\"CI Old Id\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-00001\",\"course_name\":\"BSIT\",\"year_level\":1,\"section\":\"A\"}" "$api/auth/register.php")
+          contains "$reply" 'like 2023-4363-I' || fail "A Student ID without its letter was accepted: ${reply:0:300}"
 
           # 10:00 on the next weekday, Philippine time, when the offices take appointments.
           day=1

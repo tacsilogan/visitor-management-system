@@ -91,14 +91,26 @@ function school_email_problem(string $accountType, string $email): string
     return "";
 }
 
-/** A student number: digits, with dashes between them, as on an ISATU ID. */
+/** An ISATU Student ID as printed on the ID card: 4 digits, 4 digits and a letter, like 2023-4363-I. */
+const SCHOOL_STUDENT_ID_PATTERN = '/^\d{4}-\d{4}-[A-Z]$/';
+
+/** The Student ID as stored: capital letter, dashes in place ("20234363i" becomes "2023-4363-I"). */
+function school_student_number_normalize(string $raw): string
+{
+    $id = strtoupper(preg_replace('/\s+/', "", $raw) ?? "");
+    if (preg_match('/^(\d{4})(\d{4})([A-Z])$/', $id, $parts)) {
+        return $parts[1] . "-" . $parts[2] . "-" . $parts[3];
+    }
+    return $id;
+}
+
 function school_student_number_problem(string $number): string
 {
     if ($number === "") {
-        return "Enter your student number";
+        return "Enter your Student ID";
     }
-    if (!preg_match('/^\d+(-\d+)*$/', $number) || strlen($number) < 4 || strlen($number) > 20) {
-        return "Use only numbers and dashes, as on your ID";
+    if (!preg_match(SCHOOL_STUDENT_ID_PATTERN, $number)) {
+        return "Enter your Student ID as on your ISATU ID, like 2023-4363-I";
     }
     return "";
 }
