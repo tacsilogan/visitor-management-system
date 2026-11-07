@@ -24,6 +24,13 @@ endpoints correctly returned HTTP 401 without a bearer token.
   visitor agrees to tracking; a student is never tracked, has no pass, books teachers only and
   says "I'm here" instead (SCHOOL_ACCOUNTS.md). Visit decisions, proposed schedules, reminders,
   and cancellations are delivered through Notifications and Firebase push notifications.
+- Since app 0.9.0 a visitor signs up on one short page, and a student in four steps that each fit
+  above the keyboard (who you are, your class, sign-in details, then a summary with Edit on each
+  part). The Student ID and the email code are typed into boxes (`ui/FormParts.kt`); the rules
+  behind them are in `ui/SignupRules.kt` and its tests.
+- The look since 0.9.0: ISATU navy at the top of every screen with a gold edge, white below, and
+  gold for progress and the selected tab. The pieces are in `ui/FormParts.kt` (`NavyTopBar`,
+  `NavyBand`, `GoldEdge`); use them on new screens rather than a white top bar.
 - Bookable destinations come from the API and remain limited to IT Department,
   IS Department, CS Department, Dean's Office, and Tech Support.
 - Walk-ins receive an immediate pass when the selected office is accepting visitors.
@@ -35,8 +42,9 @@ endpoints correctly returned HTTP 401 without a bearer token.
 - Tracking consent is accepted during account creation and copied into an auditable
   visit record. Android's required operating-system location permission is requested as
   part of signup; it is separate from legal consent and does not start collection.
-- Signup has two required checkboxes: the Terms and Privacy Notice (`ui/TermsNotice.kt`, with
-  a link to read it) and location sharing. `CONSENT_VERSION` in `app/build.gradle.kts` names
+- Since app 0.9.0 a visitor's signup has one required checkbox, which agrees to the Terms and
+  Privacy Notice (`ui/TermsNotice.kt`, with a link to read it) and names location sharing in its
+  words; a student's names only the notice. `CONSENT_VERSION` in `app/build.gradle.kts` names
   the notice's version and goes to the server with signup and each visit's consent. An account
   that hasn't agreed to this version on this phone sees the notice once before the app opens,
   and can agree or sign out. That agreement is saved on the phone; the server first sees it

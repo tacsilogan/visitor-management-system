@@ -13,16 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -30,8 +29,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
@@ -43,6 +40,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -51,8 +49,9 @@ import java.util.Locale
 import ph.edu.isatu.visitor.R
 import ph.edu.isatu.visitor.data.AppointmentDto
 
+/** The seal and the app's name. [onNavy] puts the seal on a white disc and the words in white. */
 @Composable
-fun PortalBrand(modifier: Modifier = Modifier, subtitle: String? = null) {
+fun PortalBrand(modifier: Modifier = Modifier, subtitle: String? = null, onNavy: Boolean = false) {
     val sealHome = LocalSealHome.current
     DisposableEffect(sealHome) {
         onDispose { sealHome?.bounds = null }
@@ -66,19 +65,20 @@ fun PortalBrand(modifier: Modifier = Modifier, subtitle: String? = null) {
             painter = painterResource(R.drawable.isatu_seal),
             contentDescription = "ISATU logo",
             modifier = Modifier
-                .size(32.dp)
-                .onGloballyPositioned { sealHome?.bounds = it.boundsInRoot() }
+                .size(if (onNavy) 38.dp else 32.dp)
                 // Until the opening animation's seal lands here, that one is the logo on screen.
-                .alpha(if (sealHome?.away == true) 0f else 1f),
+                .alpha(if (sealHome?.away == true) 0f else 1f)
+                .then(if (onNavy) Modifier.background(Color.White, CircleShape).padding(2.dp) else Modifier)
+                .onGloballyPositioned { sealHome?.bounds = it.boundsInRoot() },
         )
         Column {
             Text(
-                "ISATU Visitor Portal",
+                "ISATU Visitor",
                 style = MaterialTheme.typography.titleMedium,
-                color = IsatuBlueDark,
+                color = if (onNavy) Color.White else IsatuBlueDark,
             )
             subtitle?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MutedInk)
+                Text(it, style = MaterialTheme.typography.bodySmall, color = if (onNavy) OnNavyMuted else MutedInk)
             }
         }
     }
@@ -96,7 +96,7 @@ fun PrimaryButton(
         onClick = onClick,
         modifier = modifier.height(52.dp),
         enabled = enabled,
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = ButtonDefaults.buttonColors(containerColor = IsatuBlue),
     ) {
         icon?.let {
@@ -292,7 +292,6 @@ fun statusLabel(status: String): String = when (status) {
     else -> status.replace('_', ' ').replaceFirstChar { it.uppercase() }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DetailScaffold(
     title: String,
@@ -302,14 +301,9 @@ fun DetailScaffold(
     Scaffold(
         containerColor = AppBackground,
         topBar = {
-            TopAppBar(
-                title = { Text(title, fontWeight = FontWeight.SemiBold, color = IsatuBlueDark) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
+            NavyTopBar(
+                title = { Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                onBack = onBack,
             )
         },
     ) { padding -> content(Modifier.padding(padding)) }

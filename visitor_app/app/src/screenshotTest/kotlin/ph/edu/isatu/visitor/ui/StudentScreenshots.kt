@@ -59,7 +59,7 @@ private val student = UserDto(
     id = 7,
     fullName = "Mika Dela Cruz",
     role = "student",
-    student = StudentProfileDto(studentNumber = "2023-01845", courseCode = "IT", course = "IT", department = "CCI", yearLevel = 3, section = "B", label = "IT 3-B"),
+    student = StudentProfileDto(studentNumber = "2023-4363-I", courseCode = "IT", course = "IT", department = "CCI", yearLevel = 3, section = "B", label = "IT 3-B"),
 )
 
 private fun studentVisit(status: String, arrivedAt: String? = null, answerBy: String? = null) = AppointmentDto(
@@ -98,42 +98,78 @@ private val schoolTeachers = listOf(
     TeacherDto(code = "T13", name = "Dr. Ana Salazar", shortName = "Dr. Salazar", course = "CS", department = "CCI", departmentName = "College of Computing and Informatics", nextFreeAt = time("14:00")),
 )
 
-@Composable
-private fun AuthCard(content: @Composable ColumnScope.() -> Unit) = ISATUVisitorTheme {
-    Column(Modifier.fillMaxSize().background(AppBackground).verticalScroll(rememberScrollState()).padding(20.dp)) {
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 26.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                content = content,
-            )
-        }
-    }
-}
-
 @PreviewTest
 @Preview(name = "Student, who's signing up", widthDp = 360, heightDp = 780)
 @Composable
-fun StudentChoose() = AuthCard { SignupChoice(onStudent = {}, onVisitor = {}) }
+fun StudentChoose() = ISATUVisitorTheme {
+    BrandedAuthPage(onBack = {}, busy = false, banner = {}) { SignupChoice(onStudent = {}, onVisitor = {}, onLogin = {}) }
+}
+
+/** A student part-way through signing up, at [step], with everything before it filled in. */
+private fun studentDraft(step: Int) = StudentDraft().apply {
+    this.step = step
+    name = "Mika Dela Cruz"
+    studentId = "20234363I"
+    if (step >= 2) {
+        courseCode = "IT"
+        year = 3
+        section = "B"
+    }
+    if (step >= 3) {
+        email = "mika.cruz@students.isatu.edu.ph"
+        password = "Notebook-4410"
+    }
+    agreed = step == STUDENT_STEPS
+}
+
+@Composable
+private fun StudentStep(step: Int) = ISATUVisitorTheme {
+    StudentSignupFlow(
+        draft = studentDraft(step),
+        options = signupOptions,
+        busy = false,
+        banner = {},
+        onLoadOptions = {},
+        onRegister = { _, _, _, _, _, _, _, _ -> },
+        onOpenNotice = {},
+        onExit = {},
+    )
+}
 
 @PreviewTest
-@Preview(name = "Student, the sign-up form", widthDp = 360, heightDp = 1100)
+@Preview(name = "Student, step 1, who you are", widthDp = 360, heightDp = 780)
 @Composable
-fun StudentForm() = AuthCard {
-    StudentSignupForm(busy = false, options = signupOptions, onLoadOptions = {}, onRegister = { _, _, _, _, _, _, _, _ -> }, onOpenNotice = {})
-}
+fun StudentStep1() = StudentStep(1)
+
+@PreviewTest
+@Preview(name = "Student, step 2, your class", widthDp = 360, heightDp = 780)
+@Composable
+fun StudentStep2() = StudentStep(2)
+
+@PreviewTest
+@Preview(name = "Student, step 3, sign-in details", widthDp = 360, heightDp = 780)
+@Composable
+fun StudentStep3() = StudentStep(3)
+
+@PreviewTest
+@Preview(name = "Student, step 4, check your details", widthDp = 360, heightDp = 780)
+@Composable
+fun StudentStep4() = StudentStep(4)
 
 @PreviewTest
 @Preview(name = "Student, the code from the email", widthDp = 360, heightDp = 780)
 @Composable
-fun StudentCode() = AuthCard {
-    SignupCodeForm(
-        signup = SignupProgress(requestId = 41, email = "mika.cruz@students.isatu.edu.ph", accountType = "student", resendAt = 0L),
-        busy = false,
-        onConfirm = {},
-        onResend = {},
-        onChangeDetails = {},
-    )
+fun StudentCode() = ISATUVisitorTheme {
+    AuthFormPage("Confirm your email", onBack = {}, busy = false, banner = {}) {
+        SignupCodeForm(
+            signup = SignupProgress(requestId = 41, email = "mika.cruz@students.isatu.edu.ph", accountType = "student", resendAt = 0L),
+            busy = false,
+            onConfirm = {},
+            onResend = {},
+            onChangeDetails = {},
+            autoFocus = false,
+        )
+    }
 }
 
 @PreviewTest
@@ -145,35 +181,13 @@ fun StudentFindTeacher() = ISATUVisitorTheme {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Home with the app's own top bar and tabs around it, as MainShell draws them. */
 @Composable
 private fun StudentHome(appointments: List<AppointmentDto>) = ISATUVisitorTheme {
     Scaffold(
         containerColor = AppBackground,
-        topBar = {
-            TopAppBar(
-                title = { PortalBrand() },
-                actions = {
-                    IconButton(onClick = {}) { Icon(Icons.Rounded.Notifications, contentDescription = "Notifications", tint = IsatuBlueDark) }
-                    IconButton(onClick = {}) { Icon(Icons.Rounded.Person, contentDescription = "Profile", tint = IsatuBlueDark) }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
-            )
-        },
-        bottomBar = {
-            NavigationBar(containerColor = Color.White, tonalElevation = 8.dp) {
-                listOf("Home" to Icons.Rounded.Home, "Visits" to Icons.Rounded.CalendarMonth, "Book" to Icons.Rounded.Add)
-                    .forEachIndexed { index, (label, icon) ->
-                        NavigationBarItem(
-                            selected = index == 0,
-                            onClick = {},
-                            icon = { Icon(icon, contentDescription = label) },
-                            label = { Text(label) },
-                            colors = NavigationBarItemDefaults.colors(selectedIconColor = IsatuBlue, selectedTextColor = IsatuBlueDark, indicatorColor = BlueSurface),
-                        )
-                    }
-            }
-        },
+        topBar = { MainTopBar(unreadCount = 0, busy = false, goldEdge = false, onNotifications = {}, onProfile = {}) },
+        bottomBar = { MainBottomBar(selected = 0) {} },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             HomeScreen(student, appointments, onOpenAppointment = {}, onOpenVisit = {}, onBook = {})

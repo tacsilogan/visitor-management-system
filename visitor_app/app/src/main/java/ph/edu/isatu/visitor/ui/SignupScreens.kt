@@ -1,5 +1,6 @@
 package ph.edu.isatu.visitor.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -13,12 +14,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.Email
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.MarkEmailRead
@@ -36,7 +37,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,13 +48,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import ph.edu.isatu.visitor.data.SignupOptionsData
 
@@ -61,31 +64,39 @@ internal const val STUDENT_EMAIL_DOMAIN = "students.isatu.edu.ph"
 internal fun isStudentEmail(email: String): Boolean =
     email.trim().lowercase().substringAfterLast("@", "") == STUDENT_EMAIL_DOMAIN
 
-/** "Who's signing up?": the one question that decides how the app works for them. */
+/** "Who's signing up?": two buttons, one short line each. */
 @Composable
-internal fun ColumnScope.SignupChoice(onStudent: () -> Unit, onVisitor: () -> Unit) {
-    AuthHeading("CREATE ACCOUNT", "Who's signing up?")
+internal fun ColumnScope.SignupChoice(onStudent: () -> Unit, onVisitor: () -> Unit, onLogin: () -> Unit = {}) {
+    AuthHeading("Create an account", "Who's signing up?")
     ChoiceCard(
         icon = Icons.Rounded.School,
-        title = "ISATU student",
-        body = "Book a time with any teacher. Sign up with your @$STUDENT_EMAIL_DOMAIN email.",
+        title = "ISATU Student",
+        body = "I study at ISATU",
+        tile = BlueSurface,
+        tint = IsatuBlue,
         onClick = onStudent,
     )
     ChoiceCard(
         icon = Icons.Rounded.Person,
         title = "Visitor",
-        body = "Visit an office or a teacher. You get a pass for the gate.",
+        body = "I'm visiting the campus",
+        tile = YellowSurface,
+        tint = Color(0xFF9A6B00),
         onClick = onVisitor,
     )
+    Row(Modifier.align(Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
+        Text("Have an account?", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+        TextButton(onClick = onLogin) { Text("Log in") }
+    }
 }
 
 @Composable
-private fun ChoiceCard(icon: ImageVector, title: String, body: String, onClick: () -> Unit) {
+private fun ChoiceCard(icon: ImageVector, title: String, body: String, tile: Color, tint: Color, onClick: () -> Unit) {
     Surface(
         modifier = Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick),
         shape = RoundedCornerShape(18.dp),
         color = Color.White,
-        border = BorderStroke(1.dp, BorderSoft),
+        border = BorderStroke(1.5.dp, BorderSoft),
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
@@ -93,11 +104,11 @@ private fun ChoiceCard(icon: ImageVector, title: String, body: String, onClick: 
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
-                modifier = Modifier.size(48.dp).background(Color(0xFFEAF2FF), RoundedCornerShape(12.dp)),
+                modifier = Modifier.size(52.dp).background(tile, RoundedCornerShape(15.dp)),
                 contentAlignment = Alignment.Center,
-            ) { Icon(icon, contentDescription = null, tint = IsatuBlue) }
+            ) { Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(27.dp)) }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Ink)
                 Text(body, color = MutedInk, style = MaterialTheme.typography.bodyMedium)
             }
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = null, tint = MutedInk)
@@ -105,104 +116,211 @@ private fun ChoiceCard(icon: ImageVector, title: String, body: String, onClick: 
     }
 }
 
-/** An ISATU student: school email, student number, course, year and section. Never tracked. */
+internal const val STUDENT_STEPS = 4
+
+/**
+ * What a student typed, kept across the steps and while they look at the code screen and come
+ * back. Step 4 is the summary.
+ */
+@Stable
+internal class StudentDraft {
+    var step by mutableIntStateOf(1)
+
+    /** The step was opened with Edit on the summary, so its button goes straight back there. */
+    var fromSummary by mutableStateOf(false)
+    var name by mutableStateOf("")
+
+    /** What the Student ID boxes hold: "20234363I" for 2023-4363-I. */
+    var studentId by mutableStateOf("")
+    var courseCode by mutableStateOf<String?>(null)
+    var courseNotListed by mutableStateOf(false)
+    var typedCourse by mutableStateOf("")
+    var year by mutableStateOf<Int?>(null)
+    var section by mutableStateOf("")
+    var email by mutableStateOf("")
+    var password by mutableStateOf("")
+    var agreed by mutableStateOf(false)
+
+    fun stepReady(step: Int): Boolean = when (step) {
+        1 -> name.trim().length >= 2 && isCompleteStudentId(studentId)
+        2 -> (courseCode != null || (courseNotListed && typedCourse.trim().length >= 2)) && year != null && section.isNotBlank()
+        3 -> isStudentEmail(email) && passwordReady(password)
+        else -> stepReady(1) && stepReady(2) && stepReady(3) && agreed
+    }
+}
+
+/**
+ * An ISATU student's sign-up, in steps that each fit above the keyboard: who they are, their class,
+ * how they'll sign in, then a summary to check before the code is sent. A student is never tracked.
+ */
 @Composable
-internal fun ColumnScope.StudentSignupForm(
-    busy: Boolean,
+internal fun StudentSignupFlow(
+    draft: StudentDraft,
     options: SignupOptionsData?,
+    busy: Boolean,
+    banner: @Composable () -> Unit,
     onLoadOptions: () -> Unit,
     onRegister: (email: String, name: String, password: String, number: String, courseCode: String?, courseName: String?, year: Int, section: String) -> Unit,
     onOpenNotice: () -> Unit,
+    onExit: () -> Unit,
 ) {
     LaunchedEffect(Unit) { onLoadOptions() }
-    var email by remember { mutableStateOf("") }
-    var name by remember { mutableStateOf("") }
-    var number by remember { mutableStateOf("") }
-    var courseCode by remember { mutableStateOf<String?>(null) }
-    var typedCourse by remember { mutableStateOf("") }
-    var notListed by remember { mutableStateOf(false) }
-    var year by remember { mutableStateOf<Int?>(null) }
-    var section by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var visible by remember { mutableStateOf(false) }
-    var termsAgreed by remember { mutableStateOf(false) }
-
-    val emailProblem = when {
-        email.isBlank() -> null
-        !isStudentEmail(email) -> "Use your @$STUDENT_EMAIL_DOMAIN email."
-        else -> null
+    val focusManager = LocalFocusManager.current
+    val back: () -> Unit = {
+        focusManager.clearFocus()
+        when {
+            draft.fromSummary && draft.step < STUDENT_STEPS -> draft.step = STUDENT_STEPS
+            draft.step > 1 -> {
+                draft.fromSummary = false
+                draft.step -= 1
+            }
+            else -> onExit()
+        }
     }
+    BackHandler(onBack = back)
+    val next: () -> Unit = {
+        focusManager.clearFocus()
+        draft.step = if (draft.fromSummary) STUDENT_STEPS else draft.step + 1
+    }
+    val submit: () -> Unit = {
+        onRegister(
+            draft.email.trim(),
+            draft.name.trim(),
+            draft.password,
+            formatStudentId(draft.studentId),
+            if (draft.courseNotListed) null else draft.courseCode,
+            if (draft.courseNotListed) draft.typedCourse.trim() else null,
+            draft.year ?: 1,
+            draft.section,
+        )
+    }
+    val step = draft.step
+    AuthFormPage(
+        title = "Student account",
+        onBack = back,
+        busy = busy,
+        banner = banner,
+        bottom = {
+            if (step == STUDENT_STEPS) {
+                TermsCheck(draft.agreed, { draft.agreed = it }, onOpenNotice)
+                PrimaryButton("Send code", submit, Modifier.fillMaxWidth(), !busy && draft.stepReady(STUDENT_STEPS))
+            } else {
+                PrimaryButton(if (draft.fromSummary) "Back to summary" else "Next", next, Modifier.fillMaxWidth(), draft.stepReady(step))
+            }
+        },
+    ) {
+        FormStepProgress(step, STUDENT_STEPS)
+        when (step) {
+            1 -> StudentWhoStep(draft)
+            2 -> StudentClassStep(draft, options)
+            3 -> StudentSignInStep(draft)
+            else -> StudentSummaryStep(draft, options) { editStep ->
+                draft.fromSummary = true
+                draft.step = editStep
+            }
+        }
+    }
+}
+
+@Composable
+private fun StudentWhoStep(draft: StudentDraft) {
+    StepHeading("Who you are", "As written on your ISATU ID.")
+    PortalTextField(draft.name, { draft.name = it }, "Full name", { Icon(Icons.Rounded.Person, null) })
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FieldLabel("Student ID")
+        StudentIdField(draft.studentId, { draft.studentId = it })
+        FieldNote("Numbers first, then the letter. The dashes are added for you.")
+    }
+}
+
+@Composable
+private fun StudentClassStep(draft: StudentDraft, options: SignupOptionsData?) {
     val courses = options?.departments.orEmpty().flatMap { department ->
         department.courses.map { course -> course.code to "${course.name}, ${department.code}" }
     }
     val courseText = when {
-        notListed -> "My course isn't listed"
-        courseCode != null -> courses.firstOrNull { it.first == courseCode }?.second.orEmpty()
+        draft.courseNotListed -> "My course isn't listed"
+        draft.courseCode != null -> courses.firstOrNull { it.first == draft.courseCode }?.second.orEmpty()
         else -> ""
     }
-
-    AuthHeading("STUDENT ACCOUNT", "Book a time with any ISATU teacher. No pass or gate scan needed.")
-    PortalTextField(email, { email = it.trim() }, "School email", { Icon(Icons.Rounded.Email, null) }, KeyboardType.Email)
-    FieldNote(emailProblem ?: "Only @$STUDENT_EMAIL_DOMAIN emails. We'll send a code there.", emailProblem != null)
-    PortalTextField(name, { name = it }, "Full name", { Icon(Icons.Rounded.Person, null) })
-    PortalTextField(number, { number = it.filter { c -> c.isDigit() || c == '-' }.take(20) }, "Student number", { Icon(Icons.Rounded.Badge, null) }, KeyboardType.Number)
+    StepHeading("Your class", "Teachers see this when you book them.")
     SimpleSelect(
         label = "Course",
         selectedText = courseText,
         placeholder = if (options == null) "Loading courses…" else "Choose your course",
         options = courses + ("" to "My course isn't listed"),
         onSelect = { value ->
-            notListed = value.isEmpty()
-            courseCode = value.ifEmpty { null }
+            draft.courseNotListed = value.isEmpty()
+            draft.courseCode = value.ifEmpty { null }
         },
     )
-    if (notListed) {
-        PortalTextField(typedCourse, { typedCourse = it.take(100) }, "Your course, e.g. BSEd Math", { Icon(Icons.Rounded.School, null) })
+    if (draft.courseNotListed) {
+        PortalTextField(draft.typedCourse, { draft.typedCourse = it.take(100) }, "Your course, e.g. BSEd Math", { Icon(Icons.Rounded.School, null) })
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        Box(Modifier.weight(1f)) {
-            SimpleSelect(
-                label = "Year",
-                selectedText = year?.let { yearName(it) }.orEmpty(),
-                placeholder = "Year",
-                options = (options?.yearLevels ?: listOf(1, 2, 3, 4, 5)).map { it.toString() to yearName(it) },
-                onSelect = { year = it.toIntOrNull() },
-            )
-        }
-        Box(Modifier.weight(1f)) {
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("Section", style = MaterialTheme.typography.bodySmall, color = MutedInk)
-                OutlinedTextField(
-                    value = section,
-                    onValueChange = { section = it.filter { c -> c.isLetterOrDigit() }.take(10).uppercase() },
-                    placeholder = { Text("e.g. B") },
-                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = IsatuBlue, unfocusedBorderColor = BorderSoft),
-                )
-            }
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FieldLabel("Year")
+        ChoiceChips(
+            options = (options?.yearLevels ?: listOf(1, 2, 3, 4, 5)).map { it.toString() to yearChip(it) },
+            selected = draft.year?.toString(),
+            onSelect = { draft.year = it.toIntOrNull() },
+        )
     }
-    PasswordField(password, { password = it }, visible, { visible = !visible }, "Password")
-    FieldNote("At least 10 characters, with a letter and a number.")
-    TermsCheck(termsAgreed, { termsAgreed = it }, onOpenNotice)
-    val ready = !busy && isStudentEmail(email) && name.trim().length >= 2 && number.length >= 4 &&
-        (courseCode != null || (notListed && typedCourse.trim().length >= 2)) && year != null &&
-        section.isNotBlank() && password.length >= 10 && termsAgreed
-    PrimaryButton(
-        "Send code",
-        { onRegister(email, name, password, number, courseCode, if (notListed) typedCourse else null, year ?: 1, section) },
-        Modifier.fillMaxWidth(),
-        ready,
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FieldLabel("Section")
+        OutlinedTextField(
+            value = draft.section,
+            onValueChange = { draft.section = it.filter { c -> c.isLetterOrDigit() }.take(10).uppercase() },
+            placeholder = { Text("e.g. B") },
+            modifier = Modifier.width(150.dp),
+            shape = RoundedCornerShape(14.dp),
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters),
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = IsatuBlue, unfocusedBorderColor = BorderSoft),
+        )
+    }
 }
 
-private fun yearName(year: Int): String = when (year) {
-    1 -> "1st year"
-    2 -> "2nd year"
-    3 -> "3rd year"
-    else -> "${year}th year"
+@Composable
+private fun StudentSignInStep(draft: StudentDraft) {
+    var visible by remember { mutableStateOf(false) }
+    val wrongEmail = draft.email.isNotBlank() && !isStudentEmail(draft.email)
+    StepHeading("Sign-in details", "You'll log in with these.")
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        PortalTextField(draft.email, { draft.email = it.trim() }, "School email", { Icon(Icons.Rounded.Email, null) }, KeyboardType.Email)
+        FieldNote(if (wrongEmail) "Use your @$STUDENT_EMAIL_DOMAIN email." else "Your @$STUDENT_EMAIL_DOMAIN email.", wrongEmail)
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        PasswordField(draft.password, { draft.password = it }, visible, { visible = !visible }, "Password")
+        PasswordChecks(draft.password)
+    }
+}
+
+@Composable
+private fun StudentSummaryStep(draft: StudentDraft, options: SignupOptionsData?, onEdit: (Int) -> Unit) {
+    val course = if (draft.courseNotListed) {
+        draft.typedCourse.trim()
+    } else {
+        options?.departments.orEmpty().flatMap { it.courses }.firstOrNull { it.code == draft.courseCode }?.name ?: draft.courseCode.orEmpty()
+    }
+    StepHeading("Check your details", "Tap Edit to change anything.")
+    ReviewSection(
+        "Who you are",
+        listOf("Name" to draft.name.trim(), "Student ID" to formatStudentId(draft.studentId)),
+    ) { onEdit(1) }
+    ReviewSection(
+        "Your class",
+        listOf("Course" to course, "Year and section" to "${draft.year?.let { yearName(it) }.orEmpty()}, ${draft.section}"),
+    ) { onEdit(2) }
+    ReviewSection("Sign-in details", listOf("School email" to draft.email.trim())) { onEdit(3) }
+}
+
+private fun yearName(year: Int): String = "${yearChip(year)} year"
+
+private fun yearChip(year: Int): String = when (year) {
+    1 -> "1st"
+    2 -> "2nd"
+    3 -> "3rd"
+    else -> "${year}th"
 }
 
 @Composable
@@ -226,13 +344,13 @@ internal fun SimpleSelect(
     onSelect: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text(label, style = MaterialTheme.typography.bodySmall, color = MutedInk)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        FieldLabel(label)
         Box(Modifier.fillMaxWidth()) {
             OutlinedButton(
                 onClick = { expanded = true },
                 modifier = Modifier.fillMaxWidth().height(54.dp),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(14.dp),
                 contentPadding = PaddingValues(horizontal = 14.dp),
                 border = BorderStroke(1.dp, BorderSoft),
             ) {
@@ -241,6 +359,7 @@ internal fun SimpleSelect(
                     modifier = Modifier.weight(1f),
                     color = if (selectedText.isBlank()) MutedInk else Ink,
                     textAlign = TextAlign.Start,
+                    fontWeight = FontWeight.Normal,
                     maxLines = 1,
                 )
                 Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Open $label", tint = MutedInk)
@@ -268,6 +387,7 @@ internal fun ColumnScope.SignupCodeForm(
     onConfirm: (String) -> Unit,
     onResend: () -> Unit,
     onChangeDetails: () -> Unit,
+    autoFocus: Boolean = true,
 ) {
     var code by remember(signup.requestId) { mutableStateOf("") }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -281,23 +401,17 @@ internal fun ColumnScope.SignupCodeForm(
     val waitSeconds = ((signup.resendAt - now) / 1000).coerceAtLeast(0)
 
     Box(
-        modifier = Modifier.align(Alignment.CenterHorizontally).size(64.dp).background(Color(0xFFEAF2FF), CircleShape),
+        modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 6.dp).size(68.dp).background(BlueSurface, CircleShape),
         contentAlignment = Alignment.Center,
-    ) { Icon(Icons.Rounded.MarkEmailRead, contentDescription = null, tint = IsatuBlue, modifier = Modifier.size(30.dp)) }
-    AuthHeading("CHECK YOUR EMAIL", "We sent a 6-digit code to ${signup.email}. It works for 10 minutes.")
-    OutlinedTextField(
-        value = code,
-        onValueChange = { typed ->
-            code = typed.filter { it.isDigit() }.take(6)
-            if (code.length == 6 && !busy) onConfirm(code)
+    ) { Icon(Icons.Rounded.MarkEmailRead, contentDescription = null, tint = IsatuBlue, modifier = Modifier.size(32.dp)) }
+    StepHeading("Check your email", "We sent a 6-digit code to ${signup.email}. It works for 10 minutes.", center = true)
+    CodeField(
+        code = code,
+        onChange = { typed ->
+            code = typed
+            if (typed.length == 6 && !busy) onConfirm(typed)
         },
-        label = { Text("6-digit code") },
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        singleLine = true,
-        textStyle = TextStyle(fontSize = 24.sp, letterSpacing = 10.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.SemiBold),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = IsatuBlue, focusedLabelColor = IsatuBlue, unfocusedBorderColor = BorderSoft),
+        autoFocus = autoFocus,
     )
     PrimaryButton("Confirm", { onConfirm(code) }, Modifier.fillMaxWidth(), !busy && code.length == 6)
     Text(
@@ -307,7 +421,7 @@ internal fun ColumnScope.SignupCodeForm(
         color = MutedInk,
         textAlign = TextAlign.Center,
     )
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         TextButton(onClick = onResend, enabled = !busy && waitSeconds == 0L) {
             Text(if (waitSeconds > 0) "Send again in ${waitSeconds}s" else "Send the code again")
         }

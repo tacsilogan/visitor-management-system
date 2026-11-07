@@ -20,7 +20,6 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -28,8 +27,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,29 +71,25 @@ fun TermsNoticeScreen(backLabel: String, onBack: () -> Unit) {
  * For an account that hasn't agreed to this version of the notice, once, before the app opens.
  * Someone who doesn't agree can sign out.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Unit) {
-    var termsAgreed by rememberSaveable { mutableStateOf(false) }
-    var locationAgreed by rememberSaveable { mutableStateOf(false) }
+fun TermsAgreementScreen(busy: Boolean, isStudent: Boolean, onAgree: () -> Unit, onSignOut: () -> Unit) {
+    var agreed by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         containerColor = AppBackground,
         topBar = {
-            TopAppBar(
-                title = { Text(TermsNotice.TITLE, fontWeight = FontWeight.SemiBold, color = IsatuBlueDark, maxLines = 1) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
-            )
+            NavyTopBar(title = { Text(TermsNotice.TITLE, fontWeight = FontWeight.SemiBold, maxLines = 1) })
         },
         bottomBar = {
             Surface(color = Color.White, shadowElevation = 10.dp) {
                 Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)) {
-                    NoticeChecks(termsAgreed, { termsAgreed = it }, locationAgreed, { locationAgreed = it })
+                    // A student is never tracked, so there is no location sharing to agree to.
+                    NoticeAgreement(agreed, { agreed = it }, includeLocation = !isStudent)
                     Spacer(Modifier.height(6.dp))
                     PrimaryButton(
                         "Agree and continue",
                         onAgree,
                         Modifier.fillMaxWidth(),
-                        enabled = !busy && termsAgreed && locationAgreed,
+                        enabled = !busy && agreed,
                     )
                     TextButton(
                         onClick = onSignOut,
@@ -125,15 +118,15 @@ fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Un
 }
 
 /**
- * The two things a visitor agrees to. Location has a box of its own, so that agreement is clear
- * and specific. With [onOpenNotice], the notice's name opens it.
+ * What someone agrees to, in one box. A visitor's also names location sharing
+ * ([includeLocation]), so it stays clear that this is part of what they agree to. With
+ * [onOpenNotice], the notice's name opens it.
  */
 @Composable
-internal fun NoticeChecks(
-    termsAgreed: Boolean,
-    onTermsChange: (Boolean) -> Unit,
-    locationAgreed: Boolean,
-    onLocationChange: (Boolean) -> Unit,
+internal fun NoticeAgreement(
+    agreed: Boolean,
+    onAgreedChange: (Boolean) -> Unit,
+    includeLocation: Boolean,
     onOpenNotice: (() -> Unit)? = null,
 ) {
     val agreement = buildAnnotatedString {
@@ -151,32 +144,15 @@ internal fun NoticeChecks(
         } else {
             append(TermsNotice.TITLE)
         }
-        append(".")
+        append(if (includeLocation) TermsNotice.LOCATION_PART else ".")
     }
-    Column {
-        NoticeCheck(termsAgreed, onTermsChange, agreement)
-        NoticeCheck(locationAgreed, onLocationChange, AnnotatedString(TermsNotice.LOCATION_AGREEMENT))
-    }
+    NoticeCheck(agreed, onAgreedChange, agreement)
 }
 
-/** Only the notice: a student is never tracked, so there is no location agreement to make. */
+/** A student's agreement: the notice only, because a student is never tracked. */
 @Composable
-internal fun TermsCheck(termsAgreed: Boolean, onTermsChange: (Boolean) -> Unit, onOpenNotice: () -> Unit) {
-    val agreement = buildAnnotatedString {
-        append("I have read and agree to the ")
-        withLink(
-            LinkAnnotation.Clickable(
-                tag = "notice",
-                styles = TextLinkStyles(
-                    SpanStyle(color = IsatuBlue, fontWeight = FontWeight.SemiBold, textDecoration = TextDecoration.Underline),
-                ),
-                linkInteractionListener = { onOpenNotice() },
-            ),
-        ) { append(TermsNotice.TITLE) }
-        append(".")
-    }
-    NoticeCheck(termsAgreed, onTermsChange, agreement)
-}
+internal fun TermsCheck(termsAgreed: Boolean, onTermsChange: (Boolean) -> Unit, onOpenNotice: () -> Unit) =
+    NoticeAgreement(termsAgreed, onTermsChange, includeLocation = false, onOpenNotice = onOpenNotice)
 
 @Composable
 private fun NoticeCheck(checked: Boolean, onCheckedChange: (Boolean) -> Unit, text: AnnotatedString) {

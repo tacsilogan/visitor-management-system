@@ -27,7 +27,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
@@ -37,7 +36,6 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MarkEmailRead
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material.icons.rounded.PendingActions
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Refresh
@@ -50,6 +48,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -62,8 +61,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -80,6 +77,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -145,55 +143,22 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
     Scaffold(
         containerColor = AppBackground,
         topBar = {
-            Column {
-                TopAppBar(
-                    title = { PortalBrand() },
-                    actions = {
-                        IconButton(onClick = {
-                            headerScreen = HeaderScreen.Notifications
-                            viewModel.refreshNotifications()
-                        }) {
-                            BadgedBox(
-                                badge = {
-                                    if (state.unreadCount > 0) {
-                                        Badge(containerColor = Color(0xFFD92D20), contentColor = Color.White) {
-                                            Text(state.unreadCount.coerceAtMost(99).toString())
-                                        }
-                                    }
-                                },
-                            ) {
-                                Icon(Icons.Rounded.Notifications, contentDescription = "Notifications", tint = IsatuBlueDark)
-                            }
-                        }
-                        IconButton(onClick = { headerScreen = HeaderScreen.Profile }) {
-                            Icon(Icons.Rounded.Person, contentDescription = "Profile", tint = IsatuBlueDark)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
-                )
-                if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = IsatuBlue)
-            }
+            MainTopBar(
+                unreadCount = state.unreadCount,
+                busy = state.busy,
+                // On Home the navy goes on into the greeting, and the gold edge comes under that.
+                goldEdge = !(headerScreen == null && selectedTab == 0),
+                onNotifications = {
+                    headerScreen = HeaderScreen.Notifications
+                    viewModel.refreshNotifications()
+                },
+                onProfile = { headerScreen = HeaderScreen.Profile },
+            )
         },
         bottomBar = {
-            NavigationBar(containerColor = Color.White, tonalElevation = 8.dp) {
-                tabs.forEachIndexed { index, tab ->
-                    NavigationBarItem(
-                        selected = headerScreen == null && selectedTab == index,
-                        onClick = {
-                            selectedTab = index
-                            headerScreen = null
-                        },
-                        icon = { Icon(tab.icon, contentDescription = tab.label) },
-                        label = { Text(tab.label) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = IsatuBlue,
-                            selectedTextColor = IsatuBlueDark,
-                            indicatorColor = BlueSurface,
-                            unselectedIconColor = MutedInk,
-                            unselectedTextColor = MutedInk,
-                        ),
-                    )
-                }
+            MainBottomBar(selected = if (headerScreen == null) selectedTab else null) { index ->
+                selectedTab = index
+                headerScreen = null
             }
         },
     ) { innerPadding ->
@@ -226,6 +191,67 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
     }
 }
 
+/** The bar over the tabs: the seal and the app's name, notifications, and the profile. */
+@Composable
+internal fun MainTopBar(
+    unreadCount: Int,
+    busy: Boolean,
+    goldEdge: Boolean,
+    onNotifications: () -> Unit,
+    onProfile: () -> Unit,
+) {
+    Column {
+        NavyTopBar(
+            title = { PortalBrand(onNavy = true) },
+            actions = {
+                IconButton(onClick = onNotifications) {
+                    BadgedBox(
+                        badge = {
+                            if (unreadCount > 0) {
+                                Badge(containerColor = IsatuYellow, contentColor = IsatuBlueDark) {
+                                    Text(unreadCount.coerceAtMost(99).toString(), fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        },
+                    ) {
+                        Icon(Icons.Rounded.Notifications, contentDescription = "Notifications")
+                    }
+                }
+                IconButton(onClick = onProfile) {
+                    Icon(Icons.Rounded.Person, contentDescription = "Profile")
+                }
+            },
+            goldEdge = goldEdge,
+        )
+        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth(), color = IsatuYellow, trackColor = IsatuBlueDark)
+    }
+}
+
+/** Home, Visits and Book. The chosen tab sits on a gold pill. */
+@Composable
+internal fun MainBottomBar(selected: Int?, onSelect: (Int) -> Unit) {
+    Column {
+        HorizontalDivider(color = BorderSoft)
+        NavigationBar(containerColor = Color.White, tonalElevation = 0.dp) {
+            tabs.forEachIndexed { index, tab ->
+                NavigationBarItem(
+                    selected = selected == index,
+                    onClick = { onSelect(index) },
+                    icon = { Icon(tab.icon, contentDescription = tab.label) },
+                    label = { Text(tab.label, fontWeight = if (selected == index) FontWeight.SemiBold else FontWeight.Normal) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = IsatuBlueDark,
+                        selectedTextColor = IsatuBlueDark,
+                        indicatorColor = IsatuYellow,
+                        unselectedIconColor = MutedInk,
+                        unselectedTextColor = MutedInk,
+                    ),
+                )
+            }
+        }
+    }
+}
+
 @Composable
 internal fun HomeScreen(
     user: UserDto?,
@@ -252,23 +278,30 @@ internal fun HomeScreen(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
+        contentPadding = PaddingValues(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item { Greeting(firstName) }
-        // The visit that matters now, with the one thing to do next. Booking is the Book tab.
+        // The greeting on navy, and the visit that matters now lifted over it, with the one thing
+        // to do next. Booking is the Book tab.
         item {
-            when (upcoming) {
-                null -> NoVisitCard(onBook, isStudent)
-                is VisitListItem.Single -> NextVisitCard(homeCard(upcoming)) { onOpenAppointment(upcoming.appointment.id) }
-                is VisitListItem.MultiStop -> NextVisitCard(homeCard(upcoming)) { onOpenVisit(upcoming.summary.id) }
+            Column {
+                NavyBand(bottomSpace = 62.dp) { Greeting(firstName) }
+                Box(Modifier.padding(horizontal = 16.dp).liftedOver(46.dp)) {
+                    when (upcoming) {
+                        null -> NoVisitCard(onBook, isStudent)
+                        is VisitListItem.Single -> NextVisitCard(homeCard(upcoming)) { onOpenAppointment(upcoming.appointment.id) }
+                        is VisitListItem.MultiStop -> NextVisitCard(homeCard(upcoming)) { onOpenVisit(upcoming.summary.id) }
+                    }
+                }
             }
         }
         if (!notificationsAllowed) {
             item {
-                NotificationsPrompt {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    NotificationsPrompt {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                     }
                 }
             }
@@ -276,7 +309,15 @@ internal fun HomeScreen(
         // Until a visitor's first booking the steps show in full; after that, behind a link.
         item {
             if (appointments.isEmpty()) {
-                VisitStepsCard(isStudent)
+                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "How a visit works",
+                        modifier = Modifier.padding(start = 4.dp),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MutedInk,
+                    )
+                    VisitStepsCard(isStudent)
+                }
             } else {
                 TextButton(onClick = { showSteps = true }, modifier = Modifier.fillMaxWidth()) {
                     Icon(Icons.Rounded.Info, contentDescription = null, modifier = Modifier.size(18.dp))
@@ -304,12 +345,16 @@ private fun Greeting(firstName: String) {
         in 12..17 -> "Good afternoon"
         else -> "Good evening"
     }
-    Column(Modifier.padding(horizontal = 2.dp)) {
-        Text("$greeting, $firstName", style = MaterialTheme.typography.titleLarge, color = Ink)
+    Column {
+        Text(
+            "$greeting, $firstName",
+            style = MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp, lineHeight = 30.sp),
+            color = Color.White,
+        )
         Text(
             now.format(DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.US)),
             style = MaterialTheme.typography.bodyMedium,
-            color = MutedInk,
+            color = OnNavyMuted,
         )
     }
 }
@@ -412,7 +457,7 @@ private fun NextVisitCard(card: HomeCard, onOpen: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().clickable(onClick = onOpen),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, BorderSoft),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         shape = RoundedCornerShape(22.dp),
     ) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -450,7 +495,7 @@ private fun NextVisitCard(card: HomeCard, onOpen: () -> Unit) {
 private fun NoVisitCard(onBook: () -> Unit, isStudent: Boolean = false) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        border = BorderStroke(1.dp, BorderSoft),
+        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
         shape = RoundedCornerShape(22.dp),
     ) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -493,37 +538,45 @@ private fun VisitStepsCard(isStudent: Boolean = false) {
         border = BorderStroke(1.dp, BorderSoft),
         shape = RoundedCornerShape(18.dp),
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("How a visit works", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark)
-            VisitSteps(isStudent)
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+            VisitSteps(isStudent, divided = true)
         }
     }
 }
 
+/** The four steps of a visit, short enough to read at a glance. */
 @Composable
-private fun VisitSteps(isStudent: Boolean = false) {
-    if (isStudent) {
+private fun VisitSteps(isStudent: Boolean = false, divided: Boolean = false) {
+    val steps = if (isStudent) {
         // No pass, gate scan or tracking for an ISATU student.
-        VisitStep(Icons.Rounded.PendingActions, "1", "Find a teacher", "Any teacher at ISATU, by name. Ask to see them now or pick a time.")
-        VisitStep(Icons.Rounded.CheckCircle, "2", "Wait for the answer", "You'll get a notification when they accept.")
-        VisitStep(Icons.Rounded.LocationOn, "3", "Go to their room", "The room and the directions show once they accept.")
-        VisitStep(Icons.Rounded.Notifications, "4", "Tap I'm here", "They're told you've arrived. No pass and no gate scan.")
-        return
+        listOf(
+            "Find a teacher" to "Any ISATU teacher, by name.",
+            "Wait for the answer" to "You're notified when they accept.",
+            "Go to their room" to "The room shows once they accept.",
+            "Tap I'm here" to "They're told you've arrived.",
+        )
+    } else {
+        listOf(
+            "Book a visit" to "A walk-in or an appointment, to an office or a teacher.",
+            "Get your pass" to "Office walk-ins get it at once. Others get it once approved.",
+            "Show it at the gate" to "Security scans it when you arrive.",
+            "Share your location" to "Only from check-in until your visit ends.",
+        )
     }
-    VisitStep(Icons.Rounded.PendingActions, "1", "Register", "Choose walk-in or appointment and tell us where you are going.")
-    VisitStep(Icons.Rounded.CheckCircle, "2", "Get your pass", "Walk-ins receive it now; appointments receive it after approval.")
-    VisitStep(Icons.Rounded.QrCode2, "3", "Present your pass", "An approved visit receives a secure QR pass.")
-    VisitStep(Icons.Rounded.LocationOn, "4", "Check in", "Location sharing starts only after Security check-in and your permission.")
+    steps.forEachIndexed { index, (title, body) ->
+        if (divided && index > 0) HorizontalDivider(color = Color(0xFFEDF1F6))
+        VisitStep(index + 1, title, body, if (divided) Modifier.padding(vertical = 12.dp) else Modifier)
+    }
 }
 
 @Composable
-private fun VisitStep(icon: ImageVector, number: String, title: String, body: String) {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.size(38.dp).clip(CircleShape).background(BlueSurface), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = "Step $number", tint = IsatuBlue, modifier = Modifier.size(21.dp))
+private fun VisitStep(number: Int, title: String, body: String, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(28.dp).clip(CircleShape).background(IsatuYellow), contentAlignment = Alignment.Center) {
+            Text(number.toString(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = IsatuBlueDark)
         }
         Column(Modifier.weight(1f)) {
-            Text("$number. $title", fontWeight = FontWeight.SemiBold)
+            Text(title, fontWeight = FontWeight.SemiBold, color = Ink)
             Text(body, color = MutedInk, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -648,23 +701,17 @@ private fun AppointmentsScreen(
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("My visits", style = MaterialTheme.typography.headlineMedium, color = IsatuBlueDark)
-                    Text("Requests, visitor passes, and visit history", color = MutedInk)
-                }
-                IconButton(onClick = onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh") }
+                Text(
+                    "My visits",
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp),
+                    color = IsatuBlueDark,
+                )
+                IconButton(onClick = onRefresh) { Icon(Icons.Rounded.Refresh, "Refresh", tint = IsatuBlueDark) }
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                filters.forEach { filter ->
-                    if (selectedFilter == filter) {
-                        FilledTonalButton(onClick = { selectedFilter = filter }) { Text(filter) }
-                    } else {
-                        OutlinedButton(onClick = { selectedFilter = filter }) { Text(filter) }
-                    }
-                }
-            }
+            ChoiceChips(filters.map { it to it }, selectedFilter, { selectedFilter = it })
         }
         if (visible.isEmpty()) {
             item { EmptyState("Nothing here yet", "Visits matching this filter will appear here.") }
@@ -728,7 +775,7 @@ private fun NotificationsScreen(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Notifications", style = MaterialTheme.typography.headlineMedium, color = IsatuBlueDark)
+                    Text("Notifications", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp), color = IsatuBlueDark)
                     Text(if (unreadCount == 0) "You are all caught up" else "$unreadCount unread notification(s)", color = MutedInk)
                 }
                 if (unreadCount > 0) TextButton(onClick = viewModel::markAllNotificationsRead) { Text("Mark all read") }
@@ -793,8 +840,7 @@ private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel, onOpen
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item {
-            Text("My profile", style = MaterialTheme.typography.headlineMedium, color = IsatuBlueDark)
-            Text("Personal details and privacy controls", color = MutedInk)
+            Text("My profile", style = MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp), color = IsatuBlueDark)
         }
         item {
             Card(

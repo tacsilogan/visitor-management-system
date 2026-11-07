@@ -113,51 +113,13 @@ private val readyPass = QrPassDto(
 private val approvedToday = sampleVisit("approved", pass = readyPass)
 
 /** The app's top bar and bottom tabs around Home, as MainShell draws them. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun HomeFrame(appointments: List<AppointmentDto>) {
     ISATUVisitorTheme {
         Scaffold(
             containerColor = AppBackground,
-            topBar = {
-                TopAppBar(
-                    title = { PortalBrand() },
-                    actions = {
-                        IconButton(onClick = {}) {
-                            BadgedBox(badge = { Badge(containerColor = Color(0xFFD92D20), contentColor = Color.White) { Text("1") } }) {
-                                Icon(Icons.Rounded.Notifications, contentDescription = "Notifications", tint = IsatuBlueDark)
-                            }
-                        }
-                        IconButton(onClick = {}) {
-                            Icon(Icons.Rounded.Person, contentDescription = "Profile", tint = IsatuBlueDark)
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
-                )
-            },
-            bottomBar = {
-                NavigationBar(containerColor = Color.White, tonalElevation = 8.dp) {
-                    listOf(
-                        "Home" to Icons.Rounded.Home,
-                        "Visits" to Icons.Rounded.CalendarMonth,
-                        "Book" to Icons.Rounded.Add,
-                    ).forEachIndexed { index, (label, icon) ->
-                        NavigationBarItem(
-                            selected = index == 0,
-                            onClick = {},
-                            icon = { Icon(icon, contentDescription = label) },
-                            label = { Text(label) },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = IsatuBlue,
-                                selectedTextColor = IsatuBlueDark,
-                                indicatorColor = BlueSurface,
-                                unselectedIconColor = MutedInk,
-                                unselectedTextColor = MutedInk,
-                            ),
-                        )
-                    }
-                }
-            },
+            topBar = { MainTopBar(unreadCount = 1, busy = false, goldEdge = false, onNotifications = {}, onProfile = {}) },
+            bottomBar = { MainBottomBar(selected = 0) {} },
         ) { padding ->
             Column(Modifier.fillMaxSize().padding(padding)) {
                 HomeScreen(visitor, appointments, onOpenAppointment = {}, onOpenVisit = {}, onBook = {})
@@ -437,26 +399,33 @@ fun AppIcon() {
 }
 
 @PreviewTest
-@Preview(name = "Create account", widthDp = 360, heightDp = 860)
+@Preview(name = "Sign in", widthDp = 360, heightDp = 780)
 @Composable
-fun CreateAccount() = ISATUVisitorTheme {
-    Column(Modifier.fillMaxSize().background(AppBackground).padding(20.dp)) {
-        Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-            Column(
-                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 26.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-            ) {
-                RegisterForm(false, { _, _, _, _ -> }, {})
-            }
-        }
+fun SignIn() = ISATUVisitorTheme {
+    BrandedAuthPage(onBack = null, busy = false, banner = {}) {
+        LoginForm(busy = false, onLogin = { _, _ -> }, onRegister = {}, onRecover = {})
     }
 }
 
 @PreviewTest
-@Preview(name = "The two checkboxes, ticked", widthDp = 320, heightDp = 170, showBackground = true)
+@Preview(name = "Visitor account", widthDp = 360, heightDp = 780)
 @Composable
-fun NoticeChecksTicked() = ISATUVisitorTheme {
-    Column(Modifier.padding(16.dp)) { NoticeChecks(true, {}, true, {}, onOpenNotice = {}) }
+fun CreateAccount() = ISATUVisitorTheme {
+    val draft = VisitorDraft().apply {
+        name = "Maria Santos"
+        email = "maria.santos@gmail.com"
+        contact = "0917 555 0142"
+        password = "Campus-Visit-2026"
+        agreed = true
+    }
+    VisitorSignupPage(draft, busy = false, banner = {}, onBack = {}, onRegister = { _, _, _, _ -> }, onOpenNotice = {}, onStudentInstead = {})
+}
+
+@PreviewTest
+@Preview(name = "The agreement, ticked", widthDp = 320, heightDp = 130, showBackground = true)
+@Composable
+fun AgreementTicked() = ISATUVisitorTheme {
+    Column(Modifier.padding(16.dp)) { NoticeAgreement(true, {}, includeLocation = true, onOpenNotice = {}) }
 }
 
 @PreviewTest
@@ -481,12 +450,12 @@ fun NoticeEnd() = ISATUVisitorTheme {
 @PreviewTest
 @Preview(name = "Agreeing, an existing account", widthDp = 360, heightDp = 780)
 @Composable
-fun NoticeAgreement() = ISATUVisitorTheme { TermsAgreementScreen(false, {}, {}) }
+fun AgreementScreen() = ISATUVisitorTheme { TermsAgreementScreen(busy = false, isStudent = false, onAgree = {}, onSignOut = {}) }
 
 @PreviewTest
 @Preview(name = "Agreeing, on a small phone", widthDp = 320, heightDp = 568)
 @Composable
-fun NoticeAgreementSmallPhone() = ISATUVisitorTheme { TermsAgreementScreen(false, {}, {}) }
+fun NoticeAgreementSmallPhone() = ISATUVisitorTheme { TermsAgreementScreen(busy = false, isStudent = false, onAgree = {}, onSignOut = {}) }
 
 @PreviewTest
 @Preview(name = "The link in Profile", widthDp = 320, heightDp = 80, showBackground = true)

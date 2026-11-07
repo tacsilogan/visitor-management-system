@@ -657,10 +657,10 @@ fun TrackingMapScreen(
                         modifier = Modifier.fillMaxSize(),
                         route = routeLine,
                     )
-                    // Keeps the status bar icons readable over the map.
+                    // Keeps the white status bar icons readable over the map.
                     Box(
                         Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
-                            .background(Color.White.copy(alpha = 0.9f)),
+                            .background(IsatuBlueDark.copy(alpha = 0.92f)),
                     )
                     Column(
                         modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 10.dp)

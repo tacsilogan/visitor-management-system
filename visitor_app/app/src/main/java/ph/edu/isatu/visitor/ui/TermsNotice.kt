@@ -15,9 +15,8 @@ package ph.edu.isatu.visitor.ui
  */
 object TermsNotice {
     const val TITLE = "Terms and Privacy Notice"
-    const val LOCATION_AGREEMENT =
-        "I agree to share my location during my visits, from when a guard checks me in until my visit ends. " +
-            "I can stop sharing at any time."
+    /** Ends a visitor's agreement, so the one box names location sharing too. */
+    const val LOCATION_PART = ", including sharing my location during my visits."
 
     val BLOCKS: List<NoticeBlock> = listOf(
         NoticeBlock.Fine("ISATU Visitor app. Version 3, effective [[date]]."),
@@ -115,12 +114,12 @@ object TermsNotice {
         NoticeBlock.Heading("ISATU students"),
         NoticeBlock.Paragraph(
             "If you sign up as an ISATU student, you use your @students.isatu.edu.ph email and give your " +
-                "student number, course, year and section. You book teachers only. You get **no pass**, no " +
+                "Student ID, course, year and section. You book teachers only. You get **no pass**, no " +
                 "guard scans you, and **your location is never shared**: the directions to a teacher's room " +
                 "don't use it. Instead, you tap I'm here, and the teacher is told.",
         ),
         NoticeBlock.Point(
-            "**A teacher you book** sees your name, student number, course, year and section, your reason, " +
+            "**A teacher you book** sees your name, Student ID, course, year and section, your reason, " +
                 "and when you tap I'm here. They can't see your email or contact number.",
         ),
         NoticeBlock.Point(

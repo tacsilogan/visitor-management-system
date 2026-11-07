@@ -11,7 +11,6 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
@@ -20,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
 import ph.edu.isatu.visitor.R
 
 val IsatuBlue = Color(0xFF0757B9)
@@ -34,6 +32,8 @@ val MutedInk = Color(0xFF64748B)
 val BorderSoft = Color(0xFFDCE3ED)
 val BlueSurface = Color(0xFFEAF2FF)
 val YellowSurface = Color(0xFFFFF7D6)
+/** Small words on ISATU navy. */
+val OnNavyMuted = Color(0xFFC9D8F2)
 
 private val LightColors = lightColorScheme(
     primary = IsatuBlue,
@@ -94,17 +94,16 @@ fun ISATUVisitorTheme(barsOverBlue: Boolean = false, content: @Composable () -> 
     if (!view.isInEditMode) {
         SideEffect {
             val activity = view.context as ComponentActivity
-            if (barsOverBlue) {
-                // White icons, with nothing behind them, over the opening animation's blue.
-                activity.enableEdgeToEdge(
-                    statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-                    navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-                )
-            } else {
-                activity.enableEdgeToEdge()
-                activity.window.statusBarColor = colors.surface.toArgb()
-                WindowCompat.getInsetsController(activity.window, view).isAppearanceLightStatusBars = true
-            }
+            // Every screen starts in ISATU navy (or the opening animation's blue), so the status bar
+            // icons are white. The navigation bar's icons are dark over the white screens below.
+            activity.enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+                navigationBarStyle = if (barsOverBlue) {
+                    SystemBarStyle.dark(AndroidColor.TRANSPARENT)
+                } else {
+                    SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)
+                },
+            )
         }
     }
     MaterialTheme(

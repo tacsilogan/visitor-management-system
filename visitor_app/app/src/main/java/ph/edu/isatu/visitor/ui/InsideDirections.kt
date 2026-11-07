@@ -177,7 +177,7 @@ internal fun InsideStepScreen(
 ) {
     val current = directions.steps.getOrNull(step) ?: return
     val last = step == directions.steps.lastIndex
-    Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().navigationBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(Color.White).navigationBarsPadding()) {
         InsideTopBar("To ${directions.office}", voiceOn, onToggleVoice, onClose)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 4.dp),
@@ -237,22 +237,30 @@ internal fun InsideStepScreen(
 
 @Composable
 private fun InsideTopBar(title: String, voiceOn: Boolean, onToggleVoice: () -> Unit, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(60.dp).padding(start = 4.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Ink) }
-        Text(
-            title,
-            style = MaterialTheme.typography.titleLarge,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(start = 4.dp),
-        )
-        IconButton(onClick = onToggleVoice) {
-            Icon(
-                if (voiceOn) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
-                contentDescription = if (voiceOn) "Turn voice directions off" else "Turn voice directions on",
-                tint = if (voiceOn) IsatuBlue else MutedInk,
+    // Navy under the status bar too, like every other screen's title bar.
+    Column(Modifier.fillMaxWidth().background(IsatuBlueDark)) {
+        Row(
+            Modifier.fillMaxWidth().statusBarsPadding().height(60.dp).padding(start = 4.dp, end = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back", tint = Color.White) }
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 4.dp),
             )
+            IconButton(onClick = onToggleVoice) {
+                Icon(
+                    if (voiceOn) Icons.AutoMirrored.Rounded.VolumeUp else Icons.AutoMirrored.Rounded.VolumeOff,
+                    contentDescription = if (voiceOn) "Turn voice directions off" else "Turn voice directions on",
+                    tint = if (voiceOn) IsatuYellow else OnNavyMuted,
+                )
+            }
         }
+        GoldEdge()
     }
 }
 
@@ -307,7 +315,7 @@ internal fun HeadingOutScreen(
     onOutside: () -> Unit,
 ) {
     val hasPhoto = directions.steps.firstOrNull()?.photo?.isNotBlank() == true
-    Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().navigationBarsPadding()) {
+    Column(Modifier.fillMaxSize().background(Color.White).navigationBarsPadding()) {
         InsideTopBar("Heading out", voiceOn, onToggleVoice, onBack)
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 18.dp, end = 18.dp, top = 4.dp),
@@ -449,7 +457,7 @@ internal fun DirectionsPreview(directions: OfficeDirections, onClose: () -> Unit
             onArrived = null,
         )
     } else {
-        Column(Modifier.fillMaxSize().background(Color.White).statusBarsPadding().navigationBarsPadding()) {
+        Column(Modifier.fillMaxSize().background(Color.White).navigationBarsPadding()) {
             InsideTopBar("To ${directions.office}", voiceOn, { voiceOn = !voiceOn }, onClose)
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp),

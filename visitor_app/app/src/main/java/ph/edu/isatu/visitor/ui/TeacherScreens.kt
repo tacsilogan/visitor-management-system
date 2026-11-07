@@ -132,7 +132,8 @@ internal fun FindTeacherContent(
                                 course = ""
                             },
                             label = { Text(option.ifBlank { "All departments" }) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFD7E6FF), selectedLabelColor = IsatuBlueDark),
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = IsatuBlueDark, selectedLabelColor = Color.White, labelColor = Ink),
+                            shape = RoundedCornerShape(50),
                         )
                     }
                 }
@@ -146,7 +147,8 @@ internal fun FindTeacherContent(
                             selected = course == option,
                             onClick = { course = option },
                             label = { Text(option.ifBlank { "All" }) },
-                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFFD7E6FF), selectedLabelColor = IsatuBlueDark),
+                            colors = FilterChipDefaults.filterChipColors(selectedContainerColor = IsatuBlueDark, selectedLabelColor = Color.White, labelColor = Ink),
+                            shape = RoundedCornerShape(50),
                         )
                     }
                 }

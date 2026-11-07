@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import ph.edu.isatu.visitor.data.AvailabilitySlotDto
 import ph.edu.isatu.visitor.data.TeacherDto
 import java.time.Instant
@@ -180,21 +181,16 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    if (isStudent) "BOOK A TEACHER" else "VISITOR REGISTRATION",
-                    style = MaterialTheme.typography.headlineMedium,
+                    if (isStudent) "Book a teacher" else "Book a visit",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp),
                     color = IsatuBlueDark,
-                    textAlign = TextAlign.Center,
                 )
                 Text(
-                    if (isStudent) "Any teacher at ISATU. Find them by name." else "Choose how you plan to visit the campus.",
+                    if (isStudent) "Any ISATU teacher, by name." else "Choose how you'll visit the campus.",
                     color = MutedInk,
-                    textAlign = TextAlign.Center,
+                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
