@@ -165,6 +165,22 @@ jobs:
           token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
           [ -n "$token" ] || fail "Visitor sign-in failed: ${reply:0:300}"
 
+          # Forgot password, as the app does it. data must be an object: PHP sends an empty one as [],
+          # which no app could read. The emailed 6-digit code refuses a wrong guess, then sets the password.
+          reply=$(send -d "{\"email\":\"$email\"}" "$api/auth/request_password_reset.php")
+          contains "$reply" '"data":{' || fail "The password reset reply's data is not an object: ${reply:0:300}"
+          reset=$(docker exec db mariadb -uisatu -pisatu-secret app -N -e "SELECT JSON_UNQUOTE(JSON_EXTRACT(payload_json, '\$.code')) FROM outbound_emails WHERE recipient_email = '$email' AND template_key = 'password_reset' ORDER BY id DESC LIMIT 1")
+          [[ "$reset" =~ ^[0-9]{6}$ ]] || fail "No 6-digit reset code was queued for $email: $reset"
+          wrong=$(printf '%06d' $(( (10#$reset + 1) % 1000000 )))
+          reply=$(send -d "{\"email\":\"$email\",\"token\":\"$wrong\",\"new_password\":\"Ci-Visitor-Pass-2\"}" "$api/auth/reset_password.php")
+          contains "$reply" '4 tries left' || fail "A wrong reset code was not refused: ${reply:0:300}"
+          reply=$(send -d "{\"email\":\"$email\",\"token\":\"$reset\",\"new_password\":\"Ci-Visitor-Pass-2\"}" "$api/auth/reset_password.php")
+          contains "$reply" '"success":true' || fail "The emailed reset code did not set a new password: ${reply:0:300}"
+          # A new password signs out every device, so sign in again with it.
+          reply=$(send -d "{\"identifier\":\"$email\",\"password\":\"Ci-Visitor-Pass-2\",\"installation_id\":\"ci-phone\",\"device_name\":\"CI phone\"}" "$api/auth/login.php")
+          token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
+          [ -n "$token" ] || fail "Signing in with the new password failed: ${reply:0:300}"
+
           # An ISATU student signs up with their school email, is never offered offices, and can't be tracked.
           student="ci-student-$(date +%s)@students.isatu.edu.ph"
           reply=$(signup "$student" "{\"account_type\":\"student\",\"email\":\"$student\",\"full_name\":\"CI Student\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v3\",\"student_number\":\"2023-0001-a\",\"course_name\":\"BS Information Technology\",\"year_level\":3,\"section\":\"B\"}")

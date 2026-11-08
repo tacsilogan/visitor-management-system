@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-require_once dirname(__DIR__) . "/_bootstrap.php";
+require_once __DIR__ . "/_password_reset.php";
 
 api_require_method("POST");
 $input = api_body();
@@ -19,13 +19,20 @@ $stmt->bind_param("s", $email);
 $stmt->execute();
 $user = $stmt->get_result()->fetch_assoc();
 $stmt->close();
-$data = [];
+// The reply is the same whether or not an account uses the email.
+$data = ["code_minutes" => API_RESET_CODE_MINUTES, "resend_after_seconds" => API_RESET_RESEND_SECONDS];
 if ($user) {
-    $token = api_create_account_action_token($conn, (int) $user["id"], $email, "password_reset", 30);
-    api_audit($conn, (int) $user["id"], "mobile.password_reset_requested", "app_user", (string) $user["id"]);
-    if (api_is_development()) {
-        $data["development_reset_token"] = $token;
+    try {
+        $code = api_send_reset_code($conn, (int) $user["id"], $email);
+    } catch (Throwable $error) {
+        api_fail("Could not send the code. Try again in a moment.", 500, [], $error);
+    }
+    if ($code !== null) {
+        api_audit($conn, (int) $user["id"], "mobile.password_reset_requested", "app_user", (string) $user["id"]);
+        if (api_is_development()) {
+            // A server on a developer's computer sends the code back, so it can be tried without email.
+            $data["development_reset_token"] = $code;
+        }
     }
 }
-api_success($data, 200, "If the account exists, password reset instructions have been queued.");
-
+api_success($data, 200, "If an account uses this email, a 6-digit code is on its way.");

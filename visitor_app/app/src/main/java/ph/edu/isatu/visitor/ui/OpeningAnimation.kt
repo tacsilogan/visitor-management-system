@@ -5,11 +5,14 @@ import android.graphics.BitmapFactory
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +63,11 @@ import ph.edu.isatu.visitor.R
 
 private val FieldBlue = Color(0xFF1336B8)
 private val SealNavy = Color(0xFF000092)
+/** The welcome's second line, quieter than the white greeting on the opening's blue. */
+private val SublineBlue = Color(0xFFD7E2FF)
+
+/** How much longer the welcome after making an account keeps its words up than the opening does. */
+const val WELCOME_HOLD_MS = 700L
 
 // Measured from the logo, in parts of the seal's width, as on the web (.auth-seal in style.css).
 private const val PLATE_RADIUS = 0.344f
@@ -114,9 +122,19 @@ fun loadSealArt(context: Context): SealArt {
 /**
  * The seal's animation when the app opens, over the app, which loads underneath in the meantime.
  * A tap sends the seal to the header straight away. See [OpeningTimeline].
+ *
+ * It also welcomes someone whose account was just made: [subline] says what they now have, and
+ * [holdMs] keeps the words up that much longer, to be read.
  */
 @Composable
-fun OpeningAnimation(greeting: () -> String, onReveal: () -> Unit, onDone: () -> Unit) {
+fun OpeningAnimation(
+    greeting: () -> String,
+    onReveal: () -> Unit,
+    onDone: () -> Unit,
+    subline: String? = null,
+    holdMs: Long = 0L,
+    description: String = "ISATU Visits is opening",
+) {
     val context = LocalContext.current
     val home = LocalSealHome.current
     val still = remember {
@@ -124,7 +142,7 @@ fun OpeningAnimation(greeting: () -> String, onReveal: () -> Unit, onDone: () ->
     }
     var art by remember { mutableStateOf<SealArt?>(null) }
     var now by remember { mutableLongStateOf(0L) }
-    var leaveAt by remember { mutableLongStateOf(if (still) STILL_HOLD_MS else OpeningTimeline.LEAVE_AT) }
+    var leaveAt by remember { mutableLongStateOf((if (still) STILL_HOLD_MS else OpeningTimeline.LEAVE_AT) + holdMs) }
     var landing by remember { mutableStateOf<Rect?>(null) }
     var words by remember { mutableStateOf<String?>(null) }
 
@@ -134,6 +152,8 @@ fun OpeningAnimation(greeting: () -> String, onReveal: () -> Unit, onDone: () ->
     }
 
     LaunchedEffect(Unit) {
+        // The header's own logo hides until this seal lands on it.
+        home?.away = true
         // Never hold the app up over a picture: without the seal, there is simply no animation.
         val loaded = withContext(Dispatchers.Default) { runCatching { loadSealArt(context) }.getOrNull() }
         if (loaded == null) {
@@ -166,7 +186,7 @@ fun OpeningAnimation(greeting: () -> String, onReveal: () -> Unit, onDone: () ->
     Box(
         Modifier
             .fillMaxSize()
-            .clearAndSetSemantics { contentDescription = "ISATU Visitor is opening" }
+            .clearAndSetSemantics { contentDescription = description }
             .pointerInput(Unit) {
                 detectTapGestures { if (now < leaveAt) leaveAt = now }
             },
@@ -176,6 +196,7 @@ fun OpeningAnimation(greeting: () -> String, onReveal: () -> Unit, onDone: () ->
             frame = { if (still) OpeningTimeline.WHOLE else OpeningTimeline.at(now, leaveAt) },
             landing = landing,
             words = words,
+            subline = subline,
             alpha = {
                 val gone = now - leaveAt
                 when {
@@ -197,6 +218,7 @@ fun OpeningStage(
     landing: Rect?,
     words: String?,
     alpha: () -> Float = { 1f },
+    subline: String? = null,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha() }) {
         val sealWidth = (min(maxWidth, maxHeight) * 0.49f).coerceIn(150.dp, 184.dp)
@@ -204,22 +226,13 @@ fun OpeningStage(
         Canvas(Modifier.fillMaxSize()) {
             drawOpening(art, frame(), sealWidth.toPx(), centreY.toPx(), landing)
         }
-        if (words != null) OpeningWords(words, frame, top = centreY + sealWidth / 2 + 24.dp)
+        if (words != null) OpeningWords(words, subline, frame, top = centreY + sealWidth / 2 + 24.dp)
     }
 }
 
 @Composable
-private fun BoxScope.OpeningWords(text: String, frame: () -> OpeningFrame, top: Dp) {
-    Text(
-        text,
-        color = Color.White,
-        // The serif of the lettering on the seal, as on the web's sign-in.
-        fontFamily = FontFamily.Serif,
-        fontSize = 22.sp,
-        lineHeight = 28.sp,
-        textAlign = TextAlign.Center,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
+private fun BoxScope.OpeningWords(text: String, subline: String?, frame: () -> OpeningFrame, top: Dp) {
+    Column(
         modifier = Modifier
             .align(Alignment.TopCenter)
             .padding(top = top, start = 24.dp, end = 24.dp)
@@ -228,7 +241,29 @@ private fun BoxScope.OpeningWords(text: String, frame: () -> OpeningFrame, top: 
                 this.alpha = now.wordsAlpha
                 translationY = now.wordsDrop * 6.dp.toPx()
             },
-    )
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text,
+            color = Color.White,
+            // The serif of the lettering on the seal, as on the web's sign-in.
+            fontFamily = FontFamily.Serif,
+            fontSize = 22.sp,
+            lineHeight = 28.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (subline != null) {
+            Text(
+                subline,
+                color = SublineBlue,
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = TextAlign.Center,
+            )
+        }
+    }
 }
 
 private fun DrawScope.drawOpening(art: SealArt?, frame: OpeningFrame, seal: Float, centreY: Float, landing: Rect?) {

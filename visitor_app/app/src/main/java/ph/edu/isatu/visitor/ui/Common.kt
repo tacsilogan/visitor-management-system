@@ -73,7 +73,7 @@ fun PortalBrand(modifier: Modifier = Modifier, subtitle: String? = null, onNavy:
         )
         Column {
             Text(
-                "ISATU Visitor",
+                "ISATU Visits",
                 style = MaterialTheme.typography.titleMedium,
                 color = if (onNavy) Color.White else IsatuBlueDark,
             )

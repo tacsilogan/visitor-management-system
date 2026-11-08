@@ -9,7 +9,10 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,6 +25,7 @@ import ph.edu.isatu.visitor.ui.LocalSealHome
 import ph.edu.isatu.visitor.ui.OpeningAnimation
 import ph.edu.isatu.visitor.ui.SealHome
 import ph.edu.isatu.visitor.ui.VisitorApp
+import ph.edu.isatu.visitor.ui.WELCOME_HOLD_MS
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: AppViewModel
@@ -40,18 +44,32 @@ class MainActivity : ComponentActivity() {
         val openedFromIcon = intent.idExtra("visit_id") <= 0 && intent.idExtra("appointment_id") <= 0
         setContent {
             var opening by rememberSaveable { mutableStateOf(openedFromIcon) }
+            val welcome by viewModel.welcome.collectAsState()
             var barsOverBlue by remember { mutableStateOf(opening) }
             val sealHome = remember { SealHome(away = opening) }
             ISATUVisitorTheme(barsOverBlue) {
                 CompositionLocalProvider(LocalSealHome provides sealHome) {
                     Box(Modifier.fillMaxSize()) {
                         VisitorApp(viewModel)
-                        if (opening) {
-                            OpeningAnimation(
+                        val newAccount = welcome
+                        when {
+                            opening -> OpeningAnimation(
                                 greeting = viewModel::openingGreeting,
                                 onReveal = { barsOverBlue = false },
                                 onDone = { opening = false },
                             )
+                            // Once, right after an account is made: the same seal, with their name.
+                            newAccount != null -> key(newAccount) {
+                                LaunchedEffect(Unit) { barsOverBlue = true }
+                                OpeningAnimation(
+                                    greeting = { newAccount.greeting },
+                                    subline = newAccount.subline,
+                                    holdMs = WELCOME_HOLD_MS,
+                                    description = "${newAccount.greeting}. ${newAccount.subline}",
+                                    onReveal = { barsOverBlue = false },
+                                    onDone = viewModel::welcomeShown,
+                                )
+                            }
                         }
                     }
                 }

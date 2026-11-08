@@ -133,7 +133,12 @@ receive a recovery code. **Without email, nobody can sign up.**
    |---|---|
    | `BREVO_API_KEY` | the key |
    | `MAIL_FROM_ADDRESS` | the confirmed sender address |
-   | `MAIL_FROM_NAME` | optional, defaults to `ISATU Visitor Management` |
+   | `MAIL_FROM_NAME` | optional, the website's emails (teachers, the Dean's Office), defaults to `ISATU Visitor Management` |
+   | `MAIL_APP_FROM_NAME` | optional, the app's emails (visitor and student codes, password resets), defaults to `ISATU Visits` |
+
+   The app's emails show the ISATU seal at the top, loaded from the site's public address
+   (`PUBLIC_BASE_URL`, or Railway's own domain). The inbox picture beside the sender's name
+   is not set by these emails: Gmail shows the sender account's profile photo, if any.
 
 4. After the redeploy, send yourself a test with the
    [Railway CLI](https://docs.railway.com/cli/ssh) (it asks you to register an SSH key

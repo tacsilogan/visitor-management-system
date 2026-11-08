@@ -1,4 +1,4 @@
-# ISATU Visitor Android app
+# ISATU Visits Android app (formerly ISATU Visitor)
 
 This folder is the native Kotlin/Jetpack Compose visitor application. It is separate
 from the PHP staff website and uses the versioned mobile API in

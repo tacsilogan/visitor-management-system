@@ -1,24 +1,74 @@
 package ph.edu.isatu.visitor
 
-import com.google.gson.FieldNamingPolicy
-import com.google.gson.GsonBuilder
+import com.google.gson.JsonParseException
+import com.google.gson.reflect.TypeToken
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import ph.edu.isatu.visitor.data.ApiEnvelope
 import ph.edu.isatu.visitor.data.AppointmentData
 import ph.edu.isatu.visitor.data.CampusMapData
+import ph.edu.isatu.visitor.data.OfficesData
+import ph.edu.isatu.visitor.data.PasswordResetData
+import ph.edu.isatu.visitor.data.ProfileData
+import ph.edu.isatu.visitor.data.UserDto
 import ph.edu.isatu.visitor.data.VisitData
 import ph.edu.isatu.visitor.data.WalkingRouteDto
+import ph.edu.isatu.visitor.data.apiGson
 import ph.edu.isatu.visitor.ui.formatTimeSpan
 import ph.edu.isatu.visitor.ui.statusLabel
 import ph.edu.isatu.visitor.ui.visitStatusLabel
 
 class ApiModelTest {
-    private val gson = GsonBuilder()
-        .setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
-        .create()
+    // The app's own reader, so these tests read replies exactly as the app does.
+    private val gson = apiGson()
+
+    private inline fun <reified T> envelope(json: String): ApiEnvelope<T> =
+        gson.fromJson(json, TypeToken.getParameterized(ApiEnvelope::class.java, T::class.java).type)
+
+    @Test
+    fun aReplyWithNothingInItReadsAsAnEmptyObject() {
+        // What "Forgot password?" got back from the live server, which every app failed to read.
+        val reply = envelope<PasswordResetData>(
+            """{"success":true,"data":[],"message":"If the account exists, password reset instructions have been queued."}""",
+        )
+        assertTrue(reply.success)
+        assertNotNull(reply.data)
+        assertNull(reply.data?.developmentResetToken)
+        // And the reply the server sends now.
+        assertNotNull(envelope<PasswordResetData>("""{"success":true,"data":{}}""").data)
+    }
+
+    @Test
+    fun forgotPasswordSaysHowLongTheCodeWorks() {
+        // As request_password_reset.php sends it, the same for any email.
+        val sent = envelope<PasswordResetData>(
+            """{"success":true,"data":{"code_minutes":15,"resend_after_seconds":60},"message":"If an account uses this email, a 6-digit code is on its way."}""",
+        ).data!!
+        assertEquals(15, sent.codeMinutes)
+        assertEquals(60, sent.resendAfterSeconds)
+        assertNull(sent.developmentResetToken)
+    }
+
+    @Test
+    fun anEmptyArrayInsideAReplyReadsAsAnEmptyObjectToo() {
+        assertEquals(UserDto(), envelope<ProfileData>("""{"success":true,"data":{"user":[]}}""").data?.user)
+    }
+
+    @Test
+    fun listsStayListsAndRealMistakesStillFail() {
+        assertTrue(envelope<OfficesData>("""{"success":true,"data":{"offices":[]}}""").data!!.offices.isEmpty())
+        // Replies the app doesn't read (sign out, new password) take anything.
+        assertEquals(emptyList<Any>(), envelope<Any>("""{"success":true,"data":[]}""").data)
+        // An array with something in it where an object belongs is a real mistake: it is not hidden.
+        assertThrows(JsonParseException::class.java) {
+            envelope<PasswordResetData>("""{"success":true,"data":["token"]}""")
+        }
+    }
 
     @Test
     fun pendingAppointmentDoesNotNeedQrData() {

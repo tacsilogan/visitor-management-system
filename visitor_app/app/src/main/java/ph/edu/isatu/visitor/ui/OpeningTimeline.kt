@@ -136,8 +136,21 @@ object OpeningTimeline {
 /** What the opening animation says when the torch lights. */
 fun greetingFor(signedIn: Boolean, fullName: String?): String {
     if (!signedIn) return "Welcome to ISATU"
-    val firstName = fullName?.trim()?.substringBefore(' ').orEmpty()
+    val firstName = firstNameOf(fullName)
     return if (firstName.isEmpty()) "Welcome back" else "Welcome back, $firstName"
+}
+
+/** The name to greet someone by: the first word of their name, and the next one after "Ma." and the like. */
+fun firstNameOf(fullName: String?): String {
+    val words = fullName?.trim()?.split(Regex("\\s+"))?.filter { it.isNotEmpty() }.orEmpty()
+    val first = words.firstOrNull() ?: return ""
+    return if (first.endsWith('.') && words.size > 1) "$first ${words[1]}" else first
+}
+
+/** The opening animation once more, right after an account is made: their name and what they now have. */
+data class Welcome(val firstName: String, val isStudent: Boolean) {
+    val greeting: String get() = if (firstName.isEmpty()) "Welcome" else "Welcome, $firstName"
+    val subline: String get() = if (isStudent) "Your student account is ready" else "Your visitor account is ready"
 }
 
 /** A CSS cubic-bezier() timing curve. */

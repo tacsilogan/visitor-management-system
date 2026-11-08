@@ -20,6 +20,9 @@ class VisitorRepository(
     val signedIn: StateFlow<Boolean> = tokenStore.signedIn
     val savedName: String? get() = tokenStore.savedName
 
+    /** The email last signed in with on this phone, for the sign-in screen. */
+    val lastEmail: String? get() = installationStore.lastEmail
+
     /** Starts an account and emails a code to it. Nothing is created until [confirmSignup]. */
     suspend fun register(request: RegisterRequest): SignupCodeData =
         apiClient.requireData(apiClient.api.register(request))
@@ -29,14 +32,19 @@ class VisitorRepository(
 
     suspend fun signupOptions(): SignupOptionsData = apiClient.requireData(apiClient.api.signupOptions())
 
-    /** The code from the email: the account is created and signed in, with the notice agreed to at sign-up. */
-    suspend fun confirmSignup(requestId: Long, code: String): UserDto {
+    /**
+     * The code from the email: the account is created and signed in, with the notice agreed to at
+     * sign-up. [beforeSignIn] gets the new account just before the app switches to it.
+     */
+    suspend fun confirmSignup(requestId: Long, code: String, beforeSignIn: (UserDto) -> Unit = {}): UserDto {
         val result = apiClient.requireData(
             apiClient.api.confirmSignup(
                 ConfirmSignupRequest(requestId, code, installationStore.installationId, installationStore.deviceName),
             ),
         )
         saveNoticeAgreement(result.user.id)
+        installationStore.lastEmail = result.user.email.ifBlank { null } ?: installationStore.lastEmail
+        beforeSignIn(result.user)
         tokenStore.saveToken(result.accessToken)
         tokenStore.savedName = result.user.fullName
         return result.user
@@ -54,6 +62,7 @@ class VisitorRepository(
                 LoginRequest(identifier, password, installationStore.installationId, installationStore.deviceName),
             ),
         )
+        installationStore.lastEmail = result.user.email.ifBlank { identifier }
         tokenStore.saveToken(result.accessToken)
         tokenStore.savedName = result.user.fullName
         return result.user

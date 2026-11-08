@@ -31,6 +31,21 @@ endpoints correctly returned HTTP 401 without a bearer token.
 - The look since 0.9.0: ISATU navy at the top of every screen with a gold edge, white below, and
   gold for progress and the selected tab. The pieces are in `ui/FormParts.kt` (`NavyTopBar`,
   `NavyBand`, `GoldEdge`); use them on new screens rather than a white top bar.
+- Since app 0.10.0 the app is called **ISATU Visits** on the phone, because ISATU students use it
+  as well as visitors (the package id stays `ph.edu.isatu.visitor`, so it updates over older
+  copies). The website keeps its name. Log in and Create an account put their card in the middle
+  of the screen, between a blurred photo of the ISATU building's front fading into navy, with the
+  logo centred above the card, and a navy wave with the university's name (`BrandedAuthPage` in
+  `ui/AuthScreens.kt`). The photo is blurred beforehand, because Android before 12 can't blur:
+  to change it, replace `res/drawable-nodpi/isatu_campus_front.jpg` with another blurred picture
+  of about 800 × 543. The email last signed in with is remembered on the
+  phone and filled in (never the password); the keyboard's Next goes to the password and Done logs
+  in. Right after an account is made, the opening animation plays once more with "Welcome, (first
+  name)" and "Your student account is ready" or "Your visitor account is ready" (`Welcome` in
+  `ui/OpeningTimeline.kt`); a normal log in goes straight in.
+- "Forgot password?" works like signing up since 0.10.0: the email, then the 6-digit code in boxes
+  with the new password (`RecoverForm` in `ui/AuthScreens.kt`), then Log in with the email filled
+  in. Before that, no app version could reset a password on the live server (PHASE4_MOBILE_API.md).
 - Bookable destinations come from the API and remain limited to IT Department,
   IS Department, CS Department, Dean's Office, and Tech Support.
 - Walk-ins receive an immediate pass when the selected office is accepting visitors.

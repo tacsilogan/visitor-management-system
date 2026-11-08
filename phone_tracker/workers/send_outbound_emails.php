@@ -30,10 +30,17 @@ if ($testIndex !== false) {
         fwrite(STDERR, "Usage: php workers/send_outbound_emails.php --test you@example.com\n");
         exit(1);
     }
-    $text = "This is a test from ISATU Visitor Management. Email is working: visitors will receive their recovery codes.\n";
-    $html = "<p>This is a test from ISATU Visitor Management.</p><p>Email is working: visitors will receive their recovery codes.</p>";
+    // Sent the way the app's codes are, from the app's name with the seal, so this shows what people get.
+    $app = mail_app_name();
+    $settings["from_name"] = $app;
+    $text = "This is a test from " . $app . ". Email is working: visitors and students will receive their codes.\n\n" . $app . "\n";
+    $html = '<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;color:#1f2937">'
+        . '<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:28px">'
+        . mail_header_html(true)
+        . '<p style="margin:16px 0 0;line-height:1.5">This is a test from ' . htmlspecialchars($app, ENT_QUOTES, "UTF-8")
+        . '. Email is working: visitors and students will receive their codes.</p></div></body></html>';
     try {
-        $messageId = mail_send($settings, $to, "", "ISATU Visitor Management test email", $text, $html);
+        $messageId = mail_send($settings, $to, "", $app . " test email", $text, $html);
     } catch (Throwable $error) {
         fwrite(STDERR, "The test email was not sent through " . $settings["transport"] . ": " . $error->getMessage() . "\n");
         exit(1);

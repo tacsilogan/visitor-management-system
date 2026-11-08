@@ -1,12 +1,16 @@
 package ph.edu.isatu.visitor.ui
 
 import android.app.Application
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
+import com.google.gson.JsonParseException
+import com.google.gson.stream.MalformedJsonException
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -76,6 +80,10 @@ data class VisitorUiState(
     val campusMap: CampusMapData? = null,
     /** Set while the person types the code from their email. */
     val signup: SignupProgress? = null,
+    /** "Forgot password?" sent a code, which is waiting to be entered with a new password. */
+    val passwordReset: PasswordResetProgress? = null,
+    /** A new password was just saved: Log in shows, with this email filled in. */
+    val passwordChanged: PasswordChanged? = null,
     /** The courses a student can choose at sign-up. */
     val signupOptions: SignupOptionsData? = null,
     val error: String? = null,
@@ -93,6 +101,17 @@ data class SignupProgress(
     /** When another code may be asked for (System.currentTimeMillis()). */
     val resendAt: Long,
 )
+
+data class PasswordResetProgress(
+    val email: String,
+    /** How long the code works. */
+    val minutes: Int,
+    /** When another code may be asked for (System.currentTimeMillis()). */
+    val resendAt: Long,
+)
+
+/** [at] tells one saved password from the next, for the same email. */
+data class PasswordChanged(val email: String, val at: Long)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val repository: VisitorRepository = (application as VisitorApplication).repository
@@ -112,6 +131,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    private val _welcome = MutableStateFlow<Welcome?>(null)
+
+    /** Set when an account has just been made, until its welcome has played. */
+    val welcome: StateFlow<Welcome?> = _welcome.asStateFlow()
+
+    fun welcomeShown() {
+        _welcome.value = null
+    }
+
+    /** The email last signed in with on this phone, filled in on the sign-in screen. */
+    val rememberedEmail: String get() = repository.lastEmail.orEmpty()
+
+    /** Signed in right now, before the screen has caught up. */
+    val signedInNow: Boolean get() = repository.signedIn.value
 
     /** What the opening animation says when the torch lights. */
     fun openingGreeting(): String =
@@ -189,10 +223,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** The code from the email: the account is made and signed in. */
+    /** The code from the email: the account is made and signed in, and the welcome plays once. */
     fun confirmSignup(code: String) = launchTask {
         val signup = _state.value.signup ?: return@launchTask
-        repository.confirmSignup(signup.requestId, code.trim())
+        // Ready before the app signs in, so the welcome covers the change from its first frame.
+        repository.confirmSignup(signup.requestId, code.trim()) { user ->
+            _welcome.value = Welcome(firstNameOf(user.fullName), isStudent = user.isStudent)
+        }
         _state.update { it.copy(signup = null, message = null) }
     }
 
@@ -222,21 +259,38 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         refreshAppointments()
     }
 
+    /** "Forgot password?": emails a 6-digit code. Asked again, it sends a new one and the old one stops working. */
     fun requestPasswordReset(email: String) = launchTask {
-        val result = repository.requestPasswordReset(email.trim())
-        val localToken = result.developmentResetToken
+        val address = email.trim()
+        val sent = repository.requestPasswordReset(address)
+        val again = _state.value.passwordReset?.email.equals(address, ignoreCase = true)
         _state.update {
             it.copy(
-                message = localToken?.let { token -> "Local test reset token: $token" }
-                    ?: "If the account exists, reset instructions were sent.",
+                passwordReset = PasswordResetProgress(
+                    email = address,
+                    minutes = sent.codeMinutes,
+                    resendAt = System.currentTimeMillis() + sent.resendAfterSeconds * 1000L,
+                ),
+                message = sent.developmentResetToken?.let { code -> "Local test code: $code" }
+                    ?: if (again) "We sent a new code. The old one no longer works." else null,
             )
         }
     }
 
-    fun resetPassword(email: String, token: String, password: String) = launchTask {
-        repository.resetPassword(email.trim(), token.trim(), password)
-        _state.update { it.copy(message = "Password updated. Sign in with your new password.") }
+    /** The code from the email and a new password. Then Log in, with the email filled in. */
+    fun resetPassword(email: String, code: String, password: String) = launchTask {
+        repository.resetPassword(email.trim(), code.trim(), password)
+        _state.update {
+            it.copy(
+                passwordReset = null,
+                passwordChanged = PasswordChanged(email.trim(), System.currentTimeMillis()),
+                message = "Password changed. Log in with your new password.",
+            )
+        }
     }
+
+    /** Back to typing the email. */
+    fun cancelPasswordReset() = _state.update { it.copy(passwordReset = null, error = null, message = null) }
 
     fun refreshAll(initial: Boolean = false) {
         viewModelScope.launch {
@@ -697,15 +751,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** What to tell the person when something fails: the server's words, never a Java error's. */
     private fun readableError(error: Exception): String {
         val apiError = error as? ApiException
-        return apiError?.fieldErrors?.values?.firstOrNull { it.isNotBlank() }
-            ?: apiError?.message
-            ?: error.message
-            ?: "Something went wrong. Check your connection and try again."
+        if (apiError != null) {
+            return apiError.fieldErrors.values.firstOrNull { it.isNotBlank() } ?: apiError.message
+        }
+        Log.w(TAG, "Request failed", error)
+        return when (error) {
+            // A reply the app can't read. MalformedJsonException is an IOException, so it goes first.
+            is JsonParseException, is MalformedJsonException ->
+                "The app couldn't read the server's reply. Try again in a moment."
+            is IOException -> "Can't reach ISATU Visits. Check your internet connection and try again."
+            else -> error.message ?: "Something went wrong. Try again in a moment."
+        }
     }
 
     private companion object {
+        const val TAG = "ISATUVisits"
         const val ARRIVAL_REPORT_ATTEMPTS = 20
         const val ARRIVAL_RETRY_MILLIS = 30_000L
     }

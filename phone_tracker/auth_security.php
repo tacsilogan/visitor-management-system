@@ -71,7 +71,7 @@ function auth_device_label(string $userAgent): string
         return "Unknown device";
     }
     if (stripos($userAgent, "okhttp") !== false || stripos($userAgent, "Dalvik") !== false) {
-        return "Visitor app on Android";
+        return "ISATU Visits app on Android";
     }
     $browsers = [
         "Edg/" => "Edge", "OPR/" => "Opera", "SamsungBrowser/" => "Samsung Internet",

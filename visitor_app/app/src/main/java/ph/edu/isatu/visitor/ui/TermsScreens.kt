@@ -105,7 +105,7 @@ fun TermsAgreementScreen(busy: Boolean, isStudent: Boolean, onAgree: () -> Unit,
             before = {
                 item {
                     Text(
-                        "ISATU Visitor now has written terms and a privacy notice. Please read them and agree to keep using the app.",
+                        "ISATU Visits now has written terms and a privacy notice. Please read them and agree to keep using the app.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = Ink,

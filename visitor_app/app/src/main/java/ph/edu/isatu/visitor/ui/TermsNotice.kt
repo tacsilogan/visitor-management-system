@@ -19,7 +19,7 @@ object TermsNotice {
     const val LOCATION_PART = ", including sharing my location during my visits."
 
     val BLOCKS: List<NoticeBlock> = listOf(
-        NoticeBlock.Fine("ISATU Visitor app. Version 3, effective [[date]]."),
+        NoticeBlock.Fine("ISATU Visits app. Version 3, effective [[date]]."),
         NoticeBlock.Summary(
             "In short",
             listOf(

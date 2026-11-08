@@ -343,25 +343,58 @@ class OpeningMoments : PreviewParameterProvider<Long> {
     override val values = generateSequence(0L) { it + 50L }.takeWhile { it <= OpeningTimeline.TOTAL_MS }
 }
 
-/** One moment of the opening animation, over the Home screen it opens onto. */
+/**
+ * One moment of the opening animation, over the Home screen it opens onto. With a [subline], it is
+ * the welcome after an account is made, which holds its words longer.
+ */
 @Composable
-private fun OpeningOverHome(ms: Long, greeting: String = "Welcome back, Juan") {
+internal fun OpeningOverHome(
+    ms: Long,
+    greeting: String = "Welcome back, Juan",
+    subline: String? = null,
+    home: @Composable () -> Unit = { HomeFrame(listOf(approvedToday)) },
+) {
     val art = loadSealArt(LocalContext.current)
     // Where PortalBrand puts the logo in this top bar, with no status bar above it in a picture.
     val landing = with(LocalDensity.current) { Rect(16.dp.toPx(), 16.dp.toPx(), 48.dp.toPx(), 48.dp.toPx()) }
-    val home = remember { SealHome(away = true) }
-    CompositionLocalProvider(LocalSealHome provides home) {
+    val sealHome = remember { SealHome(away = true) }
+    val leaveAt = OpeningTimeline.LEAVE_AT + if (subline != null) WELCOME_HOLD_MS else 0L
+    CompositionLocalProvider(LocalSealHome provides sealHome) {
         Box(Modifier.fillMaxSize()) {
-            HomeFrame(listOf(approvedToday))
-            OpeningStage(
-                art = art,
-                frame = { OpeningTimeline.at(ms) },
-                landing = landing,
-                words = greeting.takeIf { ms >= OpeningTimeline.WORDS_AT },
-            )
+            home()
+            // In the app's theme, as in MainActivity, for the welcome's second line.
+            ISATUVisitorTheme {
+                OpeningStage(
+                    art = art,
+                    frame = { OpeningTimeline.at(ms, leaveAt) },
+                    landing = landing,
+                    words = greeting.takeIf { ms >= OpeningTimeline.WORDS_AT },
+                    subline = subline,
+                )
+            }
         }
     }
 }
+
+@PreviewTest
+@Preview(name = "Welcome, new visitor", widthDp = 360, heightDp = 780)
+@Composable
+fun WelcomeVisitor() = OpeningOverHome(2800L, greeting = "Welcome, Maria", subline = "Your visitor account is ready", home = { HomeFrame(emptyList()) })
+
+@PreviewTest
+@Preview(name = "Welcome, small phone", widthDp = 320, heightDp = 568)
+@Composable
+fun WelcomeSmallPhone() = OpeningOverHome(2800L, greeting = "Welcome, Maximiliano", subline = "Your visitor account is ready", home = { HomeFrame(emptyList()) })
+
+@PreviewTest
+@Preview(name = "Welcome, flying to the header", widthDp = 360, heightDp = 780)
+@Composable
+fun WelcomeLeaving() = OpeningOverHome(
+    OpeningTimeline.LEAVE_AT + WELCOME_HOLD_MS + 200L,
+    greeting = "Welcome, Maria",
+    subline = "Your visitor account is ready",
+    home = { HomeFrame(emptyList()) },
+)
 
 @PreviewTest
 @Preview(name = "Opening animation", widthDp = 360, heightDp = 780)
@@ -398,14 +431,70 @@ fun AppIcon() {
     }
 }
 
+@Composable
+private fun SignInFrame(rememberedEmail: String = "", message: String? = null) = ISATUVisitorTheme {
+    BrandedAuthPage(onBack = null, busy = false, banner = { message?.let { MessageCard(it, true) {} } }) {
+        LoginForm(busy = false, onLogin = { _, _ -> }, onRegister = {}, onRecover = {}, rememberedEmail = rememberedEmail)
+    }
+}
+
 @PreviewTest
 @Preview(name = "Sign in", widthDp = 360, heightDp = 780)
 @Composable
-fun SignIn() = ISATUVisitorTheme {
-    BrandedAuthPage(onBack = null, busy = false, banner = {}) {
-        LoginForm(busy = false, onLogin = { _, _ -> }, onRegister = {}, onRecover = {})
+fun SignIn() = SignInFrame()
+
+@PreviewTest
+@Preview(name = "Sign in, email remembered", widthDp = 360, heightDp = 780)
+@Composable
+fun SignInRemembered() = SignInFrame(rememberedEmail = "maria.santos@gmail.com")
+
+@PreviewTest
+@Preview(name = "Sign in, small phone", widthDp = 320, heightDp = 568)
+@Composable
+fun SignInSmallPhone() = SignInFrame(rememberedEmail = "maria.santos@gmail.com")
+
+@PreviewTest
+@Preview(name = "Sign in, large phone", widthDp = 412, heightDp = 915)
+@Composable
+fun SignInLargePhone() = SignInFrame(rememberedEmail = "maria.santos@gmail.com")
+
+@PreviewTest
+@Preview(name = "Sign in, wrong password", widthDp = 360, heightDp = 780)
+@Composable
+fun SignInWrongPassword() = SignInFrame(rememberedEmail = "maria.santos@gmail.com", message = "Incorrect email or password.")
+
+@Composable
+private fun ResetFrame(progress: PasswordResetProgress?, message: String? = null) = ISATUVisitorTheme {
+    AuthFormPage("Reset password", onBack = {}, busy = false, banner = { message?.let { MessageCard(it, true) {} } }) {
+        RecoverForm(
+            progress = progress,
+            busy = false,
+            rememberedEmail = "maria.santos@gmail.com",
+            onRequest = {},
+            onReset = { _, _, _ -> },
+            onDifferentEmail = {},
+            autoFocus = false,
+        )
     }
 }
+
+@PreviewTest
+@Preview(name = "Forgot password, the email", widthDp = 360, heightDp = 780)
+@Composable
+fun ResetPasswordEmail() = ResetFrame(progress = null)
+
+@PreviewTest
+@Preview(name = "Forgot password, the code", widthDp = 360, heightDp = 780)
+@Composable
+fun ResetPasswordCode() = ResetFrame(PasswordResetProgress("maria.santos@gmail.com", minutes = 15, resendAt = 0L))
+
+@PreviewTest
+@Preview(name = "Forgot password, a wrong code", widthDp = 360, heightDp = 780)
+@Composable
+fun ResetPasswordWrongCode() = ResetFrame(
+    PasswordResetProgress("maria.santos@gmail.com", minutes = 15, resendAt = 0L),
+    message = "That code is not right. 4 tries left.",
+)
 
 @PreviewTest
 @Preview(name = "Visitor account", widthDp = 360, heightDp = 780)

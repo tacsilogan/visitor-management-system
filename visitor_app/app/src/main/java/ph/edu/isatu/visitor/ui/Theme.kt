@@ -9,7 +9,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextStyle
@@ -85,12 +89,25 @@ private val AppShapes = Shapes(
     extraLarge = RoundedCornerShape(28.dp),
 )
 
+/** How many screens on show put ISATU navy behind the navigation bar ([NavyUnderNavigationBar]). */
+private var navyNavigationBars by mutableIntStateOf(0)
+
+/** Says this screen has navy at the very bottom, so the navigation bar's icons turn white while it shows. */
+@Composable
+fun NavyUnderNavigationBar() {
+    DisposableEffect(Unit) {
+        navyNavigationBars++
+        onDispose { navyNavigationBars-- }
+    }
+}
+
 @Composable
 fun ISATUVisitorTheme(barsOverBlue: Boolean = false, content: @Composable () -> Unit) {
     // The visitor portal intentionally keeps the approved white/blue institutional
     // appearance even when the device uses a dark system theme.
     val colors = LightColors
     val view = LocalView.current
+    val navyBottom = barsOverBlue || navyNavigationBars > 0
     if (!view.isInEditMode) {
         SideEffect {
             val activity = view.context as ComponentActivity
@@ -98,7 +115,7 @@ fun ISATUVisitorTheme(barsOverBlue: Boolean = false, content: @Composable () -> 
             // icons are white. The navigation bar's icons are dark over the white screens below.
             activity.enableEdgeToEdge(
                 statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
-                navigationBarStyle = if (barsOverBlue) {
+                navigationBarStyle = if (navyBottom) {
                     SystemBarStyle.dark(AndroidColor.TRANSPARENT)
                 } else {
                     SystemBarStyle.light(AndroidColor.TRANSPARENT, AndroidColor.TRANSPARENT)

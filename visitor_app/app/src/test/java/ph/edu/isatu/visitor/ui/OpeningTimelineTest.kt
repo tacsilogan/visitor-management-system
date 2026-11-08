@@ -129,4 +129,37 @@ class OpeningTimelineTest {
         // A name left behind must not greet someone who has signed out.
         assertEquals("Welcome to ISATU", greetingFor(signedIn = false, fullName = "Juan Dela Cruz"))
     }
+
+    @Test
+    fun aShortenedFirstNameKeepsTheNameAfterIt() {
+        assertEquals("Ma. Cristina", firstNameOf("Ma. Cristina Santos"))
+        assertEquals("Welcome back, Ma. Cristina", greetingFor(signedIn = true, fullName = "Ma.  Cristina Santos"))
+        assertEquals("Ma.", firstNameOf("Ma."))
+        assertEquals("Mika", firstNameOf("Mika\tDela Cruz"))
+        assertEquals("", firstNameOf(""))
+    }
+
+    @Test
+    fun theWelcomeSaysWhoAndWhatKindOfAccount() {
+        val student = Welcome(firstNameOf("Mika Dela Cruz"), isStudent = true)
+        assertEquals("Welcome, Mika", student.greeting)
+        assertEquals("Your student account is ready", student.subline)
+        val visitor = Welcome(firstNameOf("Maria Santos"), isStudent = false)
+        assertEquals("Welcome, Maria", visitor.greeting)
+        assertEquals("Your visitor account is ready", visitor.subline)
+        assertEquals("Welcome", Welcome("", isStudent = false).greeting)
+    }
+
+    @Test
+    fun theWelcomeHoldsItsWordsLongerAndStillLandsWhole() {
+        val leaveAt = OpeningTimeline.LEAVE_AT + WELCOME_HOLD_MS
+        // The words are up, settled, the whole time between lighting and leaving.
+        for (ms in OpeningTimeline.WORDS_AT + 300L..leaveAt step 50L) {
+            assertEquals(1f, OpeningTimeline.at(ms, leaveAt).wordsAlpha, 0.001f)
+        }
+        assertTrue(leaveAt - OpeningTimeline.WORDS_AT >= 2000L)
+        val landed = OpeningTimeline.at(leaveAt + OpeningTimeline.LEAVE_MS, leaveAt)
+        assertEquals(1f, landed.flight, 0.001f)
+        assertEquals(0f, landed.wordsAlpha, 0.001f)
+    }
 }

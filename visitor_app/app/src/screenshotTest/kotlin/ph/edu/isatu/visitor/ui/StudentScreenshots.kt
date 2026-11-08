@@ -201,6 +201,11 @@ private fun StudentHome(appointments: List<AppointmentDto>) = ISATUVisitorTheme 
 fun StudentHomeFirst() = StudentHome(emptyList())
 
 @PreviewTest
+@Preview(name = "Welcome, new student", widthDp = 360, heightDp = 780)
+@Composable
+fun WelcomeStudent() = OpeningOverHome(2800L, greeting = "Welcome, Mika", subline = "Your student account is ready", home = { StudentHome(emptyList()) })
+
+@PreviewTest
 @Preview(name = "Student, Home waiting for the teacher", widthDp = 360, heightDp = 800)
 @Composable
 fun StudentHomeWaiting() = StudentHome(listOf(studentVisit("pending_approval", answerBy = time("23:59"))))

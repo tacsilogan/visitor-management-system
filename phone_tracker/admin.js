@@ -720,7 +720,7 @@
         const noVisitorsYet = users.length === 0 && userState.role === "visitor" && !userState.query && !userState.department;
         text("usersEmptyTitle", noVisitorsYet ? "No visitor accounts yet" : "No matching users");
         text("usersEmptyText", noVisitorsYet
-            ? "Visitors appear here once they create an account in the ISATU Visitor app or on the visitor website."
+            ? "Visitors appear here once they create an account in the ISATU Visits app or on the visitor website."
             : "Try a different role or search term.");
         const wrap = usersBody.closest(".admin-table-wrap");
         if (wrap) {
@@ -2666,7 +2666,7 @@
             row.appendChild(result);
             appendCell(row, attempt.device);
             appendCell(row, UI.formatIp(attempt.ip));
-            appendCell(row, attempt.channel === "mobile" ? "Visitor app" : "Website");
+            appendCell(row, attempt.channel === "mobile" ? "ISATU Visits app" : "Website");
             attemptBody.appendChild(row);
         });
         document.getElementById("attemptsWrap").hidden = data.attempts.length === 0;

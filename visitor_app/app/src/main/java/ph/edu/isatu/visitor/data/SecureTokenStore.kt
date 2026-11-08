@@ -96,6 +96,14 @@ class InstallationStore(context: Context) {
             .ifBlank { "Android phone" }
             .take(100)
 
+    /**
+     * The email last signed in with on this phone, filled in on the sign-in screen next time. Never
+     * the password. It outlives signing out, which is the point.
+     */
+    var lastEmail: String?
+        get() = preferences.getString("last_email", null)
+        set(value) = preferences.edit().putString("last_email", value).apply()
+
     /** The notice version each account agreed to on this phone. It outlives signing out. */
     fun agreedNotice(userId: Long): String? = preferences.getString("agreed_notice_$userId", null)
 

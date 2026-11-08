@@ -112,7 +112,13 @@ data class SignupDepartmentDto(
 data class SignupCourseDto(val code: String = "", val name: String = "")
 
 data class PasswordResetRequest(val email: String)
-data class PasswordResetData(val developmentResetToken: String? = null)
+/** "Forgot password?" sent its 6-digit code. The reply is the same whether or not the email has an account. */
+data class PasswordResetData(
+    val codeMinutes: Int = 15,
+    val resendAfterSeconds: Int = 60,
+    /** Only from a server on a developer's computer, so it can be tried without email. */
+    val developmentResetToken: String? = null,
+)
 data class ResetPasswordRequest(val email: String, val token: String, val newPassword: String)
 data class ProfileData(val user: UserDto = UserDto())
 data class ProfileUpdateRequest(val fullName: String, val contactNumber: String)

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">ISATU Visitor</string>
+    <string name="app_name">ISATU Visits</string>
     <string name="tracking_channel_name">Active visit location sharing</string>
     <string name="notifications_channel_name">Appointment updates</string>
 </resources>
