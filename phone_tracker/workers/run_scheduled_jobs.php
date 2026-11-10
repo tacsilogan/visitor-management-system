@@ -10,7 +10,9 @@ if (PHP_SAPI !== "cli") {
  * Runs the background jobs the system needs while it is online:
  *   every minute  visit timing (ended slots, campus exits, end of day), queued emails,
  *                 queued push notifications, teachers' phone alerts
- *   once a day    location history older than the retention period is deleted (from 03:00)
+ *   once a day    location history older than the retention period is deleted, and what the
+ *                 Terms and Privacy Notice keeps only 1 year (record_retention_service.php),
+ *                 from 03:00
  *
  *   php workers/run_scheduled_jobs.php          keeps running, one pass a minute (the Docker
  *                                               image starts this next to the web server)
@@ -88,10 +90,19 @@ function scheduler_jobs(array &$state): array
         ["name" => "Push notifications", "script" => "send_push_notifications.php", "arguments" => [], "timeout" => 240],
         ["name" => "Teacher phone alerts", "script" => "send_web_push.php", "arguments" => [], "timeout" => 120],
     ];
+    // Each daily job keeps its own day, so one failing (it tries again an hour later) never
+    // stands in for another that worked.
     $today = date("Y-m-d");
-    if ((int) date("G") >= SCHEDULER_PURGE_HOUR && ($state["purged_on"] ?? "") !== $today
-        && time() >= (int) ($state["purge_retry_after"] ?? 0)) {
-        $jobs[] = ["name" => "Location history cleanup", "script" => "purge_location_history.php", "arguments" => ["--apply"], "timeout" => 600, "daily" => true];
+    if ((int) date("G") >= SCHEDULER_PURGE_HOUR) {
+        foreach ([
+            ["name" => "Location history cleanup", "script" => "purge_location_history.php"],
+            ["name" => "1-year records cleanup", "script" => "purge_old_records.php"],
+        ] as $daily) {
+            $script = $daily["script"];
+            if (($state["daily_done"][$script] ?? "") !== $today && time() >= (int) ($state["daily_retry"][$script] ?? 0)) {
+                $jobs[] = $daily + ["arguments" => ["--apply"], "timeout" => 600, "daily" => true];
+            }
+        }
     }
     return $jobs;
 }
@@ -136,7 +147,7 @@ function scheduler_pass(array &$state): void
                 $state["failing"][$key] = $output;
             }
             if (!empty($job["daily"])) {
-                $state["purge_retry_after"] = time() + 3600;
+                $state["daily_retry"][$key] = time() + 3600;
             }
             continue;
         }
@@ -145,7 +156,8 @@ function scheduler_pass(array &$state): void
             unset($state["failing"][$key]);
         }
         if (!empty($job["daily"])) {
-            $state["purged_on"] = date("Y-m-d");
+            $state["daily_done"][$key] = date("Y-m-d");
+            unset($state["daily_retry"][$key]);
         }
         // Routine passes stay quiet unless something was actually sent or removed.
         if (!empty($job["daily"]) || preg_match('/\b[1-9]\d* (sent|failed|expired|invalid|location point)/', $output)) {

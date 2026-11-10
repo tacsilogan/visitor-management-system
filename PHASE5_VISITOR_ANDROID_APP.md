@@ -42,7 +42,13 @@ endpoints correctly returned HTTP 401 without a bearer token.
   phone and filled in (never the password); the keyboard's Next goes to the password and Done logs
   in. Right after an account is made, the opening animation plays once more with "Welcome, (first
   name)" and "Your student account is ready" or "Your visitor account is ready" (`Welcome` in
-  `ui/OpeningTimeline.kt`); a normal log in goes straight in.
+  `ui/OpeningTimeline.kt`). Since 0.10.1, logging in plays it too, with "Welcome back, (first
+  name)" on one line, and the opening says "Welcome to ISATU Visits" when nobody is logged in.
+- Since 0.10.2 the Terms and Privacy Notice is Version 4 (`terms-privacy-v4`), effective November
+  15, 2026, with ISATU's answers in place of the highlighted blanks: a parent or guardian agrees for
+  someone under 18; visits, consent and activity records are kept 1 year and an account 1 year
+  without use; the contact is mail@isatu.edu.ph. The server deletes on that schedule every day
+  (`phone_tracker/record_retention_service.php`, checked by `tools/record_retention_test.php`).
 - "Forgot password?" works like signing up since 0.10.0: the email, then the 6-digit code in boxes
   with the new password (`RecoverForm` in `ui/AuthScreens.kt`), then Log in with the email filled
   in. Before that, no app version could reset a password on the live server (PHASE4_MOBILE_API.md).

@@ -36,17 +36,14 @@ class TermsNoticeTest {
     }
 
     @Test
-    fun theBlanksForIsatuAreStillThere() {
-        // When ISATU answers, its words replace these and this list gets shorter.
-        assertEquals(
-            listOf(
-                "[date]",
-                "[If you are under 18, a parent or guardian must agree for you. ISATU to confirm.]",
-                "[period for ISATU to set]",
-                "[Email and phone: ISATU to fill in]",
-            ),
-            TermsNotice.blanks,
-        )
+    fun everyBlankIsFilledIn() {
+        // Version 4 has ISATU's answers in place of the highlighted blanks.
+        assertEquals(emptyList<String>(), TermsNotice.blanks)
+        listOf(
+            "Version 4, effective November 15, 2026",
+            "If you are under 18, a parent or guardian must agree for you.",
+            "mail@isatu.edu.ph",
+        ).forEach { assertTrue("missing: $it", readable.contains(it)) }
     }
 
     @Test
@@ -57,6 +54,9 @@ class TermsNoticeTest {
             "15 seconds",
             "25 meters",
             "90 days",
+            // record_retention_service.php deletes what this says.
+            "1 year after the visit or activity",
+            "after 1 year without use",
             "Republic Act 10173",
             "National Privacy Commission",
             "Railway",

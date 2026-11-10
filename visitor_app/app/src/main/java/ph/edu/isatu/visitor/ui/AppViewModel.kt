@@ -157,8 +157,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(noticeAgreementNeeded = false) }
     }
 
+    /** Logging in plays the seal once more, with "Welcome back" and their first name. */
     fun login(email: String, password: String) = launchTask {
-        repository.login(email.trim(), password)
+        // Ready before the app signs in, so the animation covers the change from its first frame.
+        repository.login(email.trim(), password) { user ->
+            _welcome.value = Welcome(firstNameOf(user.fullName), isStudent = user.isStudent, returning = true)
+        }
     }
 
     /** A visitor from outside ISATU: any email, and they agree to be tracked on campus. */

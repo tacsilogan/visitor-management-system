@@ -409,7 +409,17 @@ fun OpeningSmallPhone() = OpeningOverHome(2600L, greeting = "Welcome back, Maxim
 @PreviewTest
 @Preview(name = "Opening animation, large phone", widthDp = 412, heightDp = 915)
 @Composable
-fun OpeningLargePhone() = OpeningOverHome(2600L, greeting = "Welcome to ISATU")
+fun OpeningLargePhone() = OpeningOverHome(2600L, greeting = "Welcome to ISATU Visits")
+
+@PreviewTest
+@Preview(name = "Opening, nobody logged in, small phone", widthDp = 320, heightDp = 568)
+@Composable
+fun OpeningSignedOutSmallPhone() = OpeningOverHome(2600L, greeting = "Welcome to ISATU Visits")
+
+@PreviewTest
+@Preview(name = "Welcome back, after logging in", widthDp = 360, heightDp = 780)
+@Composable
+fun WelcomeBack() = OpeningOverHome(2600L, greeting = Welcome("Maria", isStudent = false, returning = true).greeting)
 
 /** The real app icon, as Android builds it from the resources and masks it. */
 @PreviewTest

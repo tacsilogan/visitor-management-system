@@ -51,21 +51,22 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalSealHome provides sealHome) {
                     Box(Modifier.fillMaxSize()) {
                         VisitorApp(viewModel)
-                        val newAccount = welcome
+                        val greeted = welcome
                         when {
                             opening -> OpeningAnimation(
                                 greeting = viewModel::openingGreeting,
                                 onReveal = { barsOverBlue = false },
                                 onDone = { opening = false },
                             )
-                            // Once, right after an account is made: the same seal, with their name.
-                            newAccount != null -> key(newAccount) {
+                            // Once, right after an account is made or after logging in: the same seal, with their name.
+                            greeted != null -> key(greeted) {
                                 LaunchedEffect(Unit) { barsOverBlue = true }
                                 OpeningAnimation(
-                                    greeting = { newAccount.greeting },
-                                    subline = newAccount.subline,
-                                    holdMs = WELCOME_HOLD_MS,
-                                    description = "${newAccount.greeting}. ${newAccount.subline}",
+                                    greeting = { greeted.greeting },
+                                    subline = greeted.subline,
+                                    // A new account's two lines stay up longer, to be read.
+                                    holdMs = if (greeted.subline != null) WELCOME_HOLD_MS else 0L,
+                                    description = listOfNotNull(greeted.greeting, greeted.subline).joinToString(". "),
                                     onReveal = { barsOverBlue = false },
                                     onDone = viewModel::welcomeShown,
                                 )

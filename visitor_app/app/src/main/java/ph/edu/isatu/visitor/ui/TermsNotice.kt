@@ -8,7 +8,8 @@ package ph.edu.isatu.visitor.ui
  * pass valid from 30 minutes before the visit, location sent every 15 seconds
  * (location_upload_interval_seconds), location kept 90 days (location_retention_days), 25 m
  * margin at the campus boundary and about 5 minutes outside to end a visit (presence_service.php),
- * sign-in attempts kept 90 days (AUTH_ATTEMPT_RETENTION_DAYS).
+ * sign-in attempts kept 90 days (AUTH_ATTEMPT_RETENTION_DAYS), and visits, activity records and
+ * unused accounts kept 1 year (record_retention_service.php).
  *
  * In the text, **this** is bold, and [[this]] is a blank waiting for ISATU's answer, which shows
  * highlighted so nobody takes it for the approved wording.
@@ -19,7 +20,7 @@ object TermsNotice {
     const val LOCATION_PART = ", including sharing my location during my visits."
 
     val BLOCKS: List<NoticeBlock> = listOf(
-        NoticeBlock.Fine("ISATU Visits app. Version 3, effective [[date]]."),
+        NoticeBlock.Fine("ISATU Visits app. Version 4, effective November 15, 2026."),
         NoticeBlock.Summary(
             "In short",
             listOf(
@@ -34,7 +35,7 @@ object TermsNotice {
         NoticeBlock.Heading("Your account"),
         NoticeBlock.Paragraph(
             "Use your real name and correct contact details, and keep your password private. " +
-                "[[If you are under 18, a parent or guardian must agree for you. ISATU to confirm.]]",
+                "If you are under 18, a parent or guardian must agree for you.",
         ),
         NoticeBlock.Heading("Your pass"),
         NoticeBlock.Paragraph(
@@ -109,7 +110,7 @@ object TermsNotice {
         NoticeBlock.Point("To run your account and visits: requests, passes, check-in, and check-out."),
         NoticeBlock.Point("To guide you on campus and tell the office or teacher when you arrive or need help."),
         NoticeBlock.Point("To keep the campus safe: guards can see where visitors are and how long they have stayed."),
-        NoticeBlock.Point("To send you visit updates as notifications, and password recovery codes by email."),
+        NoticeBlock.Point("To send you visit updates as notifications, and codes by email for signing up and for a new password."),
         NoticeBlock.Point("To keep records, prepare visitor reports, and look into misuse."),
         NoticeBlock.Heading("ISATU students"),
         NoticeBlock.Paragraph(
@@ -146,14 +147,15 @@ object TermsNotice {
         NoticeBlock.Point(
             "**Google,** whose Firebase delivers notifications and whose Play services work out your phone's position.",
         ),
-        NoticeBlock.Point("**Brevo,** which delivers password recovery emails to your email address."),
+        NoticeBlock.Point("**Brevo,** which delivers the codes we email you, for signing up and for a new password."),
         NoticeBlock.Point("**OpenFreeMap,** which supplies the map and can see your internet address and the area you view."),
         NoticeBlock.Heading("How long we keep it"),
         NoticeBlock.Point("**Location positions:** 90 days, then deleted automatically."),
         NoticeBlock.Point("**Sign-in attempts:** 90 days."),
         NoticeBlock.Point(
-            "**Your account, visits, consent records, and activity records:** [[period for ISATU to set]].",
+            "**Visits, consent records, and activity records:** 1 year after the visit or activity, then deleted automatically.",
         ),
+        NoticeBlock.Point("**Your account:** deleted automatically after 1 year without use, meaning no sign-in and no visit."),
         NoticeBlock.Heading("Your rights"),
         NoticeBlock.Paragraph(
             "You can ask to see your information, correct it, get a copy, object to how it is used, or have " +
@@ -163,8 +165,7 @@ object TermsNotice {
         ),
         NoticeBlock.Heading("Contact"),
         NoticeBlock.Paragraph(
-            "Data Protection Officer, Iloilo Science and Technology University. " +
-                "[[Email and phone: ISATU to fill in]]",
+            "Data Protection Officer, Iloilo Science and Technology University. Email: **mail@isatu.edu.ph**",
         ),
     )
 

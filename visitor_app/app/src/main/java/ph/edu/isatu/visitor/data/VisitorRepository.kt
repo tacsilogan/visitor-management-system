@@ -56,13 +56,15 @@ class VisitorRepository(
 
     fun saveNoticeAgreement(userId: Long) = installationStore.saveAgreedNotice(userId, BuildConfig.CONSENT_VERSION)
 
-    suspend fun login(identifier: String, password: String): UserDto {
+    /** [beforeSignIn] gets the account just before the app switches to it, as [confirmSignup] does. */
+    suspend fun login(identifier: String, password: String, beforeSignIn: (UserDto) -> Unit = {}): UserDto {
         val result = apiClient.requireData(
             apiClient.api.login(
                 LoginRequest(identifier, password, installationStore.installationId, installationStore.deviceName),
             ),
         )
         installationStore.lastEmail = result.user.email.ifBlank { identifier }
+        beforeSignIn(result.user)
         tokenStore.saveToken(result.accessToken)
         tokenStore.savedName = result.user.fullName
         return result.user

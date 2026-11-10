@@ -125,9 +125,9 @@ class OpeningTimelineTest {
         assertEquals("Welcome back, Cher", greetingFor(signedIn = true, fullName = "Cher"))
         assertEquals("Welcome back", greetingFor(signedIn = true, fullName = null))
         assertEquals("Welcome back", greetingFor(signedIn = true, fullName = "   "))
-        assertEquals("Welcome to ISATU", greetingFor(signedIn = false, fullName = null))
+        assertEquals("Welcome to ISATU Visits", greetingFor(signedIn = false, fullName = null))
         // A name left behind must not greet someone who has signed out.
-        assertEquals("Welcome to ISATU", greetingFor(signedIn = false, fullName = "Juan Dela Cruz"))
+        assertEquals("Welcome to ISATU Visits", greetingFor(signedIn = false, fullName = "Juan Dela Cruz"))
     }
 
     @Test
@@ -148,6 +148,15 @@ class OpeningTimelineTest {
         assertEquals("Welcome, Maria", visitor.greeting)
         assertEquals("Your visitor account is ready", visitor.subline)
         assertEquals("Welcome", Welcome("", isStudent = false).greeting)
+    }
+
+    @Test
+    fun loggingInSaysWelcomeBackOnOneLine() {
+        val back = Welcome(firstNameOf("Maria Santos"), isStudent = false, returning = true)
+        assertEquals("Welcome back, Maria", back.greeting)
+        assertEquals(null, back.subline)
+        assertEquals("Welcome back, Ma. Cristina", Welcome(firstNameOf("Ma. Cristina Reyes"), isStudent = true, returning = true).greeting)
+        assertEquals("Welcome back", Welcome("", isStudent = true, returning = true).greeting)
     }
 
     @Test

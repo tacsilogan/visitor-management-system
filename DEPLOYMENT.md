@@ -10,7 +10,7 @@ report. Plan about an hour for the first deployment.
 
 | Part | What it is |
 |---|---|
-| **Web service** | This repository's `Dockerfile`: Apache and PHP 8.2 serving `phone_tracker`, plus the background jobs (emails, push notifications, visit timing, location-history cleanup). |
+| **Web service** | This repository's `Dockerfile`: Apache and PHP 8.2 serving `phone_tracker`, plus the background jobs (emails, push notifications, visit timing, location-history cleanup, and the daily 1-year cleanup the Terms and Privacy Notice promises: `record_retention_service.php`). |
 | **MariaDB service** | The database. It must be MariaDB, not MySQL: the database files use MariaDB syntax that MySQL rejects. |
 | **Two volumes** | `/var/lib/mysql` on MariaDB (the data) and `/data` on the web service (sign-in sessions and staff photos). Without them, every deploy loses that data. |
 | **Android app** | Built on your laptop with the HTTPS address inside, then shared as an APK. |
