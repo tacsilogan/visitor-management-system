@@ -151,7 +151,7 @@ fun firstNameOf(fullName: String?): String {
  * The opening animation once more: right after an account is made, with their name and what they
  * now have, or after logging in ([returning]), with "Welcome back" and their name, one line only.
  */
-data class Welcome(val firstName: String, val isStudent: Boolean, val returning: Boolean = false) {
+data class Welcome(val firstName: String, val returning: Boolean = false) {
     val greeting: String
         get() = when {
             returning -> if (firstName.isEmpty()) "Welcome back" else "Welcome back, $firstName"
@@ -162,7 +162,6 @@ data class Welcome(val firstName: String, val isStudent: Boolean, val returning:
     val subline: String?
         get() = when {
             returning -> null
-            isStudent -> "Your student account is ready"
             else -> "Your visitor account is ready"
         }
 }

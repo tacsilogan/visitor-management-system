@@ -18,22 +18,24 @@ endpoints correctly returned HTTP 401 without a bearer token.
 
 ## Product rules preserved
 
-- Visitor and ISATU student signup exists only in the app. The staff sign-in page only lets a
-  teacher request an account, which their department's Dean's Office approves.
-- Since app 0.8.0, every new account confirms its email with a 6-digit code before it exists. A
-  visitor agrees to tracking; a student is never tracked, has no pass, books teachers only and
-  says "I'm here" instead (SCHOOL_ACCOUNTS.md). Visit decisions, proposed schedules, reminders,
-  and cancellations are delivered through Notifications and Firebase push notifications.
-- Since app 0.9.0 a visitor signs up on one short page, and a student in four steps that each fit
-  above the keyboard (who you are, your class, sign-in details, then a summary with Edit on each
-  part). The Student ID and the email code are typed into boxes (`ui/FormParts.kt`); the rules
-  behind them are in `ui/SignupRules.kt` and its tests.
+- The visitor is the only person who uses the app, and visitor signup exists only in the app.
+  Office Personnel, Security and Admin accounts are made by the admin on the website.
+- Since app 0.8.0, every new account confirms its email with a 6-digit code before it exists
+  (PHASE4_MOBILE_API.md, "Creating an account"). A visitor agrees to share their location during
+  visits. Visit decisions, proposed schedules, reminders, and cancellations are delivered through
+  Notifications and Firebase push notifications.
+- Since app 0.9.0 a visitor signs up on one short page. The email code is typed into boxes
+  (`ui/FormParts.kt`); the password rules are in `ui/SignupRules.kt` and its tests.
+- Since app 0.11.0 (2026-11-10) the app is for visitors only, as the capstone adviser asked: there
+  are no ISATU student accounts and no visits to a single teacher. "Create an account" goes straight
+  to the visitor form, any email address can be used, and the Book tab books offices. Apps 0.8.0 to
+  0.10.x still sign in and book offices, but their student and teacher screens no longer work.
 - The look since 0.9.0: ISATU navy at the top of every screen with a gold edge, white below, and
   gold for progress and the selected tab. The pieces are in `ui/FormParts.kt` (`NavyTopBar`,
   `NavyBand`, `GoldEdge`); use them on new screens rather than a white top bar.
-- Since app 0.10.0 the app is called **ISATU Visits** on the phone, because ISATU students use it
-  as well as visitors (the package id stays `ph.edu.isatu.visitor`, so it updates over older
-  copies). The website keeps its name. Log in and Create an account put their card in the middle
+- Since app 0.10.0 the app is called **ISATU Visits** on the phone (the package id stays
+  `ph.edu.isatu.visitor`, so it updates over older copies). The website keeps its name. Log in
+  puts its card in the middle
   of the screen, between a blurred photo of the ISATU building's front fading into navy, with the
   logo centred above the card, and a navy wave with the university's name (`BrandedAuthPage` in
   `ui/AuthScreens.kt`). The photo is blurred beforehand, because Android before 12 can't blur:
@@ -41,7 +43,7 @@ endpoints correctly returned HTTP 401 without a bearer token.
   of about 800 × 543. The email last signed in with is remembered on the
   phone and filled in (never the password); the keyboard's Next goes to the password and Done logs
   in. Right after an account is made, the opening animation plays once more with "Welcome, (first
-  name)" and "Your student account is ready" or "Your visitor account is ready" (`Welcome` in
+  name)" and "Your visitor account is ready" (`Welcome` in
   `ui/OpeningTimeline.kt`). Since 0.10.1, logging in plays it too, with "Welcome back, (first
   name)" on one line, and the opening says "Welcome to ISATU Visits" when nobody is logged in.
 - Since 0.10.2 the Terms and Privacy Notice is Version 4 (`terms-privacy-v4`), effective November
@@ -52,8 +54,8 @@ endpoints correctly returned HTTP 401 without a bearer token.
 - "Forgot password?" works like signing up since 0.10.0: the email, then the 6-digit code in boxes
   with the new password (`RecoverForm` in `ui/AuthScreens.kt`), then Log in with the email filled
   in. Before that, no app version could reset a password on the live server (PHASE4_MOBILE_API.md).
-- Bookable destinations come from the API and remain limited to IT Department,
-  IS Department, CS Department, Dean's Office, and Tech Support.
+- Bookable destinations come from the API: the active offices that have Office Personnel to
+  answer them, as one plain list the admin keeps in the Office Directory.
 - Walk-ins receive an immediate pass when the selected office is accepting visitors.
   Appointments can use only availability returned by the selected office.
 - Approval exposes a QR pass; pending requests never receive one.
@@ -65,7 +67,7 @@ endpoints correctly returned HTTP 401 without a bearer token.
   part of signup; it is separate from legal consent and does not start collection.
 - Since app 0.9.0 a visitor's signup has one required checkbox, which agrees to the Terms and
   Privacy Notice (`ui/TermsNotice.kt`, with a link to read it) and names location sharing in its
-  words; a student's names only the notice. `CONSENT_VERSION` in `app/build.gradle.kts` names
+  words. `CONSENT_VERSION` in `app/build.gradle.kts` names
   the notice's version and goes to the server with signup and each visit's consent. An account
   that hasn't agreed to this version on this phone sees the notice once before the app opens,
   and can agree or sign out. That agreement is saved on the phone; the server first sees it
@@ -117,7 +119,3 @@ endpoints correctly returned HTTP 401 without a bearer token.
 
 Do not finalize Phase 6 analytics until the core physical workflow passes. Those tests
 confirm that the event data used by analytics is actually produced correctly.
-
-- Visits to a teacher (TEACHER_VISITS.md): the Book tab asks Office or Teacher. A visitor finds a teacher by
-  name or course, and sees only "Available now" or the next free time. A walk-in to a teacher waits for them
-  to accept, with a 10-minute timer, and if they can't, the visitor can pick another time or go to an office.

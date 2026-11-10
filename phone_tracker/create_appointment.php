@@ -58,6 +58,7 @@ if ($startRaw === "") {
 }
 $endRaw = appointment_input($input, "scheduled_end_at");
 
+// Only offices with someone to answer (appointment_office_bookable_map()).
 $offices = appointment_office_bookable_map();
 if ($officeCode === "" || !isset($offices[$officeCode])) {
     echo json_encode(["success" => false, "message" => "Select a valid office"]);
@@ -209,7 +210,7 @@ try {
          (recipient_user_id, appointment_id, notification_type, title, message)
          SELECT id, ?, 'appointment_request', 'New appointment request', ?
          FROM app_users
-         WHERE role IN ('offices', 'teacher') AND office_code = ? AND is_active = 1"
+         WHERE role = 'offices' AND office_code = ? AND is_active = 1"
     );
     if ($notification) {
         $notificationMessage = $visitorName . " requested " . $appointmentStart . ".";

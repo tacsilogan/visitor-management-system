@@ -140,23 +140,20 @@ class OpeningTimelineTest {
     }
 
     @Test
-    fun theWelcomeSaysWhoAndWhatKindOfAccount() {
-        val student = Welcome(firstNameOf("Mika Dela Cruz"), isStudent = true)
-        assertEquals("Welcome, Mika", student.greeting)
-        assertEquals("Your student account is ready", student.subline)
-        val visitor = Welcome(firstNameOf("Maria Santos"), isStudent = false)
+    fun theWelcomeSaysWhoAndThatTheAccountIsReady() {
+        val visitor = Welcome(firstNameOf("Maria Santos"))
         assertEquals("Welcome, Maria", visitor.greeting)
         assertEquals("Your visitor account is ready", visitor.subline)
-        assertEquals("Welcome", Welcome("", isStudent = false).greeting)
+        assertEquals("Welcome", Welcome("").greeting)
     }
 
     @Test
     fun loggingInSaysWelcomeBackOnOneLine() {
-        val back = Welcome(firstNameOf("Maria Santos"), isStudent = false, returning = true)
+        val back = Welcome(firstNameOf("Maria Santos"), returning = true)
         assertEquals("Welcome back, Maria", back.greeting)
         assertEquals(null, back.subline)
-        assertEquals("Welcome back, Ma. Cristina", Welcome(firstNameOf("Ma. Cristina Reyes"), isStudent = true, returning = true).greeting)
-        assertEquals("Welcome back", Welcome("", isStudent = true, returning = true).greeting)
+        assertEquals("Welcome back, Ma. Cristina", Welcome(firstNameOf("Ma. Cristina Reyes"), returning = true).greeting)
+        assertEquals("Welcome back", Welcome("", returning = true).greeting)
     }
 
     @Test

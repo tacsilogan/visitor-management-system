@@ -278,83 +278,15 @@ class ApiModelTest {
         assertEquals(0, fromOlderServer.directionSteps.size)
     }
 
-    /** teachers.php, copied from the local server's reply. */
+    /** A reply that still carries the old teacher and student fields reads as a plain office visit. */
     @Test
-    fun theListOfTeachersIsRead() {
-        val json = """
-            {"success":true,"data":{"teachers":[{
-              "code":"T89","name":"Prof. Elena Reyes","short_name":"Prof. Reyes","course":"IT","department":"CCI",
-              "department_name":"College of Computing and Informatics","available_now":true,"accepts_walk_ins":true,
-              "can_walk_in":true,"next_free_at":"2026-11-06 01:00:00","slot_duration_minutes":30
-            }],"courses":["IT"],"timezone":"Asia/Manila","server_time":"2026-11-06 00:50:00"}}
-        """.trimIndent()
-        val type = com.google.gson.reflect.TypeToken.getParameterized(
-            ApiEnvelope::class.java,
-            ph.edu.isatu.visitor.data.TeachersData::class.java,
-        ).type
-        val data = gson.fromJson<ApiEnvelope<ph.edu.isatu.visitor.data.TeachersData>>(json, type).data!!
-        val teacher = data.teachers.single()
-        assertEquals("T89", teacher.code)
-        assertEquals("Prof. Reyes", teacher.shortName)
-        assertEquals("College of Computing and Informatics", teacher.departmentName)
-        assertEquals(true, teacher.availableNow)
-        assertEquals(true, teacher.canWalkIn)
-        assertEquals("2026-11-06 01:00:00", teacher.nextFreeAt)
-        assertEquals(30, teacher.slotDurationMinutes)
-        assertEquals(listOf("IT"), data.courses)
-    }
-
-    /** teachers.php?code=T89: what the visitor can do next when a teacher can't see them. */
-    @Test
-    fun oneTeacherWithFreeTimesIsRead() {
-        val json = """
-            {"success":true,"data":{"teacher":{
-              "code":"T89","name":"Prof. Elena Reyes","short_name":"Prof. Reyes","course":"IT","department":"CCI",
-              "available_now":false,"accepts_walk_ins":true,"can_walk_in":false,"next_free_at":"2026-11-06 13:30:00",
-              "next_free_slots":[{"scheduled_start_at":"2026-11-06 13:30:00","scheduled_end_at":"2026-11-06 14:00:00"}],
-              "fallback_office":{"code":"IT","name":"CCI IT Office"}
-            }}}
-        """.trimIndent()
-        val type = com.google.gson.reflect.TypeToken.getParameterized(
-            ApiEnvelope::class.java,
-            ph.edu.isatu.visitor.data.TeacherData::class.java,
-        ).type
-        val teacher = gson.fromJson<ApiEnvelope<ph.edu.isatu.visitor.data.TeacherData>>(json, type).data!!.teacher
-        assertEquals("2026-11-06 13:30:00", teacher.nextFreeSlots.single().scheduledStartAt)
-        assertEquals("2026-11-06 14:00:00", teacher.nextFreeSlots.single().scheduledEndAt)
-        assertEquals("CCI IT Office", teacher.fallbackOffice?.name)
-    }
-
-    /** A walk-in to a teacher: no pass yet, a time to answer by, and who it's with. */
-    @Test
-    fun aWalkInRequestToATeacherIsRead() {
-        val json = """
-            {"success":true,"data":{"appointment":{
-              "id":44,"visit_type":"walk_in","office":{"code":"T89","name":"Prof. Elena Reyes"},
-              "status":"pending_approval","scheduled_start_at":"2026-11-06 01:00:00","scheduled_end_at":"2026-11-06 01:30:00",
-              "qr_pass":null,"answer_by_at":"2026-11-06 01:03:41","meeting_done_at":null,
-              "teacher":{"code":"T89","name":"Prof. Elena Reyes","short_name":"Prof. Reyes","course":"IT","department":"CCI"},
-              "fallback_office":{"code":"IT","name":"CCI IT Office"}
-            }}}
-        """.trimIndent()
-        val type = com.google.gson.reflect.TypeToken.getParameterized(
-            ApiEnvelope::class.java,
-            AppointmentData::class.java,
-        ).type
-        val appointment = gson.fromJson<ApiEnvelope<AppointmentData>>(json, type).data!!.appointment
-        assertEquals("2026-11-06 01:03:41", appointment.answerByAt)
-        assertEquals("Prof. Reyes", appointment.teacher?.shortName)
-        assertEquals("CCI IT Office", appointment.fallbackOffice?.name)
-        assertNull(appointment.meetingDoneAt)
-        assertNull(appointment.qrPass)
-    }
-
-    /** An office visit, or an older server, has none of the teacher fields. */
-    @Test
-    fun anOfficeVisitHasNoTeacherFields() {
-        val appointment = gson.fromJson("""{"id":5,"office":{"code":"IT","name":"CCI IT Office"},"status":"approved"}""", ph.edu.isatu.visitor.data.AppointmentDto::class.java)
-        assertNull(appointment.teacher)
-        assertNull(appointment.answerByAt)
-        assertNull(appointment.fallbackOffice)
+    fun oldTeacherFieldsInAReplyAreIgnored() {
+        val appointment = gson.fromJson(
+            """{"id":5,"office":{"code":"IT","name":"CCI IT Office"},"status":"approved","visitor_kind":"visitor",
+                "teacher":null,"answer_by_at":null,"meeting_done_at":null,"fallback_office":null}""",
+            ph.edu.isatu.visitor.data.AppointmentDto::class.java,
+        )
+        assertEquals("CCI IT Office", appointment.office.name)
+        assertEquals("approved", appointment.status)
     }
 }

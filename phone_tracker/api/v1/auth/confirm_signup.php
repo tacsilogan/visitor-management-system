@@ -2,12 +2,12 @@
 declare(strict_types=1);
 require_once __DIR__ . "/_signup.php";
 
-// Finishes a sign-up with the emailed code: the account is created and signed in at once.
+// Finishes a sign-up with the emailed code: the visitor account is created and signed in at once.
 // POST {request_id, code, installation_id?, device_name?}
 // 201 {access_token, token_type, expires_at, user}
 
 api_require_method("POST");
-api_require_school_schema($conn);
+api_require_signup_schema($conn);
 $input = api_body();
 $requestId = (int) ($input["request_id"] ?? 0);
 $code = preg_replace('/\D/', "", api_text($input, "code", 12)) ?? "";
@@ -20,24 +20,19 @@ api_rate_limit($conn, "confirm_signup", (string) $requestId, 20, 3600);
 
 $conn->begin_transaction();
 try {
-    $request = school_verify_code($conn, $requestId, $code);
-    if (!in_array($request["account_type"], ["visitor", "student"], true)) {
-        $conn->rollback();
-        api_fail("This code is for a teacher request. Enter it on the website.", 409);
-    }
-    $userId = school_create_app_account($conn, $request);
+    $request = signup_verify_code($conn, $requestId, $code);
+    $userId = signup_create_account($conn, $request);
     api_audit($conn, $userId, "mobile.account_registered", "app_user", (string) $userId, [
         "email" => (string) $request["email"],
-        "account_type" => (string) $request["account_type"],
         "consent_version" => (string) $request["consent_version"],
         "email_confirmed" => true,
     ]);
     $conn->commit();
-} catch (SchoolAccountError $error) {
+} catch (SignupError $error) {
     try {
         $conn->rollback();
     } catch (Throwable) {
-        // school_verify_code() already rolled back.
+        // signup_verify_code() already rolled back.
     }
     api_signup_fail($error);
 } catch (Throwable $error) {

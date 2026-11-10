@@ -30,7 +30,6 @@ class VisitorRepository(
     suspend fun resendCode(requestId: Long): SignupCodeData =
         apiClient.requireData(apiClient.api.resendCode(ResendCodeRequest(requestId)))
 
-    suspend fun signupOptions(): SignupOptionsData = apiClient.requireData(apiClient.api.signupOptions())
 
     /**
      * The code from the email: the account is created and signed in, with the notice agreed to at
@@ -98,9 +97,6 @@ class VisitorRepository(
 
     suspend fun offices(): List<OfficeDto> = apiClient.requireData(apiClient.api.offices()).offices
 
-    suspend fun teachers(): List<TeacherDto> = apiClient.requireData(apiClient.api.teachers()).teachers
-
-    suspend fun teacher(code: String): TeacherDto = apiClient.requireData(apiClient.api.teacher(code)).teacher
 
     suspend fun availability(officeCode: String, date: String): AvailabilityData =
         apiClient.requireData(apiClient.api.availability(officeCode, date))

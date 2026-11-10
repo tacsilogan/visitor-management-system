@@ -2,19 +2,19 @@
 declare(strict_types=1);
 require_once __DIR__ . "/_signup.php";
 
-// Starts a new app account and emails a 6-digit code to the address. Nothing is created until the
+// Starts a new visitor account and emails a 6-digit code to the address. Nothing is created until the
 // code is entered (confirm_signup.php), so an address nobody can open never becomes an account.
-// POST {account_type: "visitor" | "student", email, full_name, password, consent_version,
-//       visitor: contact_number?, tracking_consent
-//       student: student_number, course_code or course_name, year_level, section}
+// POST {email, full_name, password, contact_number?, consent_version, tracking_consent}
 // 202 {verification_required, request_id, email, expires_at, resend_after_seconds}
 
 api_require_method("POST");
-api_require_school_schema($conn);
+api_require_signup_schema($conn);
 $input = api_body();
+// Apps from 0.8.0 to 0.10.x also send account_type, and could ask for an ISATU student account.
 $accountType = strtolower(api_text($input, "account_type", 16)) ?: "visitor";
-if (!in_array($accountType, ["visitor", "student"], true)) {
-    api_fail("Choose visitor or ISATU student", 422, ["account_type" => "Choose visitor or ISATU student"]);
+if ($accountType !== "visitor") {
+    $message = "Only visitor accounts can be created. Update the ISATU Visits app, then sign up as a visitor.";
+    api_fail($message, 422, ["account_type" => $message]);
 }
 $email = strtolower(api_text($input, "email", 190));
 $fullName = api_text($input, "full_name", 100);
@@ -28,7 +28,7 @@ api_rate_limit($conn, "register", $email, 5, 3600);
 api_rate_limit($conn, "register_network", "", 30, 3600);
 
 $errors = [];
-$emailProblem = school_email_problem($accountType, $email);
+$emailProblem = signup_email_problem($email);
 if ($emailProblem !== "") {
     $errors["email"] = $emailProblem;
 }
@@ -42,43 +42,8 @@ if ($passwordError !== "") {
 if ($consentVersion === "") {
     $errors["consent_version"] = "Agree to the terms and privacy notice first";
 }
-if ($accountType === "visitor" && !$trackingConsent) {
+if (!$trackingConsent) {
     $errors["tracking_consent"] = "Agree to the visitor tracking consent before creating an account";
-}
-
-$student = [];
-if ($accountType === "student") {
-    $studentNumber = school_student_number_normalize(api_text($input, "student_number", 20));
-    $numberProblem = school_student_number_problem($studentNumber);
-    if ($numberProblem !== "") {
-        $errors["student_number"] = $numberProblem;
-    }
-    $courseCode = strtoupper(api_text($input, "course_code", 16));
-    $courseName = api_text($input, "course_name", 100);
-    if ($courseCode !== "") {
-        $course = appointment_office_row($courseCode);
-        if (!$course || $course["kind"] !== "course" || !$course["is_active"]) {
-            $errors["course_code"] = "Choose your course from the list";
-        }
-        $courseName = "";
-    } elseif (mb_strlen($courseName) < 2) {
-        $errors["course_code"] = "Choose your course, or type it if it isn't listed";
-    }
-    $yearLevel = (int) ($input["year_level"] ?? 0);
-    if (!in_array($yearLevel, SCHOOL_YEAR_LEVELS, true)) {
-        $errors["year_level"] = "Choose your year";
-    }
-    $section = strtoupper(api_text($input, "section", 10));
-    if ($section === "" || !preg_match('/^[A-Z0-9]{1,10}$/', $section)) {
-        $errors["section"] = "Enter your section, like A or 1";
-    }
-    $student = [
-        "student_number" => $studentNumber,
-        "course_code" => $courseCode,
-        "course_name" => $courseName,
-        "year_level" => $yearLevel,
-        "section" => $section,
-    ];
 }
 if ($errors) {
     api_fail("Check the highlighted account details", 422, $errors);
@@ -90,17 +55,16 @@ if (!$passwordHash) {
 }
 
 try {
-    $requestId = school_save_request($conn, [
-        "account_type" => $accountType,
+    $requestId = signup_save_request($conn, [
         "email" => $email,
         "password_hash" => $passwordHash,
         "full_name" => $fullName,
         "contact_number" => $contactNumber,
         "consent_version" => $consentVersion,
         "requested_ip" => api_client_ip(),
-    ] + $student);
-    $sent = school_send_code($conn, $requestId);
-} catch (SchoolAccountError $error) {
+    ]);
+    $sent = signup_send_code($conn, $requestId);
+} catch (SignupError $error) {
     api_signup_fail($error);
 } catch (Throwable $error) {
     api_fail("Could not start the account. Please try again.", 500, [], $error);

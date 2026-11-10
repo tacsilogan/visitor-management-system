@@ -4,21 +4,19 @@
  * Removing an account (AUTH_SECURITY.md, "Removing an account"). An administrator can remove any
  * account, even one with years of visits:
  *
- * - The person's sign-in, phones, notifications, location sharing and student profile go with the
- *   account (ON DELETE CASCADE).
+ * - The person's sign-in, phones, notifications and location sharing go with the account
+ *   (ON DELETE CASCADE).
  * - Their visits and everything staff did stay in the records. Each visit keeps the name and email it
  *   was booked with, so the guard's and the offices' history still reads correctly; the rows only stop
  *   pointing at the account (ON DELETE SET NULL, account_removal_migration.sql).
- * - Anything still to come is closed first, so no one waits for a person who is gone: a visitor's or
- *   student's requests and visits are cancelled and the office or teacher is told; a teacher's visits
- *   are cancelled and each visitor is told.
+ * - Anything still to come is closed first, so no one waits for a person who is gone: a visitor's
+ *   requests and visits are cancelled and each office is told.
  *
  * The one thing that waits: a visitor who is inside the campus. The guard ends that visit first.
  */
 
 require_once __DIR__ . "/auth_security.php";
 require_once __DIR__ . "/visit_service.php";
-require_once __DIR__ . "/teacher_service.php";
 
 /** The account can't be removed right now; the message says why, for the administrator. */
 final class AccountRemovalError extends RuntimeException
@@ -55,15 +53,8 @@ function account_remove(mysqli $conn, int $userId, int $actorId): array
         }
 
         $cancelled = 0;
-        if ($role === "visitor" || $role === "student") {
+        if ($role === "visitor") {
             $cancelled = account_removal_close_visits($conn, $userId, $actorId, $name);
-        } elseif ($role === "teacher") {
-            $code = (string) $user["office_code"];
-            if ($code !== "" && appointment_is_teacher_code($code)) {
-                $cancelled = teacher_close_open_visits($conn, $code, $actorId, "removed by an administrator");
-            }
-            // Their hours go; the calendar stays, archived, when visits carry the teacher's name.
-            teacher_retire_calendar($conn, $code);
         }
 
         // Emails still waiting in the queue are not sent to someone who is no longer here.
@@ -92,10 +83,10 @@ function account_remove(mysqli $conn, int $userId, int $actorId): array
 }
 
 /**
- * A visitor or student is being removed. Every request and visit of theirs that is still open is
- * cancelled, so nothing is left for the time-based updates (appointment_maintenance.php) to report to
- * someone who is gone, and a saved picture of their pass no longer opens the gate. Each office or
- * teacher still expecting them is told. The caller owns the transaction and has locked the account.
+ * A visitor is being removed. Every request and visit of theirs that is still open is cancelled, so
+ * nothing is left for the time-based updates (appointment_maintenance.php) to report to someone who
+ * is gone, and a saved picture of their pass no longer opens the gate. Each office still expecting
+ * them is told. The caller owns the transaction and has locked the account.
  * Returns how many upcoming visits were cancelled.
  *
  * @throws AccountRemovalError while the person is inside the campus

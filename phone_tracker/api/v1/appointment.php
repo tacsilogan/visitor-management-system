@@ -4,7 +4,7 @@ require_once __DIR__ . "/_bootstrap.php";
 require_once __DIR__ . "/_appointments.php";
 
 api_require_method("GET");
-$user = api_require_app_user();
+$user = api_require_visitor();
 refresh_appointment_time_states($conn);
 $appointmentId = max(0, (int) ($_GET["id"] ?? 0));
 if ($appointmentId <= 0) {

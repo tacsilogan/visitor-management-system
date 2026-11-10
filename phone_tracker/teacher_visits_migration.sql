@@ -1,4 +1,8 @@
--- Visits to a specific teacher (TEACHER_VISITS.md).
+-- Undone on 2026-11-10 by visitor_only_migration.sql, which runs after it: the system has no teachers
+-- and no department tree any more, only offices with their Office Personnel. Kept so new and old
+-- databases take the same steps.
+--
+-- Visits to a specific teacher.
 --
 -- The offices table becomes a tree. A department (CCI) holds offices (Dean's Office, Tech Support)
 -- and courses (IT, CS, IS), and a course holds teachers. A teacher is a calendar row of their own,

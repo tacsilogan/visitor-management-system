@@ -11,14 +11,12 @@
         admin: "admin.html",
         security: "dashboard.html",
         offices: "offices.html",
-        teacher: "teacher.html",
         visitor: "index.html",
     };
     const ROLE_PLACE = {
         admin: "the Admin dashboard",
         security: "the Security dashboard",
         offices: "the Office dashboard",
-        teacher: "your dashboard",
         visitor: "your visitor page",
     };
     // The animation's timeline in ms. The first beat is the password check, which is done

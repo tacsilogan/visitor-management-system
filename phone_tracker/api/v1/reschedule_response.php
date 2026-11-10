@@ -5,7 +5,7 @@ require_once dirname(__DIR__, 2) . "/office_availability_service.php";
 require_once dirname(__DIR__, 2) . "/visit_service.php";
 
 api_require_method("POST");
-$user = api_require_app_user();
+$user = api_require_visitor();
 $input = api_body();
 $proposalId = (int) ($input["proposal_id"] ?? 0);
 $action = strtolower(api_text($input, "action", 16));
@@ -144,7 +144,7 @@ try {
         "INSERT INTO app_notifications
          (recipient_user_id, appointment_id, notification_type, title, message)
          SELECT id, ?, 'appointment.reschedule_response', ?, ?
-         FROM app_users WHERE role IN ('offices', 'teacher') AND office_code = ? AND is_active = 1"
+         FROM app_users WHERE role = 'offices' AND office_code = ? AND is_active = 1"
     );
     $notify->bind_param("isss", $appointmentId, $officeTitle, $officeMessage, $officeCode);
     $notify->execute();

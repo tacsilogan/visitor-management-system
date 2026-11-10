@@ -88,9 +88,8 @@ function mail_configuration_problem(?array $settings = null): ?string
 }
 
 /*
- * Two names send email. People who use the app (visitors and ISATU students) hear from the app,
- * ISATU Visits, with the seal at the top. The website's people (teachers, the Dean's Office, staff)
- * hear from the website, MAIL_FROM_NAME (ISATU Visitor Management).
+ * Two names send email. Visitors, who use the app, hear from the app, ISATU Visits, with the seal at
+ * the top. Anything else comes from the website, MAIL_FROM_NAME (ISATU Visitor Management).
  */
 
 /** The app's name as an email sender. MAIL_APP_FROM_NAME changes it. */
@@ -102,25 +101,32 @@ function mail_app_name(): string
 /** Whether an email is for someone who uses the app, so it comes from the app's name. */
 function mail_is_app_email(string $templateKey, array $payload): bool
 {
-    if (in_array($templateKey, ["password_reset", "verify_email"], true)) {
-        return true;
-    }
-    return $templateKey === "account_code" && (string) ($payload["account_type"] ?? "visitor") !== "teacher";
+    return in_array($templateKey, ["account_code", "password_reset", "verify_email"], true);
 }
 
-/** Where pictures in an email are served from: the site's public address, or none, and then no picture. */
+/**
+ * Where pictures in an email are served from: the phone_tracker folder's public address, or "" and
+ * then no picture. PUBLIC_BASE_URL wins; then the address of the request that sent the email.
+ */
 function mail_site_base_url(): string
 {
-    if (function_exists("teacher_site_base_url")) {
-        return teacher_site_base_url();
-    }
     $configured = trim((string) (getenv("PUBLIC_BASE_URL") ?: ""));
     if ($configured !== "") {
         return rtrim($configured, "/");
     }
-    // The email worker runs with no request to read the address from. Railway says what it is.
-    $railway = trim((string) (getenv("RAILWAY_PUBLIC_DOMAIN") ?: ""));
-    return $railway !== "" ? "https://" . $railway . "/phone_tracker" : "";
+    $host = (string) ($_SERVER["HTTP_HOST"] ?? "");
+    if ($host === "") {
+        // The email worker runs with no request to read the address from. Railway says what it is.
+        $railway = trim((string) (getenv("RAILWAY_PUBLIC_DOMAIN") ?: ""));
+        return $railway !== "" ? "https://" . $railway . "/phone_tracker" : "";
+    }
+    $scheme = function_exists("auth_request_is_https") && auth_request_is_https() ? "https" : "http";
+    // Up to phone_tracker from phone_tracker/x.php, and from any depth under phone_tracker/api/v1/,
+    // such as api/v1/auth/register.php, which sends the sign-up code.
+    $script = (string) ($_SERVER["SCRIPT_NAME"] ?? "");
+    $api = strpos($script, "/api/v1/");
+    $path = $api !== false ? substr($script, 0, $api) : (string) preg_replace('#/[^/]*$#', "", $script);
+    return $scheme . "://" . $host . $path;
 }
 
 /** The top of an email: the app's seal and name, or the website's name in small capitals. */
@@ -146,44 +152,11 @@ function mail_signature(bool $app): string
     return $app ? mail_app_name() : "ISATU Visitor Management";
 }
 
-/** The alerts a teacher gets by email: no code, just who wants to see them and a link to answer. */
-const MAIL_TEACHER_TEMPLATES = [
-    "teacher_request" => ["%s asked to see you on %s.", "Answer this request"],
-    "teacher_walk_in" => ["%s wants to see you now. The request closes in 10 minutes.", "Answer this walk-in"],
-    "teacher_booked" => ["%s booked a visit with you on %s. It was accepted automatically.", "See your visits"],
-    "teacher_reminder" => ["%s is still waiting to hear from you about %s.", "Answer this request"],
-];
-
-function mail_render_teacher_alert(string $templateKey, array $payload): array
-{
-    [$sentence, $action] = MAIL_TEACHER_TEMPLATES[$templateKey];
-    $visitor = (string) ($payload["visitor"] ?? "A visitor");
-    $when = (string) ($payload["when"] ?? "");
-    $intro = sprintf($sentence, $visitor, $when);
-    $reason = trim(implode(". ", array_filter([(string) ($payload["purpose"] ?? ""), (string) ($payload["subject"] ?? "")])));
-    $greeting = "Hello " . trim((string) ($payload["teacher"] ?? "")) . ",";
-    $link = (string) ($payload["link"] ?? "");
-
-    $text = $greeting . "\n\n" . $intro . ($reason !== "" ? "\nReason: " . $reason . "." : "")
-        . ($link !== "" ? "\n\n" . $action . ": " . $link : "") . "\n\n" . mail_signature(false) . "\n";
-
-    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
-    $html = '<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;color:#1f2937">'
-        . '<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:28px">'
-        . mail_header_html(false)
-        . '<p style="margin:16px 0">' . $escape($greeting) . '</p>'
-        . '<p style="margin:0 0 8px;line-height:1.5">' . $escape($intro) . '</p>'
-        . ($reason !== "" ? '<p style="margin:0 0 18px;line-height:1.5;color:#64748b">Reason: ' . $escape($reason) . '.</p>' : '')
-        . ($link !== "" ? '<a href="' . $escape($link) . '" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#0755b5;color:#ffffff;font-weight:bold;text-decoration:none">' . $escape($action) . '</a>' : '')
-        . '</div></body></html>';
-    return ["text" => $text, "html" => $html];
-}
-
 /**
- * The emails about an account that does not exist yet (school_accounts_service.php): the 6-digit code
- * that confirms an email address, and the Dean's Office's answer to a teacher's request.
+ * The emails with a 6-digit code: the code that confirms a new visitor's email (signup_service.php),
+ * and the code that resets a forgotten password (api/v1/auth/_password_reset.php).
  */
-const MAIL_ACCOUNT_TEMPLATES = ["account_code", "password_reset", "teacher_request_approved", "teacher_request_rejected"];
+const MAIL_ACCOUNT_TEMPLATES = ["account_code", "password_reset"];
 
 function mail_render_account(string $templateKey, array $payload, string $recipientName): array
 {
@@ -197,14 +170,10 @@ function mail_render_account(string $templateKey, array $payload, string $recipi
             throw new InvalidArgumentException("The email has no valid code to send.");
         }
         $minutes = max(1, (int) ($payload["minutes"] ?? 10));
-        $intro = match ((string) ($payload["account_type"] ?? "")) {
-            "student" => "Enter this code in the " . mail_app_name() . " app to finish creating your student account:",
-            "teacher" => "Enter this code on the ISATU website to send your teacher account request:",
-            default => "Enter this code in the " . mail_app_name() . " app to finish creating your visitor account:",
-        };
+        $intro = "Enter this code in the " . mail_app_name() . " app to finish creating your visitor account:";
         $after = "The code works once and expires in " . $minutes . " minutes.";
         $outro = "If you didn't ask for an ISATU account, ignore this email. Nothing is created without the code.";
-    } elseif ($templateKey === "password_reset") {
+    } else {
         $code = (string) ($payload["code"] ?? "");
         if (!preg_match('/^\d{6}$/', $code)) {
             throw new InvalidArgumentException("The email has no valid code to send.");
@@ -213,15 +182,6 @@ function mail_render_account(string $templateKey, array $payload, string $recipi
         $intro = "Someone asked to reset the password of your " . mail_app_name() . " account. If it was you, enter this code in the app with your new password:";
         $after = "The code works once and expires in " . $minutes . " minutes. Asking for another code ends this one.";
         $outro = "If you didn't ask for this, ignore this email. Your password stays the same.";
-    } elseif ($templateKey === "teacher_request_approved") {
-        $office = (string) ($payload["office"] ?? "Your Dean's Office");
-        $intro = $office . " approved your teacher account. Sign in with your school email and the password you chose, then set your hours. Students and visitors can find you once you have.";
-        $after = (string) ($payload["link"] ?? "");
-    } else {
-        $office = (string) ($payload["office"] ?? "Your Dean's Office");
-        $reason = trim((string) ($payload["reason"] ?? ""));
-        $intro = $office . " did not approve your teacher account request" . ($reason !== "" ? ": " . $reason . "." : ".");
-        $after = "If this is a mistake, contact " . $office . ", then request an account again.";
     }
 
     $app = mail_is_app_email($templateKey, $payload);
@@ -229,16 +189,13 @@ function mail_render_account(string $templateKey, array $payload, string $recipi
         . ($outro !== "" ? "\n\n" . $outro : "") . "\n\n" . mail_signature($app) . "\n";
 
     $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
-    $isLink = str_starts_with($after, "http");
     $html = '<!doctype html><html><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;color:#1f2937">'
         . '<div style="max-width:520px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:28px">'
         . mail_header_html($app)
         . '<p style="margin:16px 0">' . $escape($greeting) . '</p>'
         . '<p style="margin:0 0 16px;line-height:1.5">' . $escape($intro) . '</p>'
         . ($code !== "" ? '<p style="margin:0 0 16px;padding:14px;background:#eef2ff;border-radius:8px;font-family:Consolas,Menlo,monospace;font-size:28px;font-weight:bold;letter-spacing:.3em;text-align:center">' . $escape($code) . '</p>' : '')
-        . ($isLink
-            ? '<a href="' . $escape($after) . '" style="display:inline-block;padding:11px 18px;border-radius:8px;background:#0755b5;color:#ffffff;font-weight:bold;text-decoration:none">Sign in</a>'
-            : ($after !== "" ? '<p style="margin:0 0 16px;line-height:1.5">' . $escape($after) . '</p>' : ''))
+        . ($after !== "" ? '<p style="margin:0 0 16px;line-height:1.5">' . $escape($after) . '</p>' : '')
         . ($outro !== "" ? '<p style="margin:16px 0 0;line-height:1.5;color:#64748b">' . $escape($outro) . '</p>' : '')
         . '</div></body></html>';
     return ["text" => $text, "html" => $html, "from_name" => $app ? mail_app_name() : null];
@@ -251,9 +208,6 @@ function mail_render_account(string $templateKey, array $payload, string $recipi
  */
 function mail_render(string $templateKey, array $payload, string $recipientName): array
 {
-    if (isset(MAIL_TEACHER_TEMPLATES[$templateKey])) {
-        return mail_render_teacher_alert($templateKey, $payload);
-    }
     if (in_array($templateKey, MAIL_ACCOUNT_TEMPLATES, true)) {
         return mail_render_account($templateKey, $payload, $recipientName);
     }

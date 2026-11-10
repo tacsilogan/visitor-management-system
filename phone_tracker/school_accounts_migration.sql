@@ -1,4 +1,8 @@
--- ISATU students and teachers with accounts of their own (SCHOOL_ACCOUNTS.md).
+-- Mostly undone on 2026-11-10 by visitor_only_migration.sql, which runs after it: visitors are the
+-- only people who sign up. What stays is account_requests, which holds a visitor's sign-up until the
+-- emailed code is entered (signup_service.php). Kept so new and old databases take the same steps.
+--
+-- ISATU students and teachers with accounts of their own.
 --
 -- Students sign up in the app with their @students.isatu.edu.ph email and book any teacher, with no
 -- pass, gate scan or location tracking. Teachers ask for an account on the website with their

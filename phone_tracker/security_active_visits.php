@@ -20,7 +20,7 @@ if (!$stmt) {
 $stmt->execute();
 $res = $stmt->get_result();
 $rows = [];
-$map = appointment_office_long_map();
+$map = appointment_office_map();
 while ($row = $res->fetch_assoc()) {
     $code = (string) $row["office_code"];
     $row["office_label"] = $map[$code] ?? $code;

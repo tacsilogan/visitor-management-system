@@ -498,7 +498,7 @@
         if (view === "history") {
             view = "dashboard";
         }
-        const valid = ["dashboard", "requests", "availability", "teachers"];
+        const valid = ["dashboard", "requests", "availability"];
         if (valid.indexOf(view) === -1) {
             view = "dashboard";
         }
@@ -514,7 +514,7 @@
                 button.removeAttribute("aria-current");
             }
         });
-        const labels = { dashboard: "Appointments", requests: "Appointment Requests", availability: "Availability", teachers: "Teachers" };
+        const labels = { dashboard: "Appointments", requests: "Appointment Requests", availability: "Availability" };
         setText("officeMobileTitle", labels[view]);
         window.history.replaceState(null, "", window.location.pathname + "#" + view);
         window.scrollTo({ top: 0, behavior: "smooth" });
@@ -525,9 +525,6 @@
         }
         // The "Open now / On lunch break" chip stays current while Availability is open.
         setStatusRefresh(view === "availability");
-        if (view === "teachers") {
-            loadOfficeTeachers();
-        }
     }
 
     function detailPair(label, value, full) {
@@ -1922,268 +1919,6 @@
     setText("officeProfileName", PhoneTrackerAuth.getDisplayName() || PhoneTrackerAuth.getUsername() || "Office Personnel");
     setText("officeProfileUsername", PhoneTrackerAuth.getUsername() || "office");
     setFutureMinimums();
-    /* ---------- Teachers: read-only, for when someone asks at the office ---------- */
-
-    const teachersState = { list: [], loaded: false };
-
-    function teacherTime(value) {
-        const match = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(String(value || ""));
-        if (!match) {
-            return "";
-        }
-        const hour = Number(match[4]);
-        return (hour % 12 === 0 ? 12 : hour % 12) + ":" + match[5] + " " + (hour < 12 ? "AM" : "PM");
-    }
-
-    function teacherDay(value) {
-        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ""));
-        if (!match) {
-            return "";
-        }
-        const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-        const today = new Date();
-        return date.toDateString() === today.toDateString()
-            ? "Today"
-            : date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    }
-
-    function renderOfficeTeachers() {
-        const body = byId("officeTeachersBody");
-        const course = byId("officeTeachersCourse").value;
-        const query = byId("officeTeachersSearch").value.trim().toLowerCase();
-        const rows = teachersState.list.filter(function (teacher) {
-            return (!course || teacher.course === course) && teacher.name.toLowerCase().indexOf(query) !== -1;
-        });
-        body.replaceChildren();
-        rows.forEach(function (teacher) {
-            const row = document.createElement("tr");
-            const name = document.createElement("td");
-            name.className = "admin-cell-strong";
-            name.textContent = teacher.name;
-            const courseCell = document.createElement("td");
-            const tag = document.createElement("span");
-            tag.className = "ot-tag";
-            tag.textContent = teacher.course;
-            courseCell.appendChild(tag);
-            const now = document.createElement("td");
-            const badge = document.createElement("span");
-            const looks = {
-                available: ["is-active", teacher.until ? "Available until " + teacherTime(teacher.until) : "Available"],
-                not_available: ["is-pending", "Not available"],
-                no_hours: ["is-cancelled", "No hours set"],
-                off: ["is-cancelled", "Account off"],
-            }[teacher.status];
-            badge.className = "admin-status " + looks[0];
-            badge.textContent = looks[1];
-            now.appendChild(badge);
-            const next = document.createElement("td");
-            next.className = teacher.next_free_at ? "ot-next" : "ot-next is-none";
-            next.textContent = teacher.next_free_at ? teacherDay(teacher.next_free_at) + ", " + teacherTime(teacher.next_free_at) : "—";
-            row.append(name, courseCell, now, next);
-            if (teachersState.approver) {
-                // The Dean's Office turns off the account of a teacher who left, and back on.
-                const account = document.createElement("td");
-                const accountBadge = document.createElement("span");
-                accountBadge.className = "sec-badge " + (teacher.account_active ? "is-good" : "is-muted");
-                accountBadge.textContent = teacher.account_active ? "Active" : "Turned off";
-                account.appendChild(accountBadge);
-                const toggleCell = document.createElement("td");
-                const toggle = document.createElement("button");
-                toggle.type = "button";
-                toggle.className = "ot-toggle";
-                toggle.textContent = teacher.account_active ? "Turn off" : "Turn on";
-                toggle.addEventListener("click", function () { toggleTeacherAccount(teacher, toggle); });
-                toggleCell.appendChild(toggle);
-                row.append(account, toggleCell);
-            }
-            if (teacher.status === "off") {
-                row.classList.add("is-off");
-            }
-            body.appendChild(row);
-        });
-        byId("officeTeachersEmpty").hidden = rows.length > 0;
-        byId("officeTeachersEmptyTitle").textContent = teachersState.list.length ? "No teacher with that name" : "No teachers yet";
-        byId("officeTeachersEmptyText").textContent = teachersState.list.length ? "Try another name, or All courses." : "Teachers appear here once the administrator adds them.";
-    }
-
-    async function loadOfficeTeachers() {
-        try {
-            const data = await fetchJson("office_teachers.php");
-            if (!data || !data.success) {
-                return;
-            }
-            byId("officeTeachersNav").hidden = !data.applies;
-            teachersState.approver = Boolean(data.approver);
-            document.querySelectorAll(".ot-account-col").forEach(function (cell) { cell.hidden = !teachersState.approver; });
-            teachersState.list = data.teachers || [];
-            const select = byId("officeTeachersCourse");
-            const current = select.value;
-            const courses = Array.from(new Set(teachersState.list.map(function (teacher) { return teacher.course; })));
-            select.replaceChildren(new Option("All courses", ""));
-            courses.forEach(function (course) { select.appendChild(new Option(course, course)); });
-            select.value = courses.indexOf(current) !== -1 ? current : "";
-            renderOfficeTeachers();
-        } catch (error) {
-            // The tab stays as it was; the next load tries again.
-        }
-    }
-    byId("officeTeachersCourse").addEventListener("change", renderOfficeTeachers);
-    byId("officeTeachersSearch").addEventListener("input", renderOfficeTeachers);
-    loadOfficeTeachers();
-
-    /* ---------- Teacher requests: for a department's Dean's Office only (SCHOOL_ACCOUNTS.md) ---------- */
-
-    const requestsState = { approver: false, department: "", courses: [], list: [], rejecting: null };
-
-    function renderTeacherRequests() {
-        const body = byId("teacherRequestsBody");
-        body.replaceChildren();
-        requestsState.list.forEach(function (request) {
-            const row = document.createElement("tr");
-            const who = document.createElement("td");
-            const name = document.createElement("strong");
-            name.className = "ot-request-name";
-            name.textContent = request.name;
-            const email = document.createElement("small");
-            email.className = "ot-request-email";
-            email.textContent = request.email + ", confirmed";
-            who.append(name, email);
-            const courseCell = document.createElement("td");
-            const select = document.createElement("select");
-            select.className = "ot-course-select";
-            select.setAttribute("aria-label", "Course for " + request.name);
-            requestsState.courses.forEach(function (course) { select.appendChild(new Option(course, course)); });
-            select.value = requestsState.courses.indexOf(request.course_code) !== -1 ? request.course_code : (requestsState.courses[0] || "");
-            courseCell.appendChild(select);
-            const asked = document.createElement("td");
-            asked.className = "ot-next";
-            asked.textContent = teacherDay(request.asked_at) + ", " + teacherTime(request.asked_at);
-            const actions = document.createElement("td");
-            actions.className = "ot-request-actions";
-            const approve = document.createElement("button");
-            approve.type = "button";
-            approve.className = "office-approve-button";
-            approve.textContent = "Approve";
-            approve.addEventListener("click", function () { approveTeacherRequest(request, select.value, approve); });
-            const reject = document.createElement("button");
-            reject.type = "button";
-            reject.className = "ot-toggle is-danger";
-            reject.textContent = "Reject";
-            reject.addEventListener("click", function () { openRejectTeacher(request); });
-            actions.append(approve, reject);
-            row.append(who, courseCell, asked, actions);
-            body.appendChild(row);
-        });
-        byId("teacherRequestsEmpty").hidden = requestsState.list.length > 0;
-        const count = byId("officeTeachersCount");
-        count.textContent = String(requestsState.list.length);
-        count.hidden = requestsState.list.length === 0;
-    }
-
-    async function loadTeacherRequests() {
-        try {
-            const data = await fetchJson("office_teacher_requests.php");
-            if (!data || !data.success) {
-                return;
-            }
-            requestsState.approver = Boolean(data.approver);
-            byId("teacherRequestsCard").hidden = !requestsState.approver;
-            if (!requestsState.approver) {
-                return;
-            }
-            requestsState.department = data.department;
-            requestsState.courses = data.courses || [];
-            requestsState.list = data.requests || [];
-            byId("teacherRequestsIntro").textContent = "Teachers who asked for an account in " + data.department + ". Approve only those who teach here.";
-            byId("officeRejectNotHere").textContent = "Doesn't teach in " + data.department;
-            renderTeacherRequests();
-        } catch (error) {
-            // Tried again on the next load.
-        }
-    }
-
-    async function approveTeacherRequest(request, courseCode, button) {
-        button.disabled = true;
-        try {
-            const data = await postJson("office_teacher_requests.php", { action: "approve", request_id: request.id, course_code: courseCode });
-            toast((data && data.message) || "Could not approve.", data && data.success ? "success" : "error");
-            await Promise.all([loadTeacherRequests(), loadOfficeTeachers()]);
-        } finally {
-            button.disabled = false;
-        }
-    }
-
-    function openRejectTeacher(request) {
-        requestsState.rejecting = request;
-        byId("officeRejectTeacherTitle").textContent = "Reject " + request.name + "?";
-        byId("officeRejectTeacherTo").textContent = "The reason is emailed to " + request.email + ".";
-        byId("officeRejectTeacherForm").reset();
-        byId("officeRejectTeacherOther").hidden = true;
-        byId("officeRejectTeacherError").hidden = true;
-        byId("officeRejectTeacherDialog").showModal();
-    }
-
-    byId("officeRejectTeacherForm").addEventListener("change", function () {
-        const other = byId("officeRejectTeacherForm").elements.teacherRejectReason.value === "other";
-        byId("officeRejectTeacherOther").hidden = !other;
-        if (other) {
-            byId("officeRejectTeacherOther").focus();
-        }
-    });
-    document.querySelectorAll("[data-close-reject]").forEach(function (button) {
-        button.addEventListener("click", function () { byId("officeRejectTeacherDialog").close(); });
-    });
-    byId("officeRejectTeacherForm").addEventListener("submit", async function (event) {
-        event.preventDefault();
-        const request = requestsState.rejecting;
-        const choice = byId("officeRejectTeacherForm").elements.teacherRejectReason.value;
-        const reason = choice === "other" ? byId("officeRejectTeacherOther").value.trim()
-            : (choice === "department" ? "Doesn't teach in " + requestsState.department : choice);
-        if (!request || reason === "") {
-            byId("officeRejectTeacherError").textContent = "Write the reason. It is sent to them.";
-            byId("officeRejectTeacherError").hidden = false;
-            return;
-        }
-        const button = byId("confirmRejectTeacherBtn");
-        button.disabled = true;
-        try {
-            const data = await postJson("office_teacher_requests.php", { action: "reject", request_id: request.id, reason: reason });
-            if (!data || !data.success) {
-                byId("officeRejectTeacherError").textContent = (data && data.message) || "Could not reject.";
-                byId("officeRejectTeacherError").hidden = false;
-                return;
-            }
-            byId("officeRejectTeacherDialog").close();
-            toast(data.message);
-            await loadTeacherRequests();
-        } finally {
-            button.disabled = false;
-        }
-    });
-
-    async function toggleTeacherAccount(teacher, button) {
-        const turnOn = !teacher.account_active;
-        if (!turnOn && !(await AppDialog.confirm({
-            title: "Turn off " + teacher.name + "'s account?",
-            message: "They can't sign in, and students and visitors can't book them. Their open visits are cancelled and each person is told."
-                + "\n\nYou can turn it back on.",
-            confirmLabel: "Turn off account",
-            danger: true,
-        }))) {
-            return;
-        }
-        button.disabled = true;
-        try {
-            const data = await postJson("office_teacher_requests.php", { action: turnOn ? "turn_on" : "turn_off", user_id: teacher.user_id });
-            toast((data && data.message) || "Could not save.", data && data.success ? "success" : "error");
-            await loadOfficeTeachers();
-        } finally {
-            button.disabled = false;
-        }
-    }
-
-    loadTeacherRequests();
-
     const initialView = String(window.location.hash || "#dashboard").slice(1);
     switchView(initialView);
     loadOfficeData(false);

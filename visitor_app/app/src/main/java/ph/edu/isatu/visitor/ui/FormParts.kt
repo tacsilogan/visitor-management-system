@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -33,13 +32,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -61,7 +58,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
@@ -153,26 +149,6 @@ fun NavyTopBar(
     }
 }
 
-/** "Step 2 of 4", with a gold bar for each step reached. */
-@Composable
-fun FormStepProgress(step: Int, total: Int, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            repeat(total) { index ->
-                Box(
-                    Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp))
-                        .background(if (index < step) IsatuYellow else Color(0xFFE3E8EF)),
-                )
-            }
-        }
-        Text(
-            "Step $step of $total",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MutedInk,
-        )
-    }
-}
 
 /** A screen's own title inside the page, in ISATU navy. */
 @Composable
@@ -238,47 +214,6 @@ private fun CharBoxes(chars: String, groups: List<Int>, focused: Boolean, wideLa
     }
 }
 
-/**
- * The Student ID as boxes: 4 digits, a dash, 4 digits, a dash, a letter. [chars] is what the boxes
- * hold ("20234363I"); the dashes are drawn, never typed. The keyboard shows numbers, then letters for
- * the last box.
- */
-@Composable
-fun StudentIdField(chars: String, onChange: (String) -> Unit, modifier: Modifier = Modifier, onDone: () -> Unit = {}) {
-    val letterTime = chars.length >= STUDENT_ID_DIGITS
-    val focusRequester = remember { FocusRequester() }
-    var focused by remember { mutableStateOf(false) }
-    var typing by remember { mutableStateOf(false) }
-    // A keyboard can't change from numbers to letters inside one input session, so the field is made
-    // again, and focused again, when the last box is reached or left.
-    key(letterTime) {
-        BasicTextField(
-            value = TextFieldValue(chars, TextRange(chars.length)),
-            onValueChange = {
-                typing = true
-                onChange(studentIdChars(it.text))
-            },
-            modifier = modifier
-                .fillMaxWidth()
-                .focusRequester(focusRequester)
-                .onFocusChanged { focused = it.isFocused }
-                .semantics { contentDescription = "Student ID, like 2023-4363-I" },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Characters,
-                autoCorrectEnabled = false,
-                keyboardType = if (letterTime) KeyboardType.Text else KeyboardType.Number,
-                imeAction = ImeAction.Done,
-            ),
-            keyboardActions = KeyboardActions(onDone = { onDone() }),
-            cursorBrush = SolidColor(Color.Transparent),
-            decorationBox = { CharBoxes(chars, listOf(4, 4, 1), focused, wideLast = true, boxHeight = 54.dp, fontSize = 20.sp) },
-        )
-    }
-    LaunchedEffect(letterTime) {
-        if (typing) runCatching { focusRequester.requestFocus() }
-    }
-}
 
 /** The 6-digit code from the email, as boxes. */
 @Composable
@@ -351,35 +286,3 @@ fun PasswordChecks(password: String, compact: Boolean = false) {
     }
 }
 
-/** A part of the summary before sending: what was entered, and Edit to go back to it. */
-@Composable
-fun ReviewSection(title: String, rows: List<Pair<String, String>>, onEdit: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).border(1.dp, BorderSoft, shape)) {
-        Row(
-            Modifier.fillMaxWidth().background(AppBackground).padding(start = 14.dp, end = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(title, style = MaterialTheme.typography.labelLarge, color = IsatuBlueDark, modifier = Modifier.weight(1f))
-            TextButton(onClick = onEdit, modifier = Modifier.semantics { contentDescription = "Edit ${title.lowercase()}" }) {
-                Text("Edit")
-            }
-        }
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            rows.forEach { (label, value) ->
-                // A long value, like a school email, goes under its label instead of beside it.
-                if (value.length > 22) {
-                    Column {
-                        Text(label, style = MaterialTheme.typography.bodySmall, color = MutedInk)
-                        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Ink)
-                    }
-                } else {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(label, style = MaterialTheme.typography.bodyMedium, color = MutedInk, modifier = Modifier.weight(1f))
-                        Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Ink, textAlign = TextAlign.End)
-                    }
-                }
-            }
-        }
-    }
-}

@@ -13,7 +13,7 @@ data class InsideStep(val text: String, val photo: String = "")
 data class OfficeDirections(
     val appointmentId: Long,
     val office: String,
-    /** The Department Directory's location, used when no building is set. */
+    /** The Office Directory's location, used when no building is set. */
     val location: String = "",
     val building: String = "",
     val floor: String = "",

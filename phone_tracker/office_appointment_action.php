@@ -4,8 +4,6 @@ require_once __DIR__ . "/session_bootstrap.php";
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/office_availability_service.php";
 require_once __DIR__ . "/visit_service.php";
-require_once __DIR__ . "/teacher_service.php";
-require_once __DIR__ . "/school_accounts_service.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     http_response_code(405);
@@ -25,10 +23,7 @@ $reason = trim((string) ($input["reason"] ?? ""));
 $officeCode = strtoupper(trim((string) ($_SESSION["office_code"] ?? "")));
 $actorId = (int) $_SESSION["user_id"];
 
-// A teacher can also finish a meeting ("done") and cancel a visit they accepted.
-$isTeacher = appointment_is_teacher_code($officeCode);
-$allowedActions = $isTeacher ? ["approve", "reject", "done", "cancel"] : ["approve", "reject", "complete"];
-if ($appointmentId <= 0 || !in_array($action, $allowedActions, true)) {
+if ($appointmentId <= 0 || !in_array($action, ["approve", "reject", "complete"], true)) {
     echo json_encode(["success" => false, "message" => "Invalid appointment action"]);
     exit;
 }
@@ -43,8 +38,7 @@ try {
     $visitColumns = visit_appointment_columns($conn);
     $lookup = $conn->prepare(
         "SELECT id, office_code, visitor_user_id, visitor_full_name, status,
-                scheduled_start_at, scheduled_end_at{$visitColumns}"
-        . (school_schema_ready($conn) ? ", visitor_kind" : ", 'visitor' AS visitor_kind") . "
+                scheduled_start_at, scheduled_end_at{$visitColumns}
          FROM appointments WHERE id = ? AND office_code = ? FOR UPDATE"
     );
     if (!$lookup) {
@@ -59,27 +53,6 @@ try {
     }
     $isVisitStop = !empty($appointment["visit_id"]);
     $officeLabel = appointment_office_label($officeCode);
-    $teacherName = $isTeacher ? teacher_short_label($officeCode) : "";
-    if ($action === "cancel") {
-        teacher_cancel_visit($conn, $appointment, $actorId, $reason);
-        $conn->commit();
-        $conn->close();
-        echo json_encode(["success" => true, "appointment_id" => $appointmentId, "status" => "cancelled", "message" => "Visit cancelled"]);
-        exit;
-    }
-    if ($action === "done") {
-        $isStudent = $appointment["visitor_kind"] === "student";
-        teacher_finish_meeting($conn, $appointment, $actorId);
-        $conn->commit();
-        $conn->close();
-        echo json_encode([
-            "success" => true,
-            "appointment_id" => $appointmentId,
-            "status" => $isStudent ? "completed" : "checked_in",
-            "message" => $isStudent ? "Visit marked as done" : "Meeting marked as done",
-        ]);
-        exit;
-    }
     if ($action === "complete") {
         if ($appointment["status"] !== "checked_in" || !$isVisitStop) {
             throw new RuntimeException("Only a checked-in stop of a multi-stop visit can be marked done");
@@ -109,18 +82,14 @@ try {
              WHERE id = ? AND status = 'pending_approval'"
         );
         $update->bind_param("sisi", $toStatus, $actorId, $toStatus, $appointmentId);
-        $historyNote = $isTeacher ? "Accepted by the teacher" : "Appointment approved by office personnel";
+        $historyNote = "Appointment approved by office personnel";
         $scheduleText = date("M j, Y g:i A", strtotime((string) $appointment["scheduled_start_at"]));
-        $notificationTitle = $isTeacher ? $teacherName . " accepted" : "Appointment approved";
+        $notificationTitle = "Appointment approved";
         if ($toStatus === "checked_in") {
             $historyNote .= "; added to the visitor's active campus visit";
             $notificationMessage = "Your {$officeLabel} stop at {$scheduleText} was approved and added to your active campus visit.";
         } elseif ($isVisitStop) {
             $notificationMessage = "Your {$officeLabel} stop at {$scheduleText} was approved. It is now part of your visit pass.";
-        } elseif ($isTeacher && $appointment["visitor_kind"] === "student") {
-            $notificationMessage = "See you on {$scheduleText}. Open the app for the room and directions.";
-        } elseif ($isTeacher) {
-            $notificationMessage = "Your pass is ready for {$scheduleText}.";
         } else {
             $notificationMessage = "Your appointment for {$scheduleText} was approved. Your QR visitor pass is now available.";
         }
@@ -134,8 +103,8 @@ try {
         );
         $update->bind_param("isi", $actorId, $reason, $appointmentId);
         $historyNote = "Declined: " . $reason;
-        $notificationTitle = $isTeacher ? $teacherName . " can't see you" : "Appointment declined";
-        $notificationMessage = $isTeacher ? $reason : "The office declined your appointment. Reason: " . $reason;
+        $notificationTitle = "Appointment declined";
+        $notificationMessage = "The office declined your appointment. Reason: " . $reason;
     } else {
         // The office's meeting is over. The visit itself, and its GPS tracking, continue
         // until Security checks the visitor out or the visit's last stop ends.

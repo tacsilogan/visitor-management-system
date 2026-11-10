@@ -16,10 +16,8 @@ personnel_require_schema($conn);
 
 $input = auth_json_body();
 $userId = (int) ($input["user_id"] ?? 0);
-$teacherColumns = teacher_schema_ready($conn);
 $stmt = $conn->prepare(
-    "SELECT id, username, role, office_code, display_name, first_name, last_name, position, email, contact_number"
-    . ($teacherColumns ? ", name_title" : "") . "
+    "SELECT id, username, role, office_code, display_name, first_name, last_name, position, email, contact_number
      FROM app_users WHERE id = ? LIMIT 1"
 );
 $stmt->bind_param("i", $userId);
@@ -38,33 +36,6 @@ $contactNumber = trim((string) ($input["contact_number"] ?? ""));
 $officeCode = (string) $user["office_code"];
 if ($user["role"] === "offices" && array_key_exists("office_code", $input)) {
     $officeCode = strtoupper(trim((string) $input["office_code"]));
-}
-
-// A teacher also has a title, a course and a room, which live on their calendar row.
-$isTeacher = $user["role"] === "teacher";
-$calendar = $isTeacher ? appointment_office_row((string) $user["office_code"]) : null;
-$nameTitle = (string) ($user["name_title"] ?? "");
-$courseCode = (string) ($calendar["parent_code"] ?? "");
-$room = (string) ($calendar["location"] ?? "");
-if ($isTeacher) {
-    if (array_key_exists("name_title", $input)) {
-        $nameTitle = trim((string) $input["name_title"]);
-    }
-    if (array_key_exists("course_code", $input)) {
-        $courseCode = strtoupper(trim((string) $input["course_code"]));
-    }
-    if (array_key_exists("room", $input)) {
-        $room = personnel_clean_text((string) $input["room"], 150);
-    }
-    if ($nameTitle !== "" && !in_array($nameTitle, TEACHER_TITLES, true)) {
-        auth_json_error(422, "invalid_details", "Choose a title from the list.");
-    }
-    if (!isset(teacher_course_map()[$courseCode])) {
-        auth_json_error(422, "invalid_details", "Select the course this teacher belongs to.");
-    }
-    if ($email === "") {
-        auth_json_error(422, "invalid_details", "Enter the teacher's email. New visit requests are sent there.");
-    }
 }
 
 $problem = personnel_name_error($firstName, "first name")
@@ -101,14 +72,6 @@ $after = [
     "contact_number" => $contactNumber,
     "office_code" => $officeCode,
 ];
-if ($isTeacher) {
-    $before += [
-        "name_title" => (string) ($user["name_title"] ?? ""),
-        "course_code" => (string) ($calendar["parent_code"] ?? ""),
-        "room" => (string) ($calendar["location"] ?? ""),
-    ];
-    $after += ["name_title" => $nameTitle, "course_code" => $courseCode, "room" => $room];
-}
 foreach ($after as $field => $value) {
     if ($value !== $before[$field]) {
         $changes[$field] = ["from" => $before[$field], "to" => $value];
@@ -126,19 +89,9 @@ $sql = "UPDATE app_users
         WHERE id = ?";
 $update = $conn->prepare($sql);
 $update->bind_param("sssssssi", $firstName, $lastName, $position, $emailValue, $contactNumber, $displayName, $officeCode, $userId);
-$conn->begin_transaction();
 try {
     $update->execute();
-    if ($isTeacher) {
-        $saveTitle = $conn->prepare("UPDATE app_users SET name_title = ? WHERE id = ?");
-        $saveTitle->bind_param("si", $nameTitle, $userId);
-        $saveTitle->execute();
-        $saveTitle->close();
-        teacher_update_calendar($conn, $officeCode, $nameTitle, $firstName, $lastName, $courseCode, $room);
-    }
-    $conn->commit();
 } catch (mysqli_sql_exception $error) {
-    $conn->rollback();
     if ($error->getCode() === 1062) {
         auth_json_error(409, "email_taken", "Another account already uses this email.");
     }

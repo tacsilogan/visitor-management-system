@@ -60,8 +60,6 @@ jobs:
 
       - name: Weekly break rules
         run: docker exec web php /var/www/html/phone_tracker/tools/office_breaks_test.php
-      - name: Teacher visit rules
-        run: docker exec web php /var/www/html/phone_tracker/tools/teacher_visits_test.php
 
       - name: Directions inside buildings
         run: docker exec web php /var/www/html/phone_tracker/tools/office_directions_test.php --database
@@ -183,20 +181,14 @@ jobs:
           token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
           [ -n "$token" ] || fail "Signing in with the new password failed: ${reply:0:300}"
 
-          # An ISATU student signs up with their school email, is never offered offices, and can't be tracked.
-          student="ci-student-$(date +%s)@students.isatu.edu.ph"
-          reply=$(signup "$student" "{\"account_type\":\"student\",\"email\":\"$student\",\"full_name\":\"CI Student\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v4\",\"student_number\":\"2023-0001-a\",\"course_name\":\"BS Information Technology\",\"year_level\":3,\"section\":\"B\"}")
-          contains "$reply" '"role":"student"' || fail "Confirming the student's code failed: ${reply:0:300}"
-          contains "$reply" '"student_number":"2023-0001-A"' || fail "The Student ID was not stored as 2023-0001-A: ${reply:0:300}"
-          student_token=$(sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p' <<< "$reply")
-          reply=$(send -H "Authorization: Bearer $student_token" "$api/offices.php")
-          contains "$reply" '"offices":[]' || fail "A student was offered offices: ${reply:0:300}"
-          status=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $student_token" "$api/tracking.php?appointment_id=1")
-          [ "$status" = "403" ] || fail "A student reached tracking.php (HTTP $status)"
-          reply=$(send -d "{\"account_type\":\"student\",\"email\":\"ci-outsider@example.test\",\"full_name\":\"CI Outsider\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v4\",\"student_number\":\"2023-0002-A\",\"course_name\":\"BSIT\",\"year_level\":1,\"section\":\"A\"}" "$api/auth/register.php")
-          contains "$reply" 'students.isatu.edu.ph' || fail "A non-school email made a student sign-up: ${reply:0:300}"
-          reply=$(send -d "{\"account_type\":\"student\",\"email\":\"ci-old-id@students.isatu.edu.ph\",\"full_name\":\"CI Old Id\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v4\",\"student_number\":\"2023-00001\",\"course_name\":\"BSIT\",\"year_level\":1,\"section\":\"A\"}" "$api/auth/register.php")
-          contains "$reply" 'like 2023-4363-I' || fail "A Student ID without its letter was accepted: ${reply:0:300}"
+          # Only visitors sign up (the app sends no account_type from 0.11.0). An older app that
+          # still asks for an ISATU student account is told to update, and a school email signs up
+          # as a visitor like any other.
+          reply=$(send -d "{\"account_type\":\"student\",\"email\":\"ci-student@students.isatu.edu.ph\",\"full_name\":\"CI Student\",\"password\":\"Ci-Student-Pass-1\",\"consent_version\":\"terms-privacy-v4\",\"student_number\":\"2023-0001-A\",\"course_name\":\"BSIT\",\"year_level\":3,\"section\":\"B\"}" "$api/auth/register.php")
+          contains "$reply" 'Only visitor accounts' || fail "A student sign-up from an old app was not refused: ${reply:0:300}"
+          school="ci-school-$(date +%s)@students.isatu.edu.ph"
+          reply=$(signup "$school" "{\"email\":\"$school\",\"full_name\":\"CI School Visitor\",\"password\":\"Ci-Visitor-Pass-1\",\"tracking_consent\":true,\"consent_version\":\"terms-privacy-v4\"}")
+          contains "$reply" '"role":"visitor"' || fail "A school email could not sign up as a visitor: ${reply:0:300}"
 
           # 10:00 on the next weekday, Philippine time, when the offices take appointments.
           day=1
@@ -211,9 +203,6 @@ jobs:
           reply=$(send -H "Authorization: Bearer $token" "$api/campus_map.php?appointment_id=$id")
           contains "$reply" '"walking_routes"' || fail "campus_map.php did not answer with walking_routes: ${reply:0:300}"
 
-          # The list of teachers answers, and is empty until a teacher saves their hours.
-          reply=$(send -H "Authorization: Bearer $token" "$api/teachers.php")
-          contains "$reply" '"teachers":[]' || fail "teachers.php did not answer with an empty list: ${reply:0:300}"
 
           # Visitors only see an office that has someone to answer it.
           docker exec db mariadb -uisatu -pisatu-secret app -e "INSERT INTO app_users (username, password_hash, display_name, role, office_code) VALUES ('ci_tech_support', 'not-a-password', 'CI Tech Support', 'offices', 'TECH_SUPPORT')"

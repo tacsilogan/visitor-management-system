@@ -1,6 +1,6 @@
 <?php
 declare(strict_types=1);
-// "Forgot password?": a 6-digit code by email, as signing up has (school_accounts_service.php).
+// "Forgot password?": a 6-digit code by email, as signing up has (signup_service.php).
 // Shared by request_password_reset.php and reset_password.php.
 require_once dirname(__DIR__) . "/_bootstrap.php";
 require_once dirname(__DIR__, 3) . "/auth_totp.php";

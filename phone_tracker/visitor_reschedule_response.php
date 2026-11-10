@@ -143,7 +143,7 @@ try {
         "INSERT INTO app_notifications
          (recipient_user_id, appointment_id, notification_type, title, message)
          SELECT id, ?, 'appointment.reschedule_response', ?, ?
-         FROM app_users WHERE role IN ('offices', 'teacher') AND office_code = ? AND is_active = 1"
+         FROM app_users WHERE role = 'offices' AND office_code = ? AND is_active = 1"
     );
     $notifyOffice->bind_param("isss", $appointmentId, $officeNotificationTitle, $officeNotificationMessage, $officeCode);
     $notifyOffice->execute();

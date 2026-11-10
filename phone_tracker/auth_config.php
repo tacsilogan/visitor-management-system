@@ -35,12 +35,11 @@ const AUTH_PASSWORD_MAX_LENGTH = 64;         // bcrypt only reads the first 72 b
 const AUTH_TRUSTED_DEVICE_DAYS = 30;
 const AUTH_BACKUP_CODE_COUNT = 10;
 const AUTH_TOTP_ISSUER = "ISATU Visitor Management";
-const AUTH_STAFF_ROLES = ["admin", "security", "offices", "teacher"];
+const AUTH_STAFF_ROLES = ["admin", "security", "offices"];
 const AUTH_ROLE_HOME = [
     "admin" => "admin.html",
     "security" => "dashboard.html",
     "offices" => "offices.html",
-    "teacher" => "teacher.html",
     "visitor" => "index.html",
 ];
 

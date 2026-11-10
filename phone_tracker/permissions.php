@@ -43,15 +43,6 @@ const AUTH_ROLE_PERMISSIONS = [
         "office.notifications",
         "profile.self",
     ],
-    // A teacher only ever reaches their own calendar: every office endpoint below is limited to
-    // the session's office_code. They have no appointments.list, which is not limited that way.
-    "teacher" => [
-        "teacher.dashboard",
-        "office.appointments",
-        "office.availability",
-        "office.notifications",
-        "profile.self",
-    ],
     "visitor" => [
         "appointments.book",
         "tracking.self",

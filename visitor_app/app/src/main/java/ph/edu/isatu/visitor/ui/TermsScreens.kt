@@ -72,7 +72,7 @@ fun TermsNoticeScreen(backLabel: String, onBack: () -> Unit) {
  * Someone who doesn't agree can sign out.
  */
 @Composable
-fun TermsAgreementScreen(busy: Boolean, isStudent: Boolean, onAgree: () -> Unit, onSignOut: () -> Unit) {
+fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Unit) {
     var agreed by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         containerColor = AppBackground,
@@ -82,8 +82,7 @@ fun TermsAgreementScreen(busy: Boolean, isStudent: Boolean, onAgree: () -> Unit,
         bottomBar = {
             Surface(color = Color.White, shadowElevation = 10.dp) {
                 Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)) {
-                    // A student is never tracked, so there is no location sharing to agree to.
-                    NoticeAgreement(agreed, { agreed = it }, includeLocation = !isStudent)
+                    NoticeAgreement(agreed, { agreed = it }, includeLocation = true)
                     Spacer(Modifier.height(6.dp))
                     PrimaryButton(
                         "Agree and continue",
@@ -149,10 +148,6 @@ internal fun NoticeAgreement(
     NoticeCheck(agreed, onAgreedChange, agreement)
 }
 
-/** A student's agreement: the notice only, because a student is never tracked. */
-@Composable
-internal fun TermsCheck(termsAgreed: Boolean, onTermsChange: (Boolean) -> Unit, onOpenNotice: () -> Unit) =
-    NoticeAgreement(termsAgreed, onTermsChange, includeLocation = false, onOpenNotice = onOpenNotice)
 
 @Composable
 private fun NoticeCheck(checked: Boolean, onCheckedChange: (Boolean) -> Unit, text: AnnotatedString) {

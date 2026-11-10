@@ -28,7 +28,7 @@ try {
         "SELECT t.id, t.user_id, t.token_hash, t.failed_attempts, t.expires_at > NOW() AS still_valid
          FROM account_action_tokens t
          INNER JOIN app_users u ON u.id = t.user_id
-         WHERE u.email = ? AND u.role IN ('visitor', 'student') AND t.purpose = 'password_reset'
+         WHERE u.email = ? AND u.role = 'visitor' AND t.purpose = 'password_reset'
            AND t.consumed_at IS NULL
          ORDER BY t.id DESC
          LIMIT 1

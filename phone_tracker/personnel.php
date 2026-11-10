@@ -6,7 +6,6 @@
  */
 
 require_once __DIR__ . "/appointment_offices.php";
-require_once __DIR__ . "/teacher_service.php";
 
 const PERSONNEL_MIGRATION_MESSAGE = "Database update required: import phone_tracker/personnel_directory_migration.sql into phone_tracker.";
 
@@ -58,25 +57,18 @@ function personnel_has_name(array $row): bool
 }
 
 /**
- * Department key used by filters: "admin", "security", "visitor", an office code, or for a teacher
- * the course they belong to.
+ * Department key used by filters: "admin", "security", "visitor", or an office code.
  */
 function personnel_department_key(string $role, string $officeCode): string
 {
-    if ($role === "teacher") {
-        return appointment_office_chain($officeCode)[1] ?? "teacher";
-    }
     return $role === "offices" ? $officeCode : $role;
 }
 
 function personnel_department_label(string $role, string $officeCode): string
 {
-    $labels = ["admin" => "Administration", "security" => "Security", "visitor" => "Visitors", "student" => "Students"];
+    $labels = ["admin" => "Administration", "security" => "Security", "visitor" => "Visitors"];
     if ($role === "offices") {
         return $officeCode !== "" ? appointment_office_label($officeCode) : "Unassigned office";
-    }
-    if ($role === "teacher") {
-        return $officeCode !== "" ? appointment_teacher_place_label($officeCode) : "Unassigned teacher";
     }
     return $labels[$role] ?? $role;
 }

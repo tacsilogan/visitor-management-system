@@ -54,9 +54,6 @@ import com.android.tools.screenshot.PreviewTest
 import java.time.LocalDate
 import ph.edu.isatu.visitor.R
 import ph.edu.isatu.visitor.data.AppointmentDto
-import ph.edu.isatu.visitor.data.AvailabilitySlotDto
-import ph.edu.isatu.visitor.data.TeacherDto
-import ph.edu.isatu.visitor.data.VisitTeacherDto
 import ph.edu.isatu.visitor.data.OfficeSummaryDto
 import ph.edu.isatu.visitor.data.QrPassDto
 import ph.edu.isatu.visitor.data.UserDto
@@ -419,7 +416,7 @@ fun OpeningSignedOutSmallPhone() = OpeningOverHome(2600L, greeting = "Welcome to
 @PreviewTest
 @Preview(name = "Welcome back, after logging in", widthDp = 360, heightDp = 780)
 @Composable
-fun WelcomeBack() = OpeningOverHome(2600L, greeting = Welcome("Maria", isStudent = false, returning = true).greeting)
+fun WelcomeBack() = OpeningOverHome(2600L, greeting = Welcome("Maria", returning = true).greeting)
 
 /** The real app icon, as Android builds it from the resources and masks it. */
 @PreviewTest
@@ -507,7 +504,7 @@ fun ResetPasswordWrongCode() = ResetFrame(
 )
 
 @PreviewTest
-@Preview(name = "Visitor account", widthDp = 360, heightDp = 780)
+@Preview(name = "Create an account", widthDp = 360, heightDp = 780)
 @Composable
 fun CreateAccount() = ISATUVisitorTheme {
     val draft = VisitorDraft().apply {
@@ -517,7 +514,7 @@ fun CreateAccount() = ISATUVisitorTheme {
         password = "Campus-Visit-2026"
         agreed = true
     }
-    VisitorSignupPage(draft, busy = false, banner = {}, onBack = {}, onRegister = { _, _, _, _ -> }, onOpenNotice = {}, onStudentInstead = {})
+    VisitorSignupPage(draft, busy = false, banner = {}, onBack = {}, onRegister = { _, _, _, _ -> }, onOpenNotice = {})
 }
 
 @PreviewTest
@@ -549,12 +546,12 @@ fun NoticeEnd() = ISATUVisitorTheme {
 @PreviewTest
 @Preview(name = "Agreeing, an existing account", widthDp = 360, heightDp = 780)
 @Composable
-fun AgreementScreen() = ISATUVisitorTheme { TermsAgreementScreen(busy = false, isStudent = false, onAgree = {}, onSignOut = {}) }
+fun AgreementScreen() = ISATUVisitorTheme { TermsAgreementScreen(busy = false, onAgree = {}, onSignOut = {}) }
 
 @PreviewTest
 @Preview(name = "Agreeing, on a small phone", widthDp = 320, heightDp = 568)
 @Composable
-fun NoticeAgreementSmallPhone() = ISATUVisitorTheme { TermsAgreementScreen(busy = false, isStudent = false, onAgree = {}, onSignOut = {}) }
+fun NoticeAgreementSmallPhone() = ISATUVisitorTheme { TermsAgreementScreen(busy = false, onAgree = {}, onSignOut = {}) }
 
 @PreviewTest
 @Preview(name = "The link in Profile", widthDp = 320, heightDp = 80, showBackground = true)
@@ -563,97 +560,3 @@ fun NoticeLinkInProfile() = ISATUVisitorTheme {
     Column(Modifier.padding(16.dp)) { NoticeLink {} }
 }
 
-/* ---------- Visits to a teacher ---------- */
-
-private val sampleTeachers = listOf(
-    TeacherDto(code = "T1", name = "Prof. Elena Reyes", shortName = "Prof. Reyes", course = "IT", department = "CCI", departmentName = "College of Computing and Informatics", availableNow = true, canWalkIn = true),
-    TeacherDto(code = "T2", name = "Mr. Paolo Dizon", shortName = "Mr. Dizon", course = "IT", department = "CCI", departmentName = "College of Computing and Informatics", nextFreeAt = at(today, "13:00")),
-    TeacherDto(code = "T3", name = "Dr. Ana Salazar", shortName = "Dr. Salazar", course = "CS", department = "CCI", departmentName = "College of Computing and Informatics", availableNow = true, canWalkIn = true),
-    TeacherDto(code = "T4", name = "Engr. Marco Villanueva", shortName = "Engr. Villanueva", course = "CS", department = "CCI", departmentName = "College of Computing and Informatics", nextFreeAt = at(today.plusDays(3), "09:00"), acceptsWalkIns = false),
-    TeacherDto(code = "T5", name = "Prof. Rosa Tan", shortName = "Prof. Tan", course = "IS", department = "CCI", departmentName = "College of Computing and Informatics", nextFreeAt = at(today, "14:00")),
-    TeacherDto(code = "T6", name = "Mr. Ken Aquino", shortName = "Mr. Aquino", course = "IS", department = "CCI", departmentName = "College of Computing and Informatics", availableNow = true, acceptsWalkIns = false),
-)
-
-private val sampleTeacherVisit = VisitTeacherDto(code = "T1", name = "Prof. Elena Reyes", shortName = "Prof. Reyes", course = "IT", department = "CCI")
-
-private fun teacherVisit(status: String, pass: QrPassDto? = null, answerBy: String? = null, type: String = "appointment") =
-    sampleVisit(status, office = "Prof. Elena Reyes", start = "10:30", end = "11:00", pass = pass).copy(
-        teacher = sampleTeacherVisit,
-        answerByAt = answerBy,
-        visitType = type,
-        subject = "Thesis consultation",
-        purpose = "Academic Concern",
-    )
-
-private val nextTimes = listOf("13:30", "14:00").map { AvailabilitySlotDto(at(today, it), at(today, it)) } +
-    listOf("09:30", "10:30").map { AvailabilitySlotDto(at(today.plusDays(1), it), at(today.plusDays(1), it)) }
-
-@PreviewTest
-@Preview(name = "Find a teacher", widthDp = 360, heightDp = 780)
-@Composable
-fun TeacherFind() = ISATUVisitorTheme {
-    Column(Modifier.fillMaxSize().background(AppBackground)) {
-        FindTeacherContent(sampleTeachers, false, {}, {}, {})
-    }
-}
-
-@PreviewTest
-@Preview(name = "The teacher field on the form", widthDp = 360, heightDp = 320)
-@Composable
-fun TeacherFormParts() = ISATUVisitorTheme {
-    Column(Modifier.fillMaxSize().background(AppBackground).padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        FindTeacherButton {}
-        TeacherChoiceCard(sampleTeachers[0]) {}
-        TeacherChoiceCard(sampleTeachers[4]) {}
-    }
-}
-
-@PreviewTest
-@Preview(name = "Waiting for the teacher to answer", widthDp = 360, heightDp = 780)
-@Composable
-fun TeacherWaiting() = ISATUVisitorTheme {
-    DetailScaffold("Your request", onBack = {}) { modifier ->
-        WalkInWaitingContent("Prof. Elena Reyes", "Thesis consultation", 582, false, {}, modifier)
-    }
-}
-
-@PreviewTest
-@Preview(name = "The teacher said not now", widthDp = 360, heightDp = 780)
-@Composable
-fun TeacherNotNow() = ISATUVisitorTheme {
-    DetailScaffold("Your request", onBack = {}) { modifier ->
-        TeacherAnswerContent(
-            "Prof. Elena Reyes", "Can't see you right now", true,
-            "Pick another time. What you typed stays, so there's nothing to fill in again.",
-            nextTimes, OfficeSummaryDto("IT", "CCI IT Office"), false, {}, {}, {}, modifier,
-        )
-    }
-}
-
-@PreviewTest
-@Preview(name = "No answer from the teacher", widthDp = 360, heightDp = 780)
-@Composable
-fun TeacherNoAnswer() = ISATUVisitorTheme {
-    DetailScaffold("Your request", onBack = {}) { modifier ->
-        TeacherAnswerContent(
-            "Prof. Elena Reyes", "No answer", false,
-            "Your request closed with no answer. Pick another time. What you typed stays, so there's nothing to fill in again.",
-            nextTimes, OfficeSummaryDto("DEANS", "CCI Dean's Office"), false, {}, {}, {}, modifier,
-        )
-    }
-}
-
-@PreviewTest
-@Preview(name = "Home, waiting for a teacher's answer", widthDp = 360, heightDp = 800)
-@Composable
-fun HomeTeacherWaitingAnswer() = HomeFrame(listOf(teacherVisit("pending_approval", answerBy = at(today, "23:59"), type = "walk_in")))
-
-@PreviewTest
-@Preview(name = "Home, booked with a teacher", widthDp = 360, heightDp = 800)
-@Composable
-fun HomeTeacherBooked() = HomeFrame(listOf(teacherVisit("pending_approval")))
-
-@PreviewTest
-@Preview(name = "Home, a teacher accepted", widthDp = 360, heightDp = 800)
-@Composable
-fun HomeTeacherAccepted() = HomeFrame(listOf(teacherVisit("approved", pass = readyPass)))

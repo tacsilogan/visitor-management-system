@@ -48,6 +48,8 @@ JSON for this Android client file.
    - `phone_tracker/school_accounts_migration.sql`
    - `phone_tracker/account_removal_migration.sql`
    - `phone_tracker/password_reset_code_migration.sql`
+   - `phone_tracker/visitor_only_migration.sql` (removes the student and teacher parts the two
+     files above it added; keep all three, in this order)
 
    An existing database only needs the files it is missing. Every migration can be run
    again safely. Do not import `app_users_office_code_migration.sql`,

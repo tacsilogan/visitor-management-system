@@ -346,7 +346,7 @@ function visit_notify_office(mysqli $conn, int $appointmentId, string $officeCod
         "INSERT INTO app_notifications
          (recipient_user_id, appointment_id, notification_type, title, message)
          SELECT id, ?, ?, ?, ?
-         FROM app_users WHERE role IN ('offices', 'teacher') AND office_code = ? AND is_active = 1"
+         FROM app_users WHERE role = 'offices' AND office_code = ? AND is_active = 1"
     );
     $notify->bind_param("issss", $appointmentId, $type, $title, $message, $officeCode);
     $notify->execute();

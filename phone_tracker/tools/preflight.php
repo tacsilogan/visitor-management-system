@@ -155,16 +155,14 @@ if ($clockDrift > 120) {
 
 $schemaChecks = [
     "app_users" => ["email", "session_version", "totp_secret", "first_name", "last_seen_at", "profile_image"],
-    "appointments" => ["visit_id", "checkout_method", "arrived_at", "arrival_method", "visitor_kind"],
+    "appointments" => ["visit_id", "checkout_method", "arrived_at", "arrival_method"],
     "visitor_presence" => ["appointment_id"],
     "campus_places" => ["place_type", "placed_by"],
     "campus_routes" => ["office_code", "points_json"],
     "office_directions" => ["office_code", "visitor_message"],
     "office_direction_steps" => ["office_code", "photo_path"],
-    "offices" => ["code", "kind", "parent_code", "approves_teachers"],
+    "offices" => ["code"],
     "account_requests" => ["code_hash", "status"],
-    "student_profiles" => ["student_number"],
-    "web_push_subscriptions" => ["endpoint"],
     "outbound_emails" => ["status"],
     "api_access_tokens" => ["id"],
     "user_trusted_devices" => ["id"],
@@ -191,7 +189,7 @@ if ($admins === 0) {
     preflight_line("FAIL", "There is no active administrator account. Use php tools/auth_recovery.php to restore one.");
 }
 $published = [];
-$result = $conn->query("SELECT username, password_hash FROM app_users WHERE is_active = 1 AND role IN ('admin', 'security', 'offices', 'teacher')");
+$result = $conn->query("SELECT username, password_hash FROM app_users WHERE is_active = 1 AND role IN ('admin', 'security', 'offices')");
 while ($user = $result->fetch_assoc()) {
     if (password_verify("password", (string) $user["password_hash"])) {
         $published[] = $user["username"];
@@ -214,7 +212,7 @@ if ($guards === 0) {
 $officesWithoutStaff = [];
 $result = $conn->query(
     "SELECT o.name FROM offices o
-     WHERE o.is_active = 1 AND o.kind = 'office'
+     WHERE o.is_active = 1
        AND NOT EXISTS (SELECT 1 FROM app_users u WHERE u.role = 'offices' AND u.is_active = 1 AND u.office_code = o.code)
      ORDER BY o.sort_order, o.name"
 );
@@ -239,10 +237,10 @@ $unpinned = [];
 $routeOnly = [];
 $routesReady = (bool) $conn->query("SHOW TABLES LIKE 'campus_routes'")->num_rows;
 $result = $conn->query(
-    "SELECT o.name, " . ($routesReady ? "EXISTS (SELECT 1 FROM campus_routes r WHERE r.office_code IN (o.code, o.parent_code))" : "0") . " AS has_route
+    "SELECT o.name, " . ($routesReady ? "EXISTS (SELECT 1 FROM campus_routes r WHERE r.office_code = o.code)" : "0") . " AS has_route
      FROM offices o
-     WHERE o.is_active = 1 AND o.kind IN ('office', 'course')
-       AND NOT EXISTS (SELECT 1 FROM campus_places p WHERE p.place_type = 'office' AND p.office_code IN (o.code, o.parent_code))
+     WHERE o.is_active = 1
+       AND NOT EXISTS (SELECT 1 FROM campus_places p WHERE p.place_type = 'office' AND p.office_code = o.code)
      ORDER BY o.sort_order, o.name"
 );
 while ($office = $result->fetch_assoc()) {
@@ -259,22 +257,22 @@ if ($routeOnly) {
     preflight_line("WARN", "A walking route but no pin: " . implode(", ", $routeOnly)
         . ". Visitors are guided to where the route ends; place the pin at the door in Campus Map > Offices.");
 }
-$activeOffices = (int) preflight_scalar($conn, "SELECT COUNT(*) FROM offices WHERE is_active = 1 AND kind IN ('office', 'course')");
+$activeOffices = (int) preflight_scalar($conn, "SELECT COUNT(*) FROM offices WHERE is_active = 1");
 $routedOffices = (int) preflight_scalar(
     $conn,
     "SELECT COUNT(*) FROM offices o
-     WHERE o.is_active = 1 AND o.kind IN ('office', 'course')
-       AND EXISTS (SELECT 1 FROM campus_routes r WHERE r.office_code IN (o.code, o.parent_code))"
+     WHERE o.is_active = 1
+       AND EXISTS (SELECT 1 FROM campus_routes r WHERE r.office_code = o.code)"
 );
 preflight_line("INFO", "Walking routes: " . $routedOffices . " of " . $activeOffices
     . " office(s) have one (record them in Campus Map > Routes).");
 $directedOffices = (int) preflight_scalar(
     $conn,
     "SELECT COUNT(*) FROM offices o
-     WHERE o.is_active = 1 AND o.kind IN ('office', 'course')
+     WHERE o.is_active = 1
        AND EXISTS (
            SELECT 1 FROM office_directions d
-           WHERE d.office_code IN (o.code, o.parent_code) AND d.building <> '' AND d.floor <> ''
+           WHERE d.office_code = o.code AND d.building <> '' AND d.floor <> ''
              AND (d.visitor_message <> '' OR EXISTS (SELECT 1 FROM office_direction_steps s WHERE s.office_code = d.office_code))
        )"
 );

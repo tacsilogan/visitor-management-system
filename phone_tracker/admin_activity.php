@@ -85,11 +85,9 @@ function activity_where(array $filters, bool $withCategory = true): array
         $params[] = $department;
         $types .= "s";
     } elseif ($department !== "") {
-        // A teacher belongs to their course, through their own calendar row.
-        $where[] = "((u.role = 'offices' AND u.office_code = ?) OR (u.role = 'teacher' AND u.office_code IN (SELECT code FROM offices WHERE parent_code = ?)))";
+        $where[] = "(u.role = 'offices' AND u.office_code = ?)";
         $params[] = $department;
-        $params[] = $department;
-        $types .= "ss";
+        $types .= "s";
     }
     if ($filters["user_id"] > 0) {
         $where[] = "g.actor_user_id = ?";
@@ -217,14 +215,11 @@ if ($view === "board") {
         "security" => ["key" => "security", "name" => "Security", "kind" => "role", "is_active" => true, "people" => []],
     ];
     foreach (appointment_office_map() as $code => $name) {
-        if (appointment_is_teacher_code($code)) {
-            continue;
-        }
         $departments[$code] = [
             "key" => $code,
             "name" => $name,
             "kind" => "office",
-            "is_active" => (bool) (appointment_office_row($code)["is_active"] ?? isset($active[$code])),
+            "is_active" => isset($active[$code]),
             "pending_appointments" => $pending[$code] ?? 0,
             "people" => [],
         ];
@@ -234,7 +229,7 @@ if ($view === "board") {
                 last_login_at, last_seen_at, TIMESTAMPDIFF(SECOND, last_seen_at, NOW()) AS seen_seconds_ago,
                 (totp_enabled_at IS NOT NULL) AS two_factor_enabled
          FROM app_users
-         WHERE role IN ('admin', 'security', 'offices', 'teacher')
+         WHERE role IN ('admin', 'security', 'offices')
          ORDER BY is_active DESC, last_name ASC, first_name ASC, username ASC"
     )->fetch_all(MYSQLI_ASSOC);
     foreach ($people as $row) {

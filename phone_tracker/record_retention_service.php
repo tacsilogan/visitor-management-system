@@ -5,8 +5,8 @@ declare(strict_types=1);
  * in visitor_app/.../ui/TermsNotice.kt):
  *   - a visit, with its consent, notifications, history and the activity records about it, goes
  *     1 year after the visit ended;
- *   - a visitor's or student's own activity records go 1 year after the activity;
- *   - a visitor's or student's account goes after 1 year without use: no sign-in and no visit;
+ *   - a visitor's own activity records go 1 year after the activity;
+ *   - a visitor's account goes after 1 year without use: no sign-in and no visit;
  *   - emails, in-app notifications and sign-up requests go 1 year after they were made.
  * Staff accounts are never removed here. What staff did is kept unless it is about a visit, which
  * goes with the visit: the notice says some records are kept for security. Location points and
@@ -27,7 +27,7 @@ const RETENTION_BATCH = 500;
 function retention_run(mysqli $conn, bool $apply): array
 {
     $cutoff = "NOW() - INTERVAL " . RETENTION_PERIOD;
-    $appUser = "SELECT id FROM app_users WHERE role IN ('visitor', 'student')";
+    $appUser = "SELECT id FROM app_users WHERE role = 'visitor'";
     $done = [];
 
     // The database removes a visit's consent, notifications, history, tracking and presence with
@@ -47,7 +47,7 @@ function retention_run(mysqli $conn, bool $apply): array
 
     // Last used: signing up, signing in, the app being used, or a visit (one still to come counts).
     $done["accounts"] = retention_batches($conn, $apply, "app_users",
-        "role IN ('visitor', 'student') AND GREATEST(
+        "role = 'visitor' AND GREATEST(
             created_at,
             COALESCE(last_login_at, created_at),
             COALESCE(last_seen_at, created_at),
@@ -59,18 +59,17 @@ function retention_run(mysqli $conn, bool $apply): array
             $conn->query("DELETE FROM audit_logs WHERE actor_user_id IN ({$ids})");
             $conn->query("DELETE FROM outbound_emails WHERE user_id IN ({$ids})");
             $conn->query("DELETE FROM account_requests WHERE user_id IN ({$ids})");
-            $conn->query("DELETE FROM app_users WHERE id IN ({$ids}) AND role IN ('visitor', 'student')");
+            $conn->query("DELETE FROM app_users WHERE id IN ({$ids}) AND role = 'visitor'");
             return $conn->affected_rows;
         });
 
-    // What visitors and students did, and anything left about a visit or with no one behind it.
+    // What visitors did, and anything left about a visit or with no one behind it.
     $done["activity records"] = retention_batches($conn, $apply, "audit_logs",
         "created_at < {$cutoff} AND (appointment_id IS NOT NULL OR actor_user_id IS NULL OR actor_user_id IN ({$appUser}))");
 
     $done["notifications"] = retention_batches($conn, $apply, "app_notifications", "created_at < {$cutoff}");
     $done["emails"] = retention_batches($conn, $apply, "outbound_emails", "created_at < {$cutoff}");
-    $done["sign-up requests"] = retention_batches($conn, $apply, "account_requests",
-        "account_type IN ('visitor', 'student') AND created_at < {$cutoff}");
+    $done["sign-up requests"] = retention_batches($conn, $apply, "account_requests", "created_at < {$cutoff}");
     return $done;
 }
 

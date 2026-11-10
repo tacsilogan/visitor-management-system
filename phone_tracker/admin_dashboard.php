@@ -43,8 +43,7 @@ $summaryResult = $conn->query(
     "SELECT
         SUM(status = 'checked_in') AS active_visitors,
         SUM(status = 'pending_approval') AS pending_approvals
-     FROM appointments
-     WHERE 1 = 1" . appointment_visitors_only_sql($conn)
+     FROM appointments"
 );
 if ($summaryResult) {
     $row = $summaryResult->fetch_assoc();
@@ -94,13 +93,12 @@ $visitorSql =
      LEFT JOIN app_users rj ON rj.id = a.rejected_by_user_id
      LEFT JOIN app_users ci ON ci.id = a.checked_in_by_user_id
      LEFT JOIN app_users co ON co.id = a.completed_by_user_id
-     WHERE 1 = 1" . appointment_visitors_only_sql($conn, "a") . "
      ORDER BY COALESCE(a.status_updated_at, a.created_at) DESC, a.id DESC
      LIMIT 20";
 
 $recentVisitors = [];
 $visitorResult = $conn->query($visitorSql);
-$officeMap = appointment_office_long_map();
+$officeMap = appointment_office_map();
 if ($visitorResult) {
     while ($row = $visitorResult->fetch_assoc()) {
         $officeCode = (string) ($row["office_code"] ?? "");

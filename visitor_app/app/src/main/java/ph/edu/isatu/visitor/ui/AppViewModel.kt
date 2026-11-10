@@ -31,12 +31,9 @@ import ph.edu.isatu.visitor.data.CampusMapData
 import ph.edu.isatu.visitor.data.CreateAppointmentRequest
 import ph.edu.isatu.visitor.data.LocationConsentRequest
 import ph.edu.isatu.visitor.data.NotificationDto
-import ph.edu.isatu.visitor.data.AvailabilitySlotDto
 import ph.edu.isatu.visitor.data.OfficeDto
 import ph.edu.isatu.visitor.data.RegisterRequest
 import ph.edu.isatu.visitor.data.SignupCodeData
-import ph.edu.isatu.visitor.data.SignupOptionsData
-import ph.edu.isatu.visitor.data.TeacherDto
 import ph.edu.isatu.visitor.data.TrackingData
 import ph.edu.isatu.visitor.data.UserDto
 import ph.edu.isatu.visitor.data.VisitDto
@@ -50,8 +47,6 @@ data class BookingPrefill(
     val subject: String,
     val details: String,
     val visitType: String = "appointment",
-    /** Set when the form should open on this teacher instead of an office. */
-    val teacher: TeacherDto? = null,
 )
 
 data class VisitorUiState(
@@ -62,10 +57,6 @@ data class VisitorUiState(
     /** This account hasn't agreed to the current Terms and Privacy Notice on this phone. */
     val noticeAgreementNeeded: Boolean = false,
     val offices: List<OfficeDto> = emptyList(),
-    val teachers: List<TeacherDto> = emptyList(),
-    val teachersLoading: Boolean = false,
-    /** The next free times of the teacher on screen, after "not now" or no answer. */
-    val teacherChoices: TeacherDto? = null,
     val appointments: List<AppointmentDto> = emptyList(),
     val notifications: List<NotificationDto> = emptyList(),
     val unreadCount: Int = 0,
@@ -84,8 +75,6 @@ data class VisitorUiState(
     val passwordReset: PasswordResetProgress? = null,
     /** A new password was just saved: Log in shows, with this email filled in. */
     val passwordChanged: PasswordChanged? = null,
-    /** The courses a student can choose at sign-up. */
-    val signupOptions: SignupOptionsData? = null,
     val error: String? = null,
     val message: String? = null,
 )
@@ -96,8 +85,6 @@ fun stopAvailabilityKey(officeCode: String, date: String): String = "$officeCode
 data class SignupProgress(
     val requestId: Long,
     val email: String,
-    /** "visitor" or "student". */
-    val accountType: String,
     /** When another code may be asked for (System.currentTimeMillis()). */
     val resendAt: Long,
 )
@@ -161,11 +148,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun login(email: String, password: String) = launchTask {
         // Ready before the app signs in, so the animation covers the change from its first frame.
         repository.login(email.trim(), password) { user ->
-            _welcome.value = Welcome(firstNameOf(user.fullName), isStudent = user.isStudent, returning = true)
+            _welcome.value = Welcome(firstNameOf(user.fullName), returning = true)
         }
     }
 
-    /** A visitor from outside ISATU: any email, and they agree to be tracked on campus. */
+    /** A new visitor account: any email, and they agree to share their location on campus. */
     fun registerVisitor(email: String, name: String, contact: String, password: String) = launchTask {
         val sent = repository.register(
             RegisterRequest(
@@ -175,49 +162,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 password = password,
                 trackingConsent = true,
                 consentVersion = BuildConfig.CONSENT_VERSION,
-                accountType = "visitor",
             ),
         )
-        codeSent(sent, "visitor")
+        codeSent(sent)
     }
 
-    /** An ISATU student: their @students.isatu.edu.ph email, and no tracking. */
-    fun registerStudent(
-        email: String,
-        name: String,
-        password: String,
-        studentNumber: String,
-        courseCode: String?,
-        courseName: String?,
-        yearLevel: Int,
-        section: String,
-    ) = launchTask {
-        val sent = repository.register(
-            RegisterRequest(
-                email = email.trim(),
-                fullName = name.trim(),
-                contactNumber = "",
-                password = password,
-                trackingConsent = false,
-                consentVersion = BuildConfig.CONSENT_VERSION,
-                accountType = "student",
-                studentNumber = studentNumber.trim(),
-                courseCode = courseCode,
-                courseName = courseName?.trim(),
-                yearLevel = yearLevel,
-                section = section.trim().uppercase(),
-            ),
-        )
-        codeSent(sent, "student")
-    }
-
-    private fun codeSent(sent: SignupCodeData, accountType: String) {
+    private fun codeSent(sent: SignupCodeData) {
         _state.update {
             it.copy(
                 signup = SignupProgress(
                     requestId = sent.requestId,
                     email = sent.email,
-                    accountType = accountType,
                     resendAt = System.currentTimeMillis() + sent.resendAfterSeconds * 1000L,
                 ),
                 // A server on a developer's computer sends the code back, so it can be tried without email.
@@ -232,7 +187,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val signup = _state.value.signup ?: return@launchTask
         // Ready before the app signs in, so the welcome covers the change from its first frame.
         repository.confirmSignup(signup.requestId, code.trim()) { user ->
-            _welcome.value = Welcome(firstNameOf(user.fullName), isStudent = user.isStudent)
+            _welcome.value = Welcome(firstNameOf(user.fullName))
         }
         _state.update { it.copy(signup = null, message = null) }
     }
@@ -240,28 +195,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun resendSignupCode() = launchTask {
         val signup = _state.value.signup ?: return@launchTask
         val sent = repository.resendCode(signup.requestId)
-        codeSent(sent, signup.accountType)
+        codeSent(sent)
         _state.update { it.copy(message = it.message ?: "We sent a new code. The old one no longer works.") }
     }
 
     fun cancelSignup() = _state.update { it.copy(signup = null, error = null, message = null) }
-
-    fun loadSignupOptions() {
-        if (_state.value.signupOptions != null) return
-        viewModelScope.launch {
-            val options = runCatching { repository.signupOptions() }.getOrNull()
-            if (options != null) _state.update { it.copy(signupOptions = options) }
-        }
-    }
-
-    /** A student at the teacher's room: there's no gate, so this is their arrival. */
-    fun sayImHere(appointment: AppointmentDto) = launchTask {
-        repository.reportArrival(ArrivalRequest(appointment.id, "visitor", null, null))
-        val updated = repository.appointment(appointment.id)
-        val teacher = appointment.teacher?.shortName ?: "The teacher"
-        _state.update { it.copy(selectedAppointment = updated, message = "$teacher knows you're here.") }
-        refreshAppointments()
-    }
 
     /** "Forgot password?": emails a 6-digit code. Asked again, it sends a new one and the old one stops working. */
     fun requestPasswordReset(email: String) = launchTask {
@@ -338,98 +276,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearAvailability() = _state.update { it.copy(availability = null) }
 
-    fun loadTeachers() {
-        viewModelScope.launch {
-            _state.update { it.copy(teachersLoading = true) }
-            val teachers = runCatching { repository.teachers() }.getOrNull()
-            _state.update {
-                it.copy(
-                    teachersLoading = false,
-                    teachers = teachers ?: it.teachers,
-                    error = if (teachers == null) "Could not load the teachers. Check your connection and try again." else it.error,
-                )
-            }
-        }
-    }
-
-    /** A teacher who stopped taking visits comes back empty, and the screen only offers the office. */
-    fun loadTeacherChoices(code: String) {
-        viewModelScope.launch {
-            _state.update { it.copy(teacherChoices = null) }
-            val teacher = runCatching { repository.teacher(code) }.getOrNull()
-            _state.update { it.copy(teacherChoices = teacher) }
-        }
-    }
-
-    /** Picks one of the teacher's free times, with what the visitor already typed. */
-    fun requestTeacherTime(previous: AppointmentDto, slot: AvailabilitySlotDto) = launchTask {
-        val appointment = repository.createAppointment(
-            CreateAppointmentRequest(
-                visitType = "appointment",
-                officeCode = previous.office.code,
-                purpose = previous.purpose,
-                subject = previous.subject,
-                additionalDetails = previous.additionalDetails,
-                scheduledStartAt = slot.scheduledStartAt,
-                scheduledEndAt = slot.scheduledEndAt,
-                deviceName = repository.installationStore.deviceName,
-                locationConsent = LocationConsentRequest(true, BuildConfig.CONSENT_VERSION),
-            ),
-        )
-        _state.update {
-            it.copy(selectedAppointment = appointment, teacherChoices = null, message = teacherBookingMessage(appointment))
-        }
-        refreshAppointments()
-    }
-
-    /** "See more times": the Book form opens on this teacher, with the details filled in. */
-    fun rebookWithTeacher(appointment: AppointmentDto) {
-        val teacher = _state.value.teacherChoices
-        _state.update {
-            it.copy(
-                selectedAppointment = null,
-                teacherChoices = null,
-                tracking = null,
-                bookingPrefill = BookingPrefill(
-                    officeCode = appointment.office.code,
-                    purpose = appointment.purpose,
-                    subject = appointment.subject,
-                    details = appointment.additionalDetails,
-                    visitType = "appointment",
-                    teacher = teacher,
-                ),
-            )
-        }
-    }
-
-    /** "Go to the office instead": the Book form opens on that office, as a walk-in. */
-    fun goToFallbackOffice(appointment: AppointmentDto) {
-        val office = appointment.fallbackOffice ?: return
-        _state.update {
-            it.copy(
-                selectedAppointment = null,
-                teacherChoices = null,
-                tracking = null,
-                bookingPrefill = BookingPrefill(
-                    officeCode = office.code,
-                    purpose = appointment.purpose,
-                    subject = appointment.subject,
-                    details = appointment.additionalDetails,
-                    visitType = "walk_in",
-                ),
-            )
-        }
-    }
-
-    private fun teacherBookingMessage(appointment: AppointmentDto): String {
-        val name = appointment.teacher?.shortName ?: "the teacher"
-        return when {
-            appointment.status != "approved" -> "Request sent to $name."
-            appointment.isStudentVisit -> "Accepted. Open it for the room and directions."
-            else -> "Accepted. Your pass is ready."
-        }
-    }
-
     fun createAppointment(
         visitType: String,
         officeCode: String,
@@ -456,10 +302,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(
                 selectedAppointment = appointment,
                 availability = null,
-                message = when {
-                    appointment.teacher != null -> teacherBookingMessage(appointment)
-                    visitType == "walk_in" -> "Walk-in pass ready. Present it to Security with a valid ID."
-                    else -> "Appointment request submitted for office review."
+                message = if (visitType == "walk_in") {
+                    "Walk-in pass ready. Present it to Security with a valid ID."
+                } else {
+                    "Appointment request submitted for office review."
                 },
             )
         }

@@ -25,18 +25,15 @@ step, and a wrong password, shows on the form straight away, without the animati
 
 ## New accounts
 
-The server decides every role. Sign-up in the app only ever makes a visitor or an ISATU student, and
-a teacher's request on the website becomes an account only when their department's Dean's Office
-approves it. Office Personnel, Security and Admin accounts are made only by the admin (Add user).
+The server decides every role. Sign-up in the app only ever makes a visitor, the only person who
+uses the app. Office Personnel, Security and Admin accounts are made only by the admin (Add user).
 
-- Every new account confirms its email first: a 6-digit code that works for 10 minutes, once, with
-  5 tries. Only an HMAC of the code is stored. Nothing exists in `app_users` until the code is
-  entered (`account_requests` holds the sign-up until then).
-- A student must use an `@students.isatu.edu.ph` email, a teacher an `@isatu.edu.ph` email. A
-  student email can't make a visitor account.
+- Every new visitor account confirms its email first: a 6-digit code that works for 10 minutes,
+  once, with 5 tries. Only an HMAC of the code is stored. Nothing exists in `app_users` until the
+  code is entered (`account_requests` holds the sign-up until then).
 - Sign-ups are limited per email and per network.
 
-Details: [SCHOOL_ACCOUNTS.md](SCHOOL_ACCOUNTS.md).
+Details: [PHASE4_MOBILE_API.md](PHASE4_MOBILE_API.md), "Creating an account".
 
 ## Lockout rules
 
@@ -123,10 +120,7 @@ Endpoints check a permission, not a role name (`permissions.php`).
 | `profile.self` | ✓ | ✓ | ✓ | |
 | `appointments.book`, `tracking.self` | | | | ✓ |
 
-Office Personnel still only see their own office's records. A student uses the app like a visitor,
-except the pass, tracking and multi-office visit endpoints, which call `api_require_visitor()`; the
-others call `api_require_app_user()`. The Dean's Office approves teachers only for its own department
-(`offices.approves_teachers`). To add a role, add it to
+Office Personnel still only see their own office's records. To add a role, add it to
 `AUTH_ROLE_PERMISSIONS`; new endpoints should call `require_permission_json("...")`.
 
 ## Admin tools
@@ -146,15 +140,14 @@ User Management → **Remove** works for any account, even one with years of vis
 and does everything in one transaction, so it either all happens or nothing changes.
 
 - **Goes with the account:** sign-in, sessions, phones, app sign-ins, notifications, location
-  sharing, trusted browsers, backup codes, the student profile, and emails still waiting to be sent.
+  sharing, trusted browsers, backup codes, and emails still waiting to be sent.
 - **Stays in the records:** every visit, under the name and email it was booked with; consent
   records; what staff did (approvals, suggested times, check-ins, pass overrides); the activity log.
   These rows only stop pointing at the account (`ON DELETE SET NULL`, from
   `account_removal_migration.sql`). GPS positions stay with their visit until the 90-day cleanup.
-- **Closed first:** a visitor's or student's open requests and visits are cancelled, and the office
-  or teacher is told about each one still to come. Their open visits are closed, so a saved picture
-  of the pass no longer works at the gate. A teacher's upcoming visits are cancelled and each visitor
-  is told; their hours are removed and their calendar is archived, or deleted if it never had a visit.
+- **Closed first:** a visitor's open requests and visits are cancelled, and the office is told about
+  each one still to come. Their open visits are closed, so a saved picture of the pass no longer
+  works at the gate.
 - **Waits:** a visitor who is inside the campus. The guard ends the visit first (End visit on the
   Security dashboard), or the administrator removes the account after they leave.
 - Nobody can remove their own account or the last active administrator.

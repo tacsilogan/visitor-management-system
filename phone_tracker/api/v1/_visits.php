@@ -90,7 +90,7 @@ function mobile_create_visit(mysqli $conn, array $user, array $input): array
         $errors["location_consent"] = "Location consent and its displayed policy version are required";
     }
 
-    // A teacher can't be one stop of a multi-office visit yet.
+    // Only offices with someone to answer (appointment_office_bookable_map()).
     $offices = appointment_office_bookable_map();
     $now = new DateTime("now");
     $stops = [];

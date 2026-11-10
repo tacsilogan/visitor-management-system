@@ -44,11 +44,10 @@ object TermsNotice {
         ),
         NoticeBlock.Heading("Your visit"),
         NoticeBlock.Paragraph(
-            "An appointment needs the approval of the office or teacher you are visiting, who may decline it " +
-                "or suggest another time. A walk-in depends on the office accepting visitors at that time. A " +
-                "walk-in to a teacher also needs the teacher to accept it, so you get your pass only then. On campus, follow " +
-                "university rules and the instructions of guards and staff, and have your pass scanned at " +
-                "the gate when you leave.",
+            "An appointment needs the approval of the office you are visiting, which may decline it or " +
+                "suggest another time. A walk-in depends on the office accepting visitors at that time. On " +
+                "campus, follow university rules and the instructions of guards and staff, and have your pass " +
+                "scanned at the gate when you leave.",
         ),
         NoticeBlock.Heading("Directions"),
         NoticeBlock.Paragraph(
@@ -77,7 +76,7 @@ object TermsNotice {
                 "scrambled form that nobody can read.",
         ),
         NoticeBlock.Point(
-            "**Visits:** the office or teacher, date and time, purpose, subject, and any details you add; your check-in " +
+            "**Visits:** the office, date and time, purpose, subject, and any details you add; your check-in " +
                 "and check-out times; and when you say you have arrived or need help.",
         ),
         NoticeBlock.Point("**Location:** see the next section."),
@@ -108,34 +107,17 @@ object TermsNotice {
         ),
         NoticeBlock.Heading("Why we use it"),
         NoticeBlock.Point("To run your account and visits: requests, passes, check-in, and check-out."),
-        NoticeBlock.Point("To guide you on campus and tell the office or teacher when you arrive or need help."),
+        NoticeBlock.Point("To guide you on campus and tell the office when you arrive or need help."),
         NoticeBlock.Point("To keep the campus safe: guards can see where visitors are and how long they have stayed."),
         NoticeBlock.Point("To send you visit updates as notifications, and codes by email for signing up and for a new password."),
         NoticeBlock.Point("To keep records, prepare visitor reports, and look into misuse."),
-        NoticeBlock.Heading("ISATU students"),
-        NoticeBlock.Paragraph(
-            "If you sign up as an ISATU student, you use your @students.isatu.edu.ph email and give your " +
-                "Student ID, course, year and section. You book teachers only. You get **no pass**, no " +
-                "guard scans you, and **your location is never shared**: the directions to a teacher's room " +
-                "don't use it. Instead, you tap I'm here, and the teacher is told.",
-        ),
-        NoticeBlock.Point(
-            "**A teacher you book** sees your name, Student ID, course, year and section, your reason, " +
-                "and when you tap I'm here. They can't see your email or contact number.",
-        ),
-        NoticeBlock.Point(
-            "Your visits to teachers aren't shown to guards and aren't counted as visitors. Administrators " +
-                "see your account and count student visits separately.",
-        ),
+
         NoticeBlock.Heading("Who can see it"),
         NoticeBlock.Point(
             "**The office you are visiting:** your name, email, contact number, visit details, and when you " +
                 "arrive or ask for help. Offices can't see your position on a map.",
         ),
-        NoticeBlock.Point(
-            "**A teacher you are visiting:** your name, visit details, and when you arrive or ask for help. " +
-                "Teachers can't see your email, contact number, or position on a map.",
-        ),
+
         NoticeBlock.Point(
             "**Guards:** your name, contact details, visit details, your position on campus, and the path you walked.",
         ),

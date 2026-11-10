@@ -2,9 +2,9 @@
 declare(strict_types=1);
 // Shared by the sign-up endpoints: register.php, confirm_signup.php and resend_code.php.
 require_once dirname(__DIR__) . "/_bootstrap.php";
-require_once dirname(__DIR__, 3) . "/school_accounts_service.php";
+require_once dirname(__DIR__, 3) . "/signup_service.php";
 
-function api_signup_fail(SchoolAccountError $error): never
+function api_signup_fail(SignupError $error): never
 {
     $payload = ["success" => false, "message" => $error->getMessage(), "code" => $error->reason];
     if ($error->field !== "") {
@@ -36,9 +36,9 @@ function api_signup_code_reply(array $sent): array
     return $data;
 }
 
-function api_require_school_schema(mysqli $conn): void
+function api_require_signup_schema(mysqli $conn): void
 {
-    if (!school_schema_ready($conn)) {
-        api_fail("Database update required: import phone_tracker/school_accounts_migration.sql", 503);
+    if (!signup_schema_ready($conn)) {
+        api_fail("Database update required: run php phone_tracker/tools/setup_database.php", 503);
     }
 }

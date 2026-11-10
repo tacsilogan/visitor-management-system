@@ -9,7 +9,7 @@ if (PHP_SAPI !== "cli") {
 /*
  * Runs the background jobs the system needs while it is online:
  *   every minute  visit timing (ended slots, campus exits, end of day), queued emails,
- *                 queued push notifications, teachers' phone alerts
+ *                 queued push notifications
  *   once a day    location history older than the retention period is deleted, and what the
  *                 Terms and Privacy Notice keeps only 1 year (record_retention_service.php),
  *                 from 03:00
@@ -88,7 +88,6 @@ function scheduler_jobs(array &$state): array
         ["name" => "Visit timing", "script" => "refresh_visit_states.php", "arguments" => [], "timeout" => 120],
         ["name" => "Email", "script" => "send_outbound_emails.php", "arguments" => [], "timeout" => 240],
         ["name" => "Push notifications", "script" => "send_push_notifications.php", "arguments" => [], "timeout" => 240],
-        ["name" => "Teacher phone alerts", "script" => "send_web_push.php", "arguments" => [], "timeout" => 120],
     ];
     // Each daily job keeps its own day, so one failing (it tries again an hour later) never
     // stands in for another that worked.

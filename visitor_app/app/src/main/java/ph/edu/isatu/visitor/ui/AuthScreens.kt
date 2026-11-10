@@ -97,7 +97,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import ph.edu.isatu.visitor.R
 
-private enum class AuthMode { Login, Choose, Register, Student, Recover }
+private enum class AuthMode { Login, Register, Recover }
 
 private data class PendingRegistration(
     val email: String,
@@ -116,7 +116,7 @@ internal class VisitorDraft {
     var agreed by mutableStateOf(false)
 
     val ready: Boolean
-        get() = name.trim().length >= 2 && email.isNotBlank() && !isStudentEmail(email) && passwordReady(password) && agreed
+        get() = name.trim().length >= 2 && email.isNotBlank() && passwordReady(password) && agreed
 }
 
 @Composable
@@ -124,7 +124,6 @@ fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
     var mode by remember { mutableStateOf(AuthMode.Login) }
     var noticeOpen by remember { mutableStateOf(false) }
     val visitor = remember { VisitorDraft() }
-    val student = remember { StudentDraft() }
     val rememberedEmail = remember { viewModel.rememberedEmail }
     val focusManager = LocalFocusManager.current
     val autofill = LocalAutofillManager.current
@@ -150,13 +149,9 @@ fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
     LaunchedEffect(passwordChanged) {
         if (passwordChanged != null) mode = AuthMode.Login
     }
-    // The phone's Back does what the screen's back arrow does. The student's steps handle their own.
-    BackHandler(enabled = signup != null || mode == AuthMode.Choose || mode == AuthMode.Register || mode == AuthMode.Recover) {
-        when {
-            signup != null -> viewModel.cancelSignup()
-            mode == AuthMode.Register -> showMode(AuthMode.Choose)
-            else -> showMode(AuthMode.Login)
-        }
+    // The phone's Back does what the screen's back arrow does.
+    BackHandler(enabled = signup != null || mode == AuthMode.Register || mode == AuthMode.Recover) {
+        if (signup != null) viewModel.cancelSignup() else showMode(AuthMode.Login)
     }
     Box(Modifier.fillMaxSize().background(AppBackground)) {
         when {
@@ -173,39 +168,18 @@ fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
                 LoginForm(
                     busy = state.busy,
                     onLogin = viewModel::login,
-                    onRegister = { showMode(AuthMode.Choose) },
+                    onRegister = { showMode(AuthMode.Register) },
                     onRecover = { showMode(AuthMode.Recover) },
                     rememberedEmail = passwordChanged?.email ?: rememberedEmail,
-                )
-            }
-            mode == AuthMode.Choose -> BrandedAuthPage(onBack = { showMode(AuthMode.Login) }, busy = state.busy, banner = banner) {
-                SignupChoice(
-                    onStudent = { showMode(AuthMode.Student) },
-                    onVisitor = { showMode(AuthMode.Register) },
-                    onLogin = { showMode(AuthMode.Login) },
                 )
             }
             mode == AuthMode.Register -> VisitorSignupPage(
                 draft = visitor,
                 busy = state.busy,
                 banner = banner,
-                onBack = { showMode(AuthMode.Choose) },
+                onBack = { showMode(AuthMode.Login) },
                 onRegister = viewModel::registerVisitor,
                 onOpenNotice = openNotice,
-                onStudentInstead = {
-                    student.email = visitor.email.trim()
-                    showMode(AuthMode.Student)
-                },
-            )
-            mode == AuthMode.Student -> StudentSignupFlow(
-                draft = student,
-                options = state.signupOptions,
-                busy = state.busy,
-                banner = banner,
-                onLoadOptions = viewModel::loadSignupOptions,
-                onRegister = viewModel::registerStudent,
-                onOpenNotice = openNotice,
-                onExit = { showMode(AuthMode.Choose) },
             )
             else -> AuthFormPage("Reset password", onBack = { showMode(AuthMode.Login) }, busy = state.busy, banner = banner) {
                 RecoverForm(
@@ -226,7 +200,7 @@ fun AuthFlow(state: VisitorUiState, viewModel: AppViewModel) {
 }
 
 /**
- * Log in and choosing an account: the card in the middle of the screen, where a thumb reaches its
+ * Log in: the card in the middle of the screen, where a thumb reaches its
  * button, between the front of the ISATU building at the top, with the logo in the middle of the
  * space above the card, and a navy wave with the university's name at the bottom. With the keyboard
  * up, the page scrolls and the field being typed in stays in view.
@@ -515,7 +489,7 @@ internal fun ColumnScope.LoginForm(
 }
 
 /**
- * A visitor's sign-up: one short page, because most visitors come once. One box agrees to the
+ * Creating an account: one short page, because most visitors come once. One box agrees to the
  * notice and to sharing their location during visits.
  */
 @Composable
@@ -526,7 +500,6 @@ internal fun VisitorSignupPage(
     onBack: () -> Unit,
     onRegister: (String, String, String, String) -> Unit,
     onOpenNotice: () -> Unit,
-    onStudentInstead: () -> Unit,
 ) {
     val context = LocalContext.current
     var visible by remember { mutableStateOf(false) }
@@ -562,7 +535,7 @@ internal fun VisitorSignupPage(
     }
 
     AuthFormPage(
-        title = "Visitor account",
+        title = "Create an account",
         onBack = onBack,
         busy = busy,
         banner = banner,
@@ -585,11 +558,7 @@ internal fun VisitorSignupPage(
             draft.email, { draft.email = it }, "Email address", { Icon(Icons.Rounded.Email, null) }, KeyboardType.Email,
             imeAction = ImeAction.Next, autofill = ContentType.NewUsername + ContentType.EmailAddress,
         )
-        if (isStudentEmail(draft.email)) {
-            // A student's school email: they have an account type of their own, with no pass or tracking.
-            FieldNote("This is a student email.", error = true)
-            TextButton(onClick = onStudentInstead) { Text("Sign up as an ISATU student instead") }
-        }
+
         PortalTextField(
             draft.contact, { draft.contact = it }, "Contact number", { Icon(Icons.Rounded.Phone, null) }, KeyboardType.Phone,
             imeAction = ImeAction.Next, autofill = ContentType.PhoneNumber,
@@ -723,11 +692,6 @@ internal fun AuthHeading(title: String, body: String) {
     }
 }
 
-/** A small label over a field that has none of its own, like the Student ID boxes. */
-@Composable
-internal fun FieldLabel(text: String) {
-    Text(text, style = MaterialTheme.typography.labelLarge, color = Ink)
-}
 
 /**
  * A one-line field. [imeAction] is the keyboard's action key: Next moves on by itself, and

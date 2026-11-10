@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISATU Office Personnel Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261107-3">
+    <link rel="stylesheet" href="style.css?v=20261110-1">
 </head>
 <body class="admin-page office-page">
     <header class="admin-topbar">
@@ -58,11 +58,6 @@
                 <button class="admin-nav-item" type="button" data-office-view="availability">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM8 2v4M16 2v4M5 9h14M9 13h2M13 13h2M9 17h2"/></svg>
                     <span>Availability</span>
-                </button>
-                <button class="admin-nav-item" id="officeTeachersNav" type="button" data-office-view="teachers" hidden>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5-10-5Z"/><path d="M6 11v5c2 2 10 2 12 0v-5"/></svg>
-                    <span>Teachers</span>
-                    <em class="office-nav-count" id="officeTeachersCount" hidden></em>
                 </button>
             </nav>
         </aside>
@@ -155,43 +150,6 @@
                 </section>
             </section>
 
-            <section class="admin-view" id="officeTeachersView" data-office-panel="teachers" hidden>
-                <section class="admin-content-card office-table-card" id="teacherRequestsCard" hidden>
-                    <header class="admin-section-header">
-                        <div><h2>Teacher requests</h2><p id="teacherRequestsIntro">Teachers who asked for an account. Approve only those who teach in your department.</p></div>
-                    </header>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table office-table ot-requests">
-                            <thead><tr><th>Teacher</th><th>Course</th><th>Asked</th><th><span class="sr-only">Answer</span></th></tr></thead>
-                            <tbody id="teacherRequestsBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state is-compact" id="teacherRequestsEmpty" hidden><strong>No requests waiting</strong><span>Teachers ask for an account from the sign-in page. Each request appears here once they confirm their @isatu.edu.ph email.</span></div>
-                </section>
-
-                <section class="admin-content-card office-table-card">
-                    <header class="admin-section-header">
-                        <div><h2>Teachers</h2><p>Each teacher manages their own hours and visitors. This list is for when someone asks at your office.</p></div>
-                        <div class="admin-table-tools">
-                            <label class="admin-select-label" for="officeTeachersCourse"><span>Course</span>
-                                <select id="officeTeachersCourse"><option value="">All courses</option></select>
-                            </label>
-                            <label class="admin-search" for="officeTeachersSearch">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                                <input id="officeTeachersSearch" type="search" placeholder="Search teachers" autocomplete="off">
-                            </label>
-                        </div>
-                    </header>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table office-table ot-table">
-                            <thead><tr><th>Teacher</th><th>Course</th><th>Right now</th><th>Next free</th><th class="ot-account-col" hidden>Account</th><th class="ot-account-col" hidden><span class="sr-only">Turn on or off</span></th></tr></thead>
-                            <tbody id="officeTeachersBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state is-compact" id="officeTeachersEmpty" hidden><strong id="officeTeachersEmptyTitle">No teachers yet</strong><span id="officeTeachersEmptyText">Teachers appear here once the administrator adds them.</span></div>
-                </section>
-            </section>
-
             <section class="admin-view" id="officeAvailabilityView" data-office-panel="availability" hidden>
                 <header class="office-view-heading">
                     <div><p class="admin-eyebrow">Appointment Controls</p><h1>Availability</h1><p>Publish when your office can receive visitors so they only request workable schedules.</p></div>
@@ -274,21 +232,6 @@
                 <button class="office-success-button" id="completeOfficeStopBtn" type="button" hidden>Mark meeting done</button>
             </footer>
         </div>
-    </dialog>
-
-    <dialog class="admin-dialog office-small-dialog" id="officeRejectTeacherDialog" aria-labelledby="officeRejectTeacherTitle">
-        <form id="officeRejectTeacherForm">
-            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Teacher request</p><h2 id="officeRejectTeacherTitle">Reject this request?</h2></div><button class="admin-dialog-close" type="button" data-close-reject aria-label="Close">×</button></header>
-            <fieldset class="office-reasons">
-                <legend id="officeRejectTeacherTo">The reason is emailed to them.</legend>
-                <label><input type="radio" name="teacherRejectReason" value="department" checked> <span id="officeRejectNotHere">Doesn't teach in this department</span></label>
-                <label><input type="radio" name="teacherRejectReason" value="Isn't a teacher"> Isn't a teacher</label>
-                <label><input type="radio" name="teacherRejectReason" value="other"> Other</label>
-                <textarea id="officeRejectTeacherOther" rows="2" maxlength="200" placeholder="Write the reason" hidden></textarea>
-            </fieldset>
-            <p class="admin-message is-error" id="officeRejectTeacherError" role="alert" hidden></p>
-            <div class="admin-dialog-actions"><button class="admin-cancel-button" type="button" data-close-reject>Cancel</button><button class="office-danger-button" id="confirmRejectTeacherBtn" type="submit">Reject request</button></div>
-        </form>
     </dialog>
 
     <dialog class="admin-dialog office-small-dialog" id="officeDeclineDialog">
@@ -390,10 +333,10 @@
     </dialog>
 
     <div class="office-toast" id="officeToast" role="status" aria-live="polite" hidden></div>
-    <script src="auth.js?v=20261106-1"></script>
+    <script src="auth.js?v=20261110-1"></script>
     <script src="dialogs.js?v=20261107-3"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
-    <script src="offices.js?v=20261107-3"></script>
+    <script src="offices.js?v=20261110-1"></script>
 </body>
 </html>

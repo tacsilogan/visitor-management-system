@@ -53,7 +53,9 @@ fields, and configurable mobile policies.
 | Method | Endpoint | Authentication | Purpose |
 |---|---|---|---|
 | GET | `/health.php` | Public | Database/API readiness |
-| POST | `/auth/register.php` | Public | Register a visitor account |
+| POST | `/auth/register.php` | Public | Start a visitor account; emails a 6-digit code |
+| POST | `/auth/confirm_signup.php` | Emailed code | Create the account from the code and sign in |
+| POST | `/auth/resend_code.php` | Public | Email a new code for a sign-up still waiting for one |
 | POST | `/auth/login.php` | Public | Issue a bearer token |
 | POST | `/auth/logout.php` | Bearer | Revoke the current token |
 | POST | `/auth/request_password_reset.php` | Public | Email a 6-digit reset code (same reply for any email) |
@@ -134,6 +136,22 @@ Configuration:
 
 The repository contains no Firebase credential. Without configuration, the worker exits
 safely and queued in-app notifications continue to work.
+
+## Creating an account
+
+Visitors are the only people who use the app, and they create their own accounts. `register.php`
+saves the sign-up in `account_requests` and emails a 6-digit code; `confirm_signup.php` turns it
+into a visitor account and signs in, only when the code is entered, so an address nobody can open
+never becomes an account (`signup_service.php`).
+
+- A code works for 10 minutes and once, allows 5 wrong tries, and can be sent again after 60
+  seconds, at most 5 times per sign-up. Sign-ups are also limited per email and per network.
+- Only an HMAC of the code is stored (key: `config/auth_secret.php`). The email queue drops the
+  code once it is sent. A development server returns it as `development_code` instead.
+- The code is sent at once when email is set up (DEPLOYMENT.md, step 4), or else waits in the
+  queue. Without email nobody can sign up, so set it up before inviting people.
+- Apps from 0.8.0 to 0.10.x send `account_type`; anything but `visitor` is refused with a message
+  to update the app.
 
 ## Account recovery email
 

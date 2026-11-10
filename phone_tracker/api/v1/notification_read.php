@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . "/_bootstrap.php";
 
 api_require_method("POST");
-$user = api_require_app_user();
+$user = api_require_visitor();
 $input = api_body();
 $userId = (int) $user["id"];
 $markAll = !empty($input["mark_all"]);

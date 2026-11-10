@@ -218,8 +218,7 @@ fun formatVisitStart(start: String): String {
 
 /** When a visit is: its time slot, or for a walk-in how long its pass lasts. */
 fun visitTimeText(appointment: AppointmentDto): String =
-    // A walk-in to a teacher has a slot, not an hour-long pass.
-    if (appointment.visitType == "walk_in" && appointment.teacher == null) {
+    if (appointment.visitType == "walk_in") {
         "Walk-in · until ${formatTimeOfDay(appointment.scheduledEndAt)}"
     } else {
         formatVisitTime(appointment.scheduledStartAt, appointment.scheduledEndAt)

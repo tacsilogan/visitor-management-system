@@ -4,7 +4,7 @@ require_once __DIR__ . "/_bootstrap.php";
 require_once __DIR__ . "/_appointments.php";
 
 api_require_method("POST");
-$user = api_require_app_user();
+$user = api_require_visitor();
 $input = api_body();
 $appointmentId = (int) ($input["appointment_id"] ?? 0);
 $reason = api_text($input, "reason", 500);

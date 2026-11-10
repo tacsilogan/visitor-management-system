@@ -18,8 +18,6 @@ interface VisitorApi {
     @POST("auth/resend_code.php")
     suspend fun resendCode(@Body request: ResendCodeRequest): Response<ApiEnvelope<SignupCodeData>>
 
-    @GET("auth/signup_options.php")
-    suspend fun signupOptions(): Response<ApiEnvelope<SignupOptionsData>>
 
     @POST("auth/login.php")
     suspend fun login(@Body request: LoginRequest): Response<ApiEnvelope<LoginData>>
@@ -42,14 +40,6 @@ interface VisitorApi {
     @GET("offices.php")
     suspend fun offices(): Response<ApiEnvelope<OfficesData>>
 
-    @GET("teachers.php")
-    suspend fun teachers(): Response<ApiEnvelope<TeachersData>>
-
-    @GET("teachers.php")
-    suspend fun teacher(
-        @Query("code") code: String,
-        @Query("slots") slots: Int = 4,
-    ): Response<ApiEnvelope<TeacherData>>
 
     @GET("availability.php")
     suspend fun availability(

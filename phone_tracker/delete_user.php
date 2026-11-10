@@ -48,8 +48,6 @@ $count = $result["cancelled_visits"];
 $message = "Removed " . $result["name"] . ".";
 if ($count > 0) {
     $visits = $count === 1 ? "1 upcoming visit was" : "{$count} upcoming visits were";
-    $message .= $result["role"] === "teacher"
-        ? " {$visits} cancelled, and each visitor was told."
-        : " {$visits} cancelled, and " . ($count === 1 ? "the office or teacher" : "each office or teacher") . " was told.";
+    $message .= " {$visits} cancelled, and " . ($count === 1 ? "the office was" : "each office was") . " told.";
 }
 auth_json(["success" => true, "message" => $message, "cancelled_visits" => $count]);

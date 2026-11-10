@@ -1,7 +1,6 @@
 package ph.edu.isatu.visitor.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,7 +52,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ph.edu.isatu.visitor.data.AvailabilitySlotDto
-import ph.edu.isatu.visitor.data.TeacherDto
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -66,15 +64,6 @@ private val visitPurposes = listOf(
     "Technical Support",
     "Document Request",
     "Official Business",
-    "Other",
-)
-
-/** Why an ISATU student comes to a teacher. */
-internal val studentReasons = listOf(
-    "Consultation",
-    "Grades",
-    "Thesis or capstone",
-    "Clearance signing",
     "Other",
 )
 
@@ -91,27 +80,12 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
     var showDatePicker by remember { mutableStateOf(false) }
     val multiStop = remember { MultiStopDraft() }
     var multipleOffices by remember { mutableStateOf(false) }
-    // The form is for an office or for one teacher. Either way officeCode holds who is booked.
-    var visitingTeacher by remember { mutableStateOf(false) }
-    var chosenTeacher by remember { mutableStateOf<TeacherDto?>(null) }
-    var findingTeacher by remember { mutableStateOf(false) }
-    // A student books teachers only, with no pass: "Now" or a set time, and a student's reasons.
-    val isStudent = state.user?.isStudent == true
-    LaunchedEffect(isStudent) {
-        if (isStudent) {
-            visitingTeacher = true
-            multipleOffices = false
-        }
-    }
-    val purposes = if (isStudent) studentReasons else visitPurposes
 
     // Rebooking: keep the request's details, so only a new time or office is left to choose.
     LaunchedEffect(state.bookingPrefill) {
         state.bookingPrefill?.let { prefill ->
             visitType = prefill.visitType
             multipleOffices = false
-            visitingTeacher = prefill.teacher != null
-            chosenTeacher = prefill.teacher
             officeCode = prefill.officeCode
             purpose = prefill.purpose
             subject = prefill.subject
@@ -140,36 +114,6 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
         }
     }
 
-    // For the teacher's next free times, and where a visitor can go if they can't be seen.
-    LaunchedEffect(chosenTeacher?.code) {
-        chosenTeacher?.let { viewModel.loadTeacherChoices(it.code) }
-    }
-
-    if (findingTeacher) {
-        LaunchedEffect(Unit) { viewModel.loadTeachers() }
-        FindTeacherContent(
-            teachers = state.teachers,
-            loading = state.teachersLoading,
-            onPick = { teacher ->
-                chosenTeacher = teacher
-                officeCode = teacher.code
-                visitType = if (teacher.canWalkIn) "walk_in" else "appointment"
-                date = ""
-                findingTeacher = false
-            },
-            onUseOffice = {
-                visitingTeacher = false
-                chosenTeacher = null
-                officeCode = ""
-                findingTeacher = false
-            },
-            onBack = { findingTeacher = false },
-            allowOffice = !isStudent,
-        )
-        return
-    }
-
-    val teacher = chosenTeacher
     val selectedOffice = state.offices.firstOrNull { it.code == officeCode }
     val commonFieldsReady = officeCode.isNotBlank() && purpose.isNotBlank() && subject.isNotBlank()
     val canSubmit = commonFieldsReady && !state.busy &&
@@ -183,60 +127,19 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
         item {
             Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    if (isStudent) "Book a teacher" else "Book a visit",
+                    "Book a visit",
                     style = MaterialTheme.typography.headlineMedium.copy(fontSize = 24.sp),
                     color = IsatuBlueDark,
                 )
                 Text(
-                    if (isStudent) "Any ISATU teacher, by name." else "Choose how you'll visit the campus.",
+                    "Choose how you'll visit the campus.",
                     color = MutedInk,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
         }
 
-        if (!isStudent) item {
-            Text("Who are you visiting?", style = MaterialTheme.typography.titleMedium)
-            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                VisitTypeButton(
-                    text = "Office",
-                    selected = !visitingTeacher,
-                    onClick = {
-                        if (visitingTeacher) {
-                            visitingTeacher = false
-                            chosenTeacher = null
-                            officeCode = ""
-                            date = ""
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-                VisitTypeButton(
-                    text = "Teacher",
-                    selected = visitingTeacher,
-                    onClick = {
-                        if (!visitingTeacher) {
-                            visitingTeacher = true
-                            multipleOffices = false
-                            officeCode = ""
-                            date = ""
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                )
-            }
-        }
-
-        if (visitingTeacher) {
-            item {
-                if (teacher == null) {
-                    Text("Teacher", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 6.dp))
-                    FindTeacherButton { findingTeacher = true }
-                } else {
-                    TeacherChoiceCard(teacher) { findingTeacher = true }
-                }
-            }
-        } else if (!multipleOffices) {
+        if (!multipleOffices) {
             item {
                 SelectionField(
                     label = "Destination",
@@ -261,32 +164,23 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
         }
 
         item {
-            Text(if (isStudent) "When" else "Visitor type", style = MaterialTheme.typography.titleMedium)
+            Text("Visitor type", style = MaterialTheme.typography.titleMedium)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     VisitTypeButton(
-                        text = if (isStudent) "Now" else "Walk-in",
+                        text = "Walk-in",
                         selected = visitType == "walk_in",
                         onClick = { visitType = "walk_in" },
                         modifier = Modifier.weight(1f),
-                        enabled = teacher == null || teacher.canWalkIn,
                     )
                     VisitTypeButton(
-                        text = if (isStudent) "Pick a time" else "Appointment",
+                        text = "Appointment",
                         selected = visitType == "appointment",
                         onClick = { visitType = "appointment" },
                         modifier = Modifier.weight(1f),
                     )
                 }
-                teacher?.let { teacherWalkInNote(it) }?.let { note ->
-                    Text(
-                        note,
-                        color = Color(0xFF5F4A0C),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.fillMaxWidth().background(Color(0xFFFFF4CC), RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 11.dp),
-                    )
-                }
-                if (!visitingTeacher) Row(
+                Row(
                     modifier = Modifier.fillMaxWidth().toggleable(
                         value = multipleOffices,
                         role = Role.Switch,
@@ -324,10 +218,10 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
 
         item {
             SelectionField(
-                label = if (isStudent) "Reason" else "Reason for visiting",
+                label = "Reason for visiting",
                 selectedText = purpose,
-                placeholder = if (isStudent) "Choose a reason" else "Select a purpose",
-                options = purposes.map { it to it },
+                placeholder = "Select a purpose",
+                options = visitPurposes.map { it to it },
                 onSelect = { purpose = it },
             )
         }
@@ -367,11 +261,7 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
                     ) {
                         Text("Appointment schedule", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            when {
-                                officeCode.isBlank() -> if (visitingTeacher) "Find a teacher first." else "Select a destination first."
-                                teacher != null -> "Choose a date to see ${teacher.shortName}'s free times."
-                                else -> "Choose a date to see that office's available times."
-                            },
+                            if (officeCode.isBlank()) "Select a destination first." else "Choose a date to see that office's available times.",
                             color = MutedInk,
                             style = MaterialTheme.typography.bodySmall,
                         )
@@ -432,13 +322,11 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
                                                 modifier = Modifier.weight(1f),
                                             )
                                         }
-                                        if (!visitingTeacher) {
-                                            Text(
-                                                if (slot.remainingCapacity == 1) "1 space left" else "${slot.remainingCapacity} spaces left",
-                                                color = MutedInk,
-                                                style = MaterialTheme.typography.bodySmall,
-                                            )
-                                        }
+                                        Text(
+                                            if (slot.remainingCapacity == 1) "1 space left" else "${slot.remainingCapacity} spaces left",
+                                            color = MutedInk,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
                                     }
                                 }
                             }
@@ -465,7 +353,7 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
                     }
                 }
             }
-        } else if (!visitingTeacher || teacher != null) {
+        } else {
             item {
                 Card(
                     colors = CardDefaults.cardColors(containerColor = BlueSurface),
@@ -473,11 +361,7 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
                     shape = RoundedCornerShape(12.dp),
                 ) {
                     Text(
-                        if (teacher != null) {
-                            teacherWalkInPromise(teacher, state.teacherChoices?.takeIf { it.code == teacher.code }?.fallbackOffice?.name, student = isStudent)
-                        } else {
-                            "Your walk-in QR pass is created immediately. Present it with a valid ID at Security. The pass expires if it is not used within one hour."
-                        },
+                        "Your walk-in QR pass is created immediately. Present it with a valid ID at Security. The pass expires if it is not used within one hour.",
                         modifier = Modifier.padding(15.dp),
                         color = IsatuBlueDark,
                     )
@@ -487,13 +371,7 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
 
         item {
             PrimaryButton(
-                text = when {
-                    visitingTeacher && teacher == null -> "Find a teacher first"
-                    teacher != null && visitType == "walk_in" -> "Ask to see ${teacher.shortName} now"
-                    visitType == "walk_in" -> "Create walk-in pass"
-                    isStudent -> "Send request"
-                    else -> "Submit appointment request"
-                },
+                text = if (visitType == "walk_in") "Create walk-in pass" else "Submit appointment request",
                 onClick = {
                     viewModel.createAppointment(
                         visitType = visitType,
@@ -552,16 +430,15 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun VisitTypeButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+private fun VisitTypeButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(52.dp),
-        enabled = enabled,
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.dp, if (selected) IsatuBlue else BorderSoft),
     ) {
-        RadioButton(selected = selected, onClick = null, enabled = enabled)
-        Text(text, color = if (!enabled) MutedInk else if (selected) IsatuBlueDark else Ink)
+        RadioButton(selected = selected, onClick = null)
+        Text(text, color = if (selected) IsatuBlueDark else Ink)
     }
 }
 

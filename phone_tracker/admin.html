@@ -6,7 +6,7 @@
     <title>ISATU Admin Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
-    <link rel="stylesheet" href="style.css?v=20261107-3">
+    <link rel="stylesheet" href="style.css?v=20261110-1">
 </head>
 <body class="admin-page">
     <header class="admin-topbar">
@@ -217,7 +217,7 @@
                     <div class="admin-section-header admin-directory-header">
                         <div>
                             <h2 id="directoryTitle">Personnel Directory</h2>
-                            <p>Security, admin, office personnel, teacher, and visitor accounts</p>
+                            <p>Security, admin, office personnel, and visitor accounts</p>
                         </div>
                         <div class="admin-table-tools">
                             <button class="admin-text-action" id="sortUsersBtn" type="button">Sort A–Z</button>
@@ -243,8 +243,7 @@
                         <button type="button" data-role-filter="admin">Admin <span data-role-count="admin" hidden></span></button>
                         <button type="button" data-role-filter="security">Security <span data-role-count="security" hidden></span></button>
                         <button type="button" data-role-filter="offices">Office Personnel <span data-role-count="offices" hidden></span></button>
-                        <button type="button" data-role-filter="teacher">Teachers <span data-role-count="teacher" hidden></span></button>
-                        <button type="button" data-role-filter="student">Students <span data-role-count="student" hidden></span></button>
+
                         <button type="button" data-role-filter="visitor">Visitor <span data-role-count="visitor" hidden></span></button>
                     </div>
 
@@ -278,17 +277,13 @@
                 <section class="admin-content-card" aria-labelledby="departmentsTitle">
                     <div class="admin-section-header">
                         <div>
-                            <h2 id="departmentsTitle">Department Directory</h2>
-                            <p>Departments and offices that visitors can book, with their people</p>
+                            <h2 id="departmentsTitle">Office Directory</h2>
+                            <p>The offices visitors can book, each with its own Office Personnel</p>
                         </div>
-                        <div class="admin-table-tools dept-head-actions">
-                            <button class="admin-cancel-button dept-add-office" id="addOfficeBtn" type="button" title="An office on its own, like the Registrar's Office">
+                        <div class="admin-table-tools">
+                            <button class="admin-primary-button" id="addOfficeBtn" type="button">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                                 Add office
-                            </button>
-                            <button class="admin-primary-button" id="addDepartmentBtn" type="button" title="A department like CCI, with its Dean's Office">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                                Add department
                             </button>
                         </div>
                     </div>
@@ -556,11 +551,7 @@
                         <span>Average Visit Duration</span>
                         <small>Based on completed visits</small>
                     </article>
-                    <article class="analytics-summary-card">
-                        <strong class="is-blue" id="analyticsStudentVisits">0</strong>
-                        <span>Student Visits</span>
-                        <small id="analyticsStudentNote">ISATU students who saw a teacher. Not counted as visitors.</small>
-                    </article>
+
                 </div>
 
                 <div class="analytics-primary-grid">
@@ -931,19 +922,14 @@
             <div class="admin-dialog-header">
                 <div>
                     <p class="admin-eyebrow">New account</p>
-                    <h2 id="addUserTitle">Add teacher</h2>
+                    <h2 id="addUserTitle">Add office personnel</h2>
                 </div>
                 <button class="admin-dialog-close" id="closeAddUserBtn" type="button" aria-label="Close">×</button>
             </div>
 
             <p class="person-form-heading">What will this person do?</p>
-            <input type="hidden" id="newUserRole" value="teacher">
+            <input type="hidden" id="newUserRole" value="offices">
             <div class="role-grid" id="newRoleCards" role="radiogroup" aria-label="Role">
-                <label class="role-card" data-role="teacher">
-                    <input type="radio" name="newRoleChoice" value="teacher">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5-10-5Z"/><path d="M6 11v5c2 2 10 2 12 0v-5"/></svg>
-                    <span><strong>Teacher</strong><small>Sets their own hours and accepts or declines their own visitors.</small></span>
-                </label>
                 <label class="role-card" data-role="offices">
                     <input type="radio" name="newRoleChoice" value="offices">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-2v18M12 8l8 2v11M2 21h20M7.5 8.5h1M7.5 12h1M7.5 15.5h1M15.5 13h1M15.5 16.5h1"/></svg>
@@ -957,24 +943,13 @@
                 <label class="role-card" data-role="admin">
                     <input type="radio" name="newRoleChoice" value="admin">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.1a2 2 0 1 1-4 0V21a1.7 1.7 0 0 0-2.9-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.3 7.3l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3.3V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
-                    <span><strong>Administrator</strong><small>Manages users, departments and the campus map.</small></span>
+                    <span><strong>Administrator</strong><small>Manages users, offices and the campus map.</small></span>
                 </label>
             </div>
             <p class="role-hint">Visitors sign up themselves in the app.</p>
 
             <p class="person-form-heading">Who is this?</p>
             <div class="person-name-grid" id="newNameGrid">
-                <label data-only="teacher">
-                    <span>Title</span>
-                    <select id="newNameTitle">
-                        <option>Prof.</option>
-                        <option>Dr.</option>
-                        <option>Engr.</option>
-                        <option>Mr.</option>
-                        <option>Ms.</option>
-                        <option>Mrs.</option>
-                    </select>
-                </label>
                 <label>
                     <span>First name</span>
                     <input type="text" id="newFirstName" autocomplete="off" maxlength="60" required>
@@ -994,31 +969,17 @@
                     <input type="tel" id="newContactNumber" autocomplete="off" maxlength="20" placeholder="e.g. 0917 123 4567">
                 </label>
                 <label class="sec-wide-field">
-                    <span id="newEmailLabel">Email</span>
+                    <span>Email <small>(optional)</small></span>
                     <input type="email" id="newEmail" autocomplete="off" maxlength="190">
-                    <small class="person-field-hint" id="newEmailHint">New requests are sent here.</small>
                 </label>
             </div>
 
-            <p class="person-form-heading" id="newWhereHeading" data-only="teacher offices">Where do they teach?</p>
-            <div class="admin-form-grid" data-only="teacher offices">
-                <label data-only="teacher">
-                    <span>Department</span>
-                    <select id="newDepartment"></select>
-                </label>
-                <label data-only="teacher">
-                    <span>Course</span>
-                    <select id="newCourse"></select>
-                </label>
-                <label class="sec-wide-field" data-only="teacher">
-                    <span>Room <small>(optional)</small></span>
-                    <input type="text" id="newRoom" autocomplete="off" maxlength="150" placeholder="e.g. Faculty Room, CCI Building, 2nd floor">
-                    <small class="person-field-hint">The teacher can change this later.</small>
-                </label>
-                <label class="sec-wide-field admin-office-field" id="newUserOfficeField" data-only="offices">
+            <p class="person-form-heading" data-only="offices">Where do they work?</p>
+            <div class="admin-form-grid" data-only="offices">
+                <label class="sec-wide-field admin-office-field" id="newUserOfficeField">
                     <span>Office</span>
                     <select id="newUserOfficeCode"></select>
-                    <small class="person-field-hint">Choosing a course gives it an office that visitors can book. Missing an office? Add it in the Department Directory below the user list.</small>
+                    <small class="person-field-hint">Missing an office? Add it in the Office Directory below the user list.</small>
                 </label>
             </div>
 
@@ -1037,7 +998,7 @@
             <p class="admin-message is-error" id="adminFormError" role="alert" hidden></p>
             <div class="admin-dialog-actions">
                 <button class="admin-cancel-button" id="cancelAddUserBtn" type="button">Cancel</button>
-                <button class="admin-primary-button" id="addUserBtn" type="submit">Add teacher</button>
+                <button class="admin-primary-button" id="addUserBtn" type="submit">Add office personnel</button>
             </div>
         </form>
     </dialog>
@@ -1060,7 +1021,7 @@
                 <li>Works once and expires <strong id="tempPasswordExpires"></strong>.</li>
                 <li>The user must choose their own password when they sign in.</li>
                 <li id="tempPasswordTwoFactor" hidden>They will also set up two-step verification.</li>
-                <li id="tempPasswordTeacher" hidden>Then they set their hours. Visitors can't find them until they do.</li>
+
             </ul>
             <div class="admin-dialog-actions">
                 <button class="admin-primary-button" type="submit">Done</button>
@@ -1106,26 +1067,7 @@
                         <select id="editDepartment"></select>
                         <small class="person-field-hint">Moving someone signs them out so the new office takes effect.</small>
                     </label>
-                    <label id="editTitleField" hidden>
-                        <span>Title</span>
-                        <select id="editNameTitle">
-                            <option value="">No title</option>
-                            <option>Prof.</option>
-                            <option>Dr.</option>
-                            <option>Engr.</option>
-                            <option>Mr.</option>
-                            <option>Ms.</option>
-                            <option>Mrs.</option>
-                        </select>
-                    </label>
-                    <label id="editCourseField" hidden>
-                        <span>Course</span>
-                        <select id="editCourse"></select>
-                    </label>
-                    <label class="sec-wide-field" id="editRoomField" hidden>
-                        <span>Room <small>(optional)</small></span>
-                        <input type="text" id="editRoom" maxlength="150">
-                    </label>
+
                 </div>
                 <div class="admin-dialog-actions">
                     <button class="admin-cancel-button" type="button" id="cancelEditDetailsBtn">Cancel</button>
@@ -1142,28 +1084,27 @@
         <form id="departmentForm" novalidate>
             <div class="admin-dialog-header">
                 <div>
-                    <p class="admin-eyebrow">Department directory</p>
-                    <h2 id="departmentDialogTitle">Add department</h2>
-                    <p class="dept-dialog-under" id="departmentDialogUnder" hidden></p>
+                    <p class="admin-eyebrow">Office directory</p>
+                    <h2 id="departmentDialogTitle">Add office</h2>
                 </div>
                 <button class="admin-dialog-close" type="button" data-close-dialog="departmentDialog" aria-label="Close">×</button>
             </div>
             <div class="admin-form-grid">
                 <label class="sec-wide-field">
-                    <span id="departmentNameLabel">Department name</span>
+                    <span>Office name</span>
                     <input type="text" id="departmentName" maxlength="100" placeholder="e.g. Registrar's Office" required>
                 </label>
-                <label id="departmentCodeField">
+                <label>
                     <span>Short code</span>
                     <input type="text" id="departmentCode" maxlength="16" placeholder="e.g. REGISTRAR" autocomplete="off" spellcheck="false">
                     <small class="person-field-hint" id="departmentCodeHint">Used in records and reports. It cannot be changed later.</small>
                 </label>
-                <label id="departmentLocationField">
+                <label>
                     <span>Location <small>(optional)</small></span>
                     <input type="text" id="departmentLocation" maxlength="150" placeholder="e.g. Admin Building, 2nd floor">
                     <small class="person-field-hint" id="departmentLocationHint" hidden>Change it in Campus Map, on the Inside tab.</small>
                 </label>
-                <label class="sec-wide-field" id="departmentDescriptionField">
+                <label class="sec-wide-field">
                     <span>Description <small>(optional)</small></span>
                     <input type="text" id="departmentDescription" maxlength="255" placeholder="What visitors come here for">
                 </label>
@@ -1171,7 +1112,7 @@
             <p class="admin-message is-error" id="departmentFormError" role="alert" hidden></p>
             <div class="admin-dialog-actions">
                 <button class="admin-cancel-button" type="button" data-close-dialog="departmentDialog">Cancel</button>
-                <button class="admin-primary-button" type="submit" id="saveDepartmentBtn">Add department</button>
+                <button class="admin-primary-button" type="submit" id="saveDepartmentBtn">Add office</button>
             </div>
         </form>
     </dialog>
@@ -1299,7 +1240,7 @@
     <!-- Sharp map at every zoom (campus_map.js falls back to OpenStreetMap images without it). -->
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
-    <script src="auth.js?v=20261106-1"></script>
+    <script src="auth.js?v=20261110-1"></script>
     <script src="dialogs.js?v=20261107-3"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
@@ -1309,6 +1250,6 @@
     <script src="campus_setup.js?v=20261107-3"></script>
     <script src="campus_routes_editor.js?v=20261107-3"></script>
     <script src="campus_inside_editor.js?v=20261107-3"></script>
-    <script src="admin.js?v=20261107-3"></script>
+    <script src="admin.js?v=20261110-1"></script>
 </body>
 </html>

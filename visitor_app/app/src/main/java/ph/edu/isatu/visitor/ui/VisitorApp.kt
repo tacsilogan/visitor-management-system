@@ -21,7 +21,6 @@ fun VisitorApp(viewModel: AppViewModel) {
         !state.signedIn -> AuthFlow(state, viewModel)
         state.noticeAgreementNeeded -> TermsAgreementScreen(
             busy = state.busy,
-            isStudent = state.user?.isStudent == true,
             onAgree = viewModel::agreeToNotice,
             onSignOut = viewModel::logout,
         )

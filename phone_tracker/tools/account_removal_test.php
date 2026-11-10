@@ -141,15 +141,10 @@ try {
     same($restrict, 0, "no record keeps an account from being removed");
 
     /* ---------- Who and what ---------- */
-    zz_insert($conn, "offices", ["code" => ZZ_OFFICE, "kind" => "office", "name" => "Zzremove Office", "is_active" => 1]);
+    zz_insert($conn, "offices", ["code" => ZZ_OFFICE, "name" => "Zzremove Office", "is_active" => 1]);
     $staff = zz_person($conn, "zzremove_staff", "offices", "Zzremove Staff", ZZ_OFFICE);
     $guard = zz_person($conn, "zzremove_guard", "security", "Zzremove Guard");
     $admin = zz_person($conn, "zzremove_admin", "admin", "Zzremove Admin");
-    $teacher = zz_person($conn, "zzremove_teacher", "teacher", "Zzremove Teacher");
-    $calendar = "T{$teacher}";
-    zz_insert($conn, "offices", ["code" => $calendar, "kind" => "teacher", "owner_user_id" => $teacher, "name" => "Prof. Zzremove Teacher", "is_active" => 1]);
-    $conn->query("UPDATE app_users SET office_code = '{$calendar}' WHERE id = {$teacher}");
-    zz_insert($conn, "office_availability_rules", ["office_code" => $calendar, "day_of_week" => 1, "start_time" => "08:00:00", "end_time" => "12:00:00"]);
 
     // A visitor with a finished visit, three still to come, a phone, a sign-in, a notice and emails.
     $visitor = zz_person($conn, "zzremove_visitor", "visitor", "Zzremove Visitor");
@@ -172,16 +167,10 @@ try {
     $waiting = zz_insert($conn, "outbound_emails", ["user_id" => $visitor, "recipient_email" => "zzremove_visitor@example.com", "template_key" => "check", "subject" => "Waiting", "status" => "queued"]);
     $sent = zz_insert($conn, "outbound_emails", ["user_id" => $visitor, "recipient_email" => "zzremove_visitor@example.com", "template_key" => "check", "subject" => "Sent", "status" => "sent"]);
 
-    // A visitor inside the campus, a student who booked the teacher, and a visitor of the teacher.
+    // A visitor inside the campus.
     $inside = zz_person($conn, "zzremove_inside", "visitor", "Zzremove Inside");
     $insideVisit = zz_visit($conn, $inside, "checked_in", ["checked_in_at" => zz_at(-30)]);
     zz_appointment($conn, $inside, ZZ_OFFICE, "Zzremove Inside", "checked_in", -40, ["visit_id" => $insideVisit, "checked_in_at" => zz_at(-30)]);
-    $student = zz_person($conn, "zzremove_student", "student", "Zzremove Student");
-    zz_insert($conn, "student_profiles", ["user_id" => $student, "student_number" => "2026-0000", "year_level" => 3]);
-    $studentVisit = zz_appointment($conn, $student, $calendar, "Zzremove Student", "approved", 300, ["visitor_kind" => "student"]);
-    $guest = zz_person($conn, "zzremove_guest", "visitor", "Zzremove Guest");
-    $guestAccepted = zz_appointment($conn, $guest, $calendar, "Zzremove Guest", "approved", 360);
-    $guestAsked = zz_appointment($conn, $guest, $calendar, "Zzremove Guest", "pending_approval", 420);
 
     /* ---------- A visitor with history ---------- */
     $result = account_remove($conn, $visitor, $admin);
@@ -224,16 +213,6 @@ try {
     }
     same($refused, "You cannot remove your own account.", "nobody removes their own account");
 
-    /* ---------- A student, then their teacher ---------- */
-    same(account_remove($conn, $student, $admin)["cancelled_visits"], 1, "a student is removed, cancelling their visit");
-    same((int) zz_value($conn, "SELECT COUNT(*) FROM app_notifications WHERE recipient_user_id = {$teacher} AND appointment_id = {$studentVisit}"), 1, "the teacher is told");
-    same((int) zz_value($conn, "SELECT COUNT(*) FROM student_profiles WHERE user_id = {$student}"), 0, "the student profile goes with the account");
-    same(account_remove($conn, $teacher, $admin)["cancelled_visits"], 2, "a teacher is removed, closing their 2 open visits");
-    same(zz_value($conn, "SELECT status FROM appointments WHERE id = {$guestAccepted}") . "/" . zz_value($conn, "SELECT status FROM appointments WHERE id = {$guestAsked}"),
-        "cancelled/rejected", "the accepted visit is cancelled and the open request refused");
-    same((int) zz_value($conn, "SELECT COUNT(*) FROM app_notifications WHERE recipient_user_id = {$guest}"), 2, "the visitor is told about both");
-    same((int) zz_value($conn, "SELECT is_active FROM offices WHERE code = '{$calendar}'") . "/" . zz_value($conn, "SELECT COUNT(*) FROM office_availability_rules WHERE office_code = '{$calendar}'"),
-        "0/0", "the calendar is archived for the records, and the hours are gone");
 
     /* ---------- Staff ---------- */
     account_remove($conn, $staff, $admin);

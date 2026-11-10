@@ -456,10 +456,7 @@ function monitor_confirmed_arrivals(array $campus, array $stops): array
         if (empty($stop["arrived_at"])) {
             continue;
         }
-        $pin = null;
-        foreach (appointment_office_chain((string) $stop["office_code"]) as $link) {
-            $pin = $pin ?? ($pins[$link] ?? null);
-        }
+        $pin = $pins[(string) $stop["office_code"]] ?? null;
         $arrivals[] = [
             "office_code" => (string) $stop["office_code"],
             "office_label" => (string) $stop["office_label"],
@@ -488,13 +485,10 @@ function monitor_near_offices(array $campus, array $stops, array $points): array
     $arrivals = [];
     foreach ($stops as $stop) {
         $code = (string) $stop["office_code"];
-        $pin = null;
-        foreach (appointment_office_chain($code) as $link) {
-            $pin = $pin ?? ($pins[$link] ?? null);
-        }
-        if ($pin === null || isset($arrivals[$code])) {
+        if (!isset($pins[$code]) || isset($arrivals[$code])) {
             continue;
         }
+        $pin = $pins[$code];
         foreach ($points as $point) {
             if (campus_distance_meters($point["lat"], $point["lng"], $pin["latitude"], $pin["longitude"]) <= MONITOR_OFFICE_RADIUS_METERS) {
                 $arrivals[$code] = [

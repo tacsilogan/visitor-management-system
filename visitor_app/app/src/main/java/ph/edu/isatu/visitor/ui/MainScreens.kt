@@ -128,7 +128,7 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
         }
     }
     state.selectedAppointment?.let { appointment ->
-        AppointmentDetailScreen(appointment, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message, state.teacherChoices)
+        AppointmentDetailScreen(appointment, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message)
         return
     }
     state.selectedVisit?.let { visit ->
@@ -274,7 +274,6 @@ internal fun HomeScreen(
 
     val upcoming = groupVisits(appointments).filter { it.isActive }.minByOrNull { it.startsAt }
     val firstName = user?.fullName?.trim()?.substringBefore(' ')?.ifBlank { "Visitor" } ?: "Visitor"
-    val isStudent = user?.isStudent == true
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -288,7 +287,7 @@ internal fun HomeScreen(
                 NavyBand(bottomSpace = 62.dp) { Greeting(firstName) }
                 Box(Modifier.padding(horizontal = 16.dp).liftedOver(46.dp)) {
                     when (upcoming) {
-                        null -> NoVisitCard(onBook, isStudent)
+                        null -> NoVisitCard(onBook)
                         is VisitListItem.Single -> NextVisitCard(homeCard(upcoming)) { onOpenAppointment(upcoming.appointment.id) }
                         is VisitListItem.MultiStop -> NextVisitCard(homeCard(upcoming)) { onOpenVisit(upcoming.summary.id) }
                     }
@@ -316,7 +315,7 @@ internal fun HomeScreen(
                         style = MaterialTheme.typography.labelLarge,
                         color = MutedInk,
                     )
-                    VisitStepsCard(isStudent)
+                    VisitStepsCard()
                 }
             } else {
                 TextButton(onClick = { showSteps = true }, modifier = Modifier.fillMaxWidth()) {
@@ -331,7 +330,7 @@ internal fun HomeScreen(
         AlertDialog(
             onDismissRequest = { showSteps = false },
             title = { Text("How a visit works") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { VisitSteps(isStudent) } },
+            text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) { VisitSteps() } },
             confirmButton = { TextButton(onClick = { showSteps = false }) { Text("Got it") } },
         )
     }
@@ -383,41 +382,25 @@ private fun homeCard(item: VisitListItem): HomeCard = when (item) {
         val appointment = item.appointment
         val office = appointment.office.name
         val time = visitTimeText(appointment)
-        val teacherName = appointment.teacher?.shortName
         when (appointment.status) {
             // The visit list does not carry the suggested times; the visit screen shows them.
             "reschedule_proposed" -> HomeCard(
                 "New time suggested", Tone.Yellow, office, Icons.Rounded.Schedule, "Requested: $time",
-                (teacherName ?: "The office") + " suggested another time. Accept it or pick a new one.", "Respond",
+                "The office suggested another time. Accept it or pick a new one.", "Respond",
             )
             "checked_in" -> HomeCard(
                 "On campus", Tone.Blue, office, Icons.Rounded.LocationOn,
                 appointment.checkedInAt?.let { "Checked in at ${formatTimeOfDay(it)}" } ?: time,
                 "Directions and your pass are on the map.", "Open map", Icons.Rounded.Map,
             )
-            // A student has no pass: the room, the directions and "I'm here" are inside.
-            "approved" -> if (appointment.isStudentVisit) {
-                HomeCard(
-                    if (appointment.arrivedAt != null) "You're here" else "Accepted", Tone.Green, office, Icons.Rounded.Schedule, time,
-                    appointment.subject, if (appointment.arrivedAt != null) "Open visit" else "Directions and I'm here", Icons.Rounded.Map,
-                )
-            } else {
-                HomeCard(
-                    if (teacherName != null) "Accepted · pass ready" else "Approved · pass ready", Tone.Green, office, Icons.Rounded.Schedule, time, appointment.subject,
-                    "Show pass", Icons.Rounded.QrCode2,
-                )
-            }
-            else -> if (appointment.answerByAt != null) {
-                HomeCard(
-                    "Waiting for an answer", Tone.Yellow, office, Icons.Rounded.Schedule, "Request closes at ${formatTimeOfDay(appointment.answerByAt)}",
-                    if (appointment.isStudentVisit) "You'll get a notification when ${teacherName ?: "they"} answers." else "You have no pass yet. You'll get a notification.",
-                )
-            } else {
-                HomeCard(
-                    "Waiting for approval", Tone.Grey, office, Icons.Rounded.Schedule, time,
-                    teacherName?.let { "You'll get a notification when $it answers." } ?: "You'll get a notification when the office decides.",
-                )
-            }
+            "approved" -> HomeCard(
+                "Approved · pass ready", Tone.Green, office, Icons.Rounded.Schedule, time, appointment.subject,
+                "Show pass", Icons.Rounded.QrCode2,
+            )
+            else -> HomeCard(
+                "Waiting for approval", Tone.Grey, office, Icons.Rounded.Schedule, time,
+                "You'll get a notification when the office decides.",
+            )
         }
     }
     is VisitListItem.MultiStop -> {
@@ -492,7 +475,7 @@ private fun NextVisitCard(card: HomeCard, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun NoVisitCard(onBook: () -> Unit, isStudent: Boolean = false) {
+private fun NoVisitCard(onBook: () -> Unit) {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
@@ -500,12 +483,8 @@ private fun NoVisitCard(onBook: () -> Unit, isStudent: Boolean = false) {
     ) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("No upcoming visits", style = MaterialTheme.typography.titleLarge, color = Ink)
-            Text(
-                if (isStudent) "See a teacher now or at a set time." else "Book a walk-in or an appointment.",
-                color = MutedInk,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            PrimaryButton(if (isStudent) "Book a teacher" else "Book a visit", onBook, Modifier.fillMaxWidth().padding(top = 4.dp), icon = Icons.Rounded.Add)
+            Text("Book a walk-in or an appointment.", color = MutedInk, style = MaterialTheme.typography.bodyMedium)
+            PrimaryButton("Book a visit", onBook, Modifier.fillMaxWidth().padding(top = 4.dp), icon = Icons.Rounded.Add)
         }
     }
 }
@@ -532,37 +511,27 @@ private fun NotificationsPrompt(onEnable: () -> Unit) {
 }
 
 @Composable
-private fun VisitStepsCard(isStudent: Boolean = false) {
+private fun VisitStepsCard() {
     Card(
         colors = CardDefaults.cardColors(containerColor = Color.White),
         border = BorderStroke(1.dp, BorderSoft),
         shape = RoundedCornerShape(18.dp),
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-            VisitSteps(isStudent, divided = true)
+            VisitSteps(divided = true)
         }
     }
 }
 
 /** The four steps of a visit, short enough to read at a glance. */
 @Composable
-private fun VisitSteps(isStudent: Boolean = false, divided: Boolean = false) {
-    val steps = if (isStudent) {
-        // No pass, gate scan or tracking for an ISATU student.
-        listOf(
-            "Find a teacher" to "Any ISATU teacher, by name.",
-            "Wait for the answer" to "You're notified when they accept.",
-            "Go to their room" to "The room shows once they accept.",
-            "Tap I'm here" to "They're told you've arrived.",
-        )
-    } else {
-        listOf(
-            "Book a visit" to "A walk-in or an appointment, to an office or a teacher.",
-            "Get your pass" to "Office walk-ins get it at once. Others get it once approved.",
-            "Show it at the gate" to "Security scans it when you arrive.",
-            "Share your location" to "Only from check-in until your visit ends.",
-        )
-    }
+private fun VisitSteps(divided: Boolean = false) {
+    val steps = listOf(
+        "Book a visit" to "A walk-in or an appointment, to an ISATU office.",
+        "Get your pass" to "Walk-ins get it at once. Appointments get it once the office approves.",
+        "Show it at the gate" to "Security scans it when you arrive.",
+        "Share your location" to "Only from check-in until your visit ends.",
+    )
     steps.forEachIndexed { index, (title, body) ->
         if (divided && index > 0) HorizontalDivider(color = Color(0xFFEDF1F6))
         VisitStep(index + 1, title, body, if (divided) Modifier.padding(vertical = 12.dp) else Modifier)

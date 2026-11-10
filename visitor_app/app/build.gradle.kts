@@ -47,8 +47,8 @@ android {
         applicationId = "ph.edu.isatu.visitor"
         minSdk = 26
         targetSdk = 37
-        versionCode = 15
-        versionName = "0.10.2"
+        versionCode = 16
+        versionName = "0.11.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"$normalizedApiUrl\"")

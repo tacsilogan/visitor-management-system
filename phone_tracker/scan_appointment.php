@@ -77,7 +77,7 @@ if (!$appt) {
 }
 
 $appointmentId = (int) $appt["id"];
-$officeMap = appointment_office_long_map();
+$officeMap = appointment_office_map();
 $officeLabel = $officeMap[$appt["office_code"]] ?? $appt["office_code"];
 $details = [
     "appointment_id" => $appointmentId,

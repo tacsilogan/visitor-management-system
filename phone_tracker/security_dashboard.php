@@ -118,8 +118,7 @@ $summaryResult = $conn->query(
         {$walkInTodayExpression} AS walk_in_today,
         {$appointmentTodayExpression} AS appointment_today,
         {$checkedOutExpression} AS checked_out_today
-     FROM appointments
-     WHERE 1 = 1" . appointment_visitors_only_sql($conn)
+     FROM appointments"
 );
 if ($summaryResult) {
     $row = $summaryResult->fetch_assoc();
@@ -129,7 +128,7 @@ if ($summaryResult) {
 }
 
 $rows = [];
-$officeMap = appointment_office_long_map();
+$officeMap = appointment_office_map();
 $visitColumns = visit_appointment_columns($conn, "a");
 // The QR pass codes stay out of this list: Security reads them from the visitor's pass.
 $checkoutSelect = presence_schema_ready($conn) ? "a.checkout_method" : "NULL AS checkout_method";
@@ -140,7 +139,6 @@ $result = $conn->query(
             a.checked_in_at, a.completed_at, a.cancelled_at, a.created_at, {$checkoutSelect},
             {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}{$visitColumns}
      FROM appointments a
-     WHERE 1 = 1" . appointment_visitors_only_sql($conn, "a") . "
      ORDER BY COALESCE(a.status_updated_at, a.created_at) DESC, a.id DESC
      LIMIT 100"
 );

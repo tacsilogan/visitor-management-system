@@ -11196,7 +11196,7 @@ html.has-expanded-map body {
 /* Add user: the role comes first (admin.html). */
 .role-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 8px;
 }
@@ -11280,10 +11280,6 @@ html.has-expanded-map body {
     margin-bottom: 12px;
 }
 
-.person-name-grid.has-title {
-    grid-template-columns: 92px minmax(0, 1fr) minmax(0, 1fr);
-}
-
 .person-name-grid label {
     display: grid;
     gap: 6px;
@@ -11311,163 +11307,9 @@ html.has-expanded-map body {
     box-sizing: border-box;
 }
 
-/* Department Directory: a department holds its offices, courses and teachers. */
-.dept-card.is-wide {
-    grid-column: 1 / -1;
-}
-
-.dept-stats.is-four {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.dept-group-title {
-    margin: 16px 0 8px;
-    color: #142033;
-    font-size: 13px;
-    font-weight: 700;
-}
-
-.dept-courses {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.dept-courses.is-two {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.dept-course {
-    min-width: 0;
-    padding: 10px 12px;
-    border: 1px solid #e3e8ee;
-    border-radius: 12px;
-    background: #f9fbfd;
-}
-
-.dept-course.is-archived {
-    opacity: 0.7;
-}
-
-.dept-course h4 {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin: 0 0 6px;
-    color: #06458f;
-    font-size: 13.5px;
-    line-height: 1.3;
-}
-
-.dept-course h4 small {
-    color: #5d6875;
-    font-size: 11.5px;
-    font-weight: 500;
-}
-
-.dept-course h4 .dept-code {
-    margin-top: 0;
-}
-
-.dept-course .dept-people {
-    margin: 0 0 6px;
-}
-
-.dept-office-line {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin: 0 0 7px;
-    color: #26313f;
-    font-size: 12.5px;
-    line-height: 1.4;
-}
-
-.dept-office-line.is-none {
-    color: #737d89;
-}
-
-.dept-office-line .dept-dot {
-    flex: none;
-}
-
-.admin-page .dept-add-link {
-    margin-left: auto;
-    padding: 0;
-    border: 0;
-    background: none;
-    color: #0755b5;
-    font-size: 12px;
-    font-weight: 700;
-    cursor: pointer;
-}
-
-.dept-add-link:hover {
-    text-decoration: underline;
-}
-
-.dept-teachers {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.dept-teachers li {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2px 8px;
-    padding: 5px 0;
-    border-top: 1px solid #edf0f4;
-    color: #26313f;
-    font-size: 12.5px;
-    line-height: 1.35;
-}
-
-.dept-teachers li:first-child {
-    border-top: 0;
-}
-
-.dept-teachers .dept-person {
-    width: auto;
-    padding: 0;
-}
-
-.dept-mini {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 2px;
-    margin-top: 8px;
-    padding-top: 6px;
-    border-top: 1px solid #edf0f4;
-}
-
-.admin-page .dept-mini .sec-manage-button {
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.dept-dialog-under {
-    margin: 2px 0 0;
-    color: #5d6875;
-    font-size: 13px;
-}
-
 @media (max-width: 720px) {
-    .role-grid,
-    .dept-courses,
-    .dept-courses.is-two {
+    .role-grid {
         grid-template-columns: minmax(0, 1fr);
-    }
-
-    .person-name-grid.has-title {
-        grid-template-columns: minmax(0, 1fr);
-    }
-
-    .dept-stats.is-four {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -11476,124 +11318,6 @@ html.has-expanded-map body {
 #manageEditForm [hidden],
 #departmentDialog [hidden] {
     display: none !important;
-}
-
-.office-sidebar .admin-nav-item[hidden] {
-    display: none;
-}
-
-/* Office Personnel's list of teachers */
-.ot-tag {
-    display: inline-block;
-    min-width: 30px;
-    padding: 1px 7px;
-    border-radius: 6px;
-    background: #eaf2ff;
-    color: #06458f;
-    font-size: 11.5px;
-    font-weight: 700;
-    text-align: center;
-}
-
-.ot-next {
-    color: #5d6875;
-    font-size: 12.5px;
-}
-
-@media (max-width: 640px) {
-    .office-page table.ot-table,
-    .office-page table.ot-table tbody {
-        display: block;
-        width: 100%;
-        min-width: 0;
-    }
-
-    .office-page table.ot-table thead {
-        display: none;
-    }
-
-    .office-page table.ot-table tr {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
-        gap: 5px 10px;
-        padding: 12px 2px;
-        border-bottom: 1px solid #edf1f6;
-    }
-
-    .office-page table.ot-table tr:last-child {
-        border-bottom: 0;
-    }
-
-    .office-page table.ot-table td {
-        display: block;
-        padding: 0;
-        border: 0;
-        white-space: normal;
-    }
-
-    .office-page table.ot-table td:nth-child(n + 3) {
-        grid-column: 1 / -1;
-    }
-
-    .office-page table.ot-table td.ot-next::before {
-        content: "Next free: ";
-    }
-
-    .office-page table.ot-table td.ot-next.is-none {
-        display: none;
-    }
-}
-
-.dept-card.is-wide > .dept-actions {
-    margin-top: 14px;
-}
-
-/* Department Directory: two add buttons, and who approves a department's teachers (SCHOOL_ACCOUNTS.md). */
-.dept-head-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.admin-page .dept-head-actions .admin-cancel-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; }
-.admin-page .dept-head-actions .admin-cancel-button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-.dept-approval { margin: 10px 0 0; padding: 9px 12px; border: 1px solid #d6e4f7; border-radius: 10px; background: #f3f8ff; color: #26313f; font-size: 12.5px; line-height: 1.5; }
-.dept-approval.is-warn { border-color: #f5d48a; background: #fff7e0; color: #5c4300; }
-.dept-approval strong { color: inherit; }
-.admin-page .dept-approval .dept-add-link { margin-left: 0; }
-
-/* Office page: teacher requests and accounts for the Dean's Office (SCHOOL_ACCOUNTS.md). */
-.office-nav-count { display: inline-grid; place-items: center; min-width: 22px; height: 22px; margin-left: auto; padding: 0 6px; border-radius: 11px; background: #ffd43b; color: #172033; font-size: 11.5px; font-style: normal; font-weight: 700; }
-.ot-request-name { display: block; color: #151515; font-size: 13.5px; }
-.ot-request-email { display: block; color: #6b7480; font-size: 11.5px; }
-.ot-course-select { min-height: 34px; padding: 4px 8px; border: 1px solid #aeb4bc; border-radius: 7px; background: #fff; color: #172033; font: inherit; font-size: 13px; }
-.ot-request-actions { white-space: nowrap; text-align: right; }
-.ot-request-actions > * + * { margin-left: 6px; }
-.office-page .office-approve-button { min-height: 34px; padding: 6px 14px; border: 0; border-radius: 8px; background: #0755b5; color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.office-page .office-approve-button:hover { background: #06458f; }
-.office-page .ot-toggle { min-height: 34px; padding: 6px 10px; border: 0; background: none; color: #0755b5; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-.office-page .ot-toggle.is-danger { color: #b42318; }
-.office-page .ot-toggle:disabled, .office-page .office-approve-button:disabled { opacity: .55; cursor: default; }
-.ot-table tr.is-off td { color: #8a94a3; }
-.office-reasons { display: grid; gap: 8px; margin: 0 0 6px; padding: 0; border: 0; }
-.office-reasons legend { margin-bottom: 8px; padding: 0; color: #424b56; font-size: 12.5px; }
-.office-reasons label { display: flex; align-items: center; gap: 9px; padding: 10px 12px; border: 1px solid #cfd6de; border-radius: 10px; font-size: 13.5px; cursor: pointer; }
-.office-reasons label:has(input:checked) { border-color: #0755b5; background: #eaf2ff; }
-.office-reasons input[type="radio"] { flex: none; width: 18px; height: 18px; margin: 0; accent-color: #0755b5; }
-.office-reasons textarea { width: 100%; padding: 8px 10px; border: 1px solid #aeb4bc; border-radius: 8px; font: inherit; font-size: 13.5px; box-sizing: border-box; }
-
-/* Request a teacher account (teacher_request.html) and its link on the sign-in page. */
-.auth-hint { margin: -6px 0 10px 4px; color: #5d6875; font-size: 12px; line-height: 1.4; }
-.auth-hint.is-error { color: #b42318; font-weight: 600; }
-.auth-row { display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 10px; }
-.auth-summary { margin: 4px 0 18px; padding: 12px 14px; border: 1px solid #e3e8ee; border-radius: 12px; background: #f9fbfd; font-size: 13px; line-height: 1.6; text-align: left; }
-.auth-summary div { display: flex; justify-content: space-between; gap: 12px; }
-.auth-summary dt { color: #5d6875; }
-.auth-summary dd { margin: 0; font-weight: 700; text-align: right; }
-.auth-request-link { margin: 16px 0 0; color: #4b5563; font-size: 14px; text-align: center; }
-.auth-request-link a { color: #0755b5; font-weight: 700; text-decoration: none; }
-.auth-request-link a:hover { text-decoration: underline; }
-a.auth-submit { display: flex; align-items: center; justify-content: center; text-decoration: none; }
-
-/* Analytics: the Student Visits card makes four. */
-@media (min-width: 1100px) {
-    .analytics-summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 /* Confirmation dialogs (dialogs.js): the system's own confirm() and alert(). A modal dialog sits

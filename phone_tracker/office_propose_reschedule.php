@@ -3,7 +3,6 @@ header("Content-Type: application/json; charset=utf-8");
 require_once __DIR__ . "/session_bootstrap.php";
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/office_availability_service.php";
-require_once __DIR__ . "/teacher_service.php";
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     http_response_code(405);
@@ -147,12 +146,11 @@ try {
         return $slot[0]->format("M j, Y g:i A");
     }, $slots);
     $visitorUserId = (int) $appointment["visitor_user_id"];
-    $who = appointment_is_teacher_code($officeCode) ? teacher_short_label($officeCode) : "The office";
-    $suggestion = "{$who} suggested: " . implode(", ", $slotLabels) . ".";
+    $suggestion = "The office suggested: " . implode(", ", $slotLabels) . ".";
     if ($fromStatus === "approved") {
         $originalTime = date("M j, Y g:i A", strtotime((string) $appointment["scheduled_start_at"]));
         $notificationTitle = "Your appointment time needs to change";
-        $notificationMessage = "{$who} can no longer meet at {$originalTime}. {$suggestion}";
+        $notificationMessage = "The office can no longer meet at {$originalTime}. {$suggestion}";
     } else {
         $notificationTitle = "Choose another appointment time";
         $notificationMessage = $suggestion;

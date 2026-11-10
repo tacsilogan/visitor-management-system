@@ -27,11 +27,9 @@ $email = strtolower(trim((string) ($input["email"] ?? "")));
 $contactNumber = trim((string) ($input["contact_number"] ?? ""));
 $role = isset($input["role"]) ? (string) $input["role"] : "";
 $officeCode = isset($input["office_code"]) ? strtoupper(trim((string) $input["office_code"])) : "";
-$nameTitle = trim((string) ($input["name_title"] ?? ""));
-$courseCode = strtoupper(trim((string) ($input["course_code"] ?? "")));
-$room = personnel_clean_text((string) ($input["room"] ?? ""), 150);
 
-$allowed = ["security", "visitor", "offices", "admin", "teacher"];
+// Visitors sign up in the app themselves, with a code sent to their email.
+$allowed = ["security", "offices", "admin"];
 if ($username === "" || !in_array($role, $allowed, true)) {
     echo json_encode(["success" => false, "message" => "Username and a valid role are required"]);
     exit;
@@ -61,27 +59,6 @@ if ($role === "offices") {
     $officeCode = "";
 }
 
-if ($role === "teacher") {
-    if (!teacher_schema_ready($conn)) {
-        echo json_encode(["success" => false, "message" => "Database update required: import phone_tracker/teacher_visits_migration.sql into phone_tracker."]);
-        exit;
-    }
-    if (!isset(teacher_course_map()[$courseCode])) {
-        echo json_encode(["success" => false, "message" => "Select the course this teacher belongs to"]);
-        exit;
-    }
-    if ($nameTitle !== "" && !in_array($nameTitle, TEACHER_TITLES, true)) {
-        echo json_encode(["success" => false, "message" => "Choose a title from the list"]);
-        exit;
-    }
-    if ($email === "") {
-        echo json_encode(["success" => false, "message" => "Enter the teacher's email. New visit requests are sent there."]);
-        exit;
-    }
-} else {
-    $nameTitle = "";
-}
-
 // Creating another administrator is a sensitive action.
 if ($role === "admin") {
     require_step_up_json();
@@ -95,30 +72,16 @@ $hours = AUTH_TEMP_PASSWORD_HOURS;
 $displayName = mb_substr($firstName . " " . $lastName, 0, 100, "UTF-8");
 $emailValue = $email !== "" ? $email : null;
 
-$adminId = (int) $_SESSION["user_id"];
-$teacherColumns = teacher_schema_ready($conn);
 $stmt = $conn->prepare(
     "INSERT INTO app_users
      (username, email, password_hash, display_name, first_name, last_name, position, contact_number,
-      role, office_code, must_change_password, temp_password_expires_at" . ($teacherColumns ? ", name_title" : "") . ")
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW() + INTERVAL {$hours} HOUR" . ($teacherColumns ? ", ?" : "") . ")"
+      role, office_code, must_change_password, temp_password_expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW() + INTERVAL {$hours} HOUR)"
 );
-if ($teacherColumns) {
-    $stmt->bind_param("sssssssssss", $username, $emailValue, $hash, $displayName, $firstName, $lastName, $position, $contactNumber, $role, $officeCode, $nameTitle);
-} else {
-    $stmt->bind_param("ssssssssss", $username, $emailValue, $hash, $displayName, $firstName, $lastName, $position, $contactNumber, $role, $officeCode);
-}
-// A teacher's account and calendar are created together, or not at all.
-$conn->begin_transaction();
+$stmt->bind_param("ssssssssss", $username, $emailValue, $hash, $displayName, $firstName, $lastName, $position, $contactNumber, $role, $officeCode);
 try {
     $stmt->execute();
-    $newId = (int) $conn->insert_id;
-    if ($role === "teacher") {
-        $officeCode = teacher_create_calendar($conn, $newId, $nameTitle, $firstName, $lastName, $courseCode, $room, $adminId);
-    }
-    $conn->commit();
 } catch (mysqli_sql_exception $error) {
-    $conn->rollback();
     $stmt->close();
     $message = "Could not create user";
     if ($error->getCode() === 1062) {
@@ -127,14 +90,16 @@ try {
     echo json_encode(["success" => false, "message" => $message]);
     exit;
 }
+
+$newId = (int) $conn->insert_id;
 $stmt->close();
 
+$adminId = (int) $_SESSION["user_id"];
 auth_audit($conn, $adminId, "user.created", "app_user", (string) $newId, [
     "username" => $username,
     "name" => $displayName,
     "role" => $role,
     "office_code" => $officeCode,
-    "course_code" => $role === "teacher" ? $courseCode : "",
 ]);
 $expires = $conn->query("SELECT temp_password_expires_at FROM app_users WHERE id = " . $newId)->fetch_row()[0];
 
@@ -143,7 +108,7 @@ echo json_encode([
     "user" => [
         "id" => $newId,
         "username" => $username,
-        "display_name" => $role === "teacher" ? teacher_display_name($nameTitle, $firstName, $lastName) : $displayName,
+        "display_name" => $displayName,
         "first_name" => $firstName,
         "last_name" => $lastName,
         "role" => $role,

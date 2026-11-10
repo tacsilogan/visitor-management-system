@@ -19,22 +19,6 @@ const ARRIVAL_DEFAULT_DISTANCE_METERS = 3;
 /** A GPS arrival needs a reading at least this accurate, so a weak signal never fakes one. */
 const ARRIVAL_MAX_ACCURACY_METERS = 8;
 const ARRIVAL_METHODS = ["gps", "visitor"];
-/** How early a student may say "I'm here" before their time. */
-const ARRIVAL_STUDENT_EARLY_MINUTES = 30;
-
-/** Whether school_accounts_migration.sql has marked who booked each visit. */
-function arrival_has_visitor_kind(mysqli $conn): bool
-{
-    static $ready = null;
-    if ($ready === null) {
-        try {
-            $ready = (bool) $conn->query("SELECT visitor_kind FROM appointments LIMIT 0");
-        } catch (mysqli_sql_exception $error) {
-            $ready = false;
-        }
-    }
-    return $ready;
-}
 const ARRIVAL_MIGRATION_MESSAGE = "Database update required: import phone_tracker/visitor_arrival_migration.sql into phone_tracker.";
 
 function arrival_schema_ready(mysqli $conn): bool
@@ -127,8 +111,7 @@ function arrival_record(
     try {
         $load = $conn->prepare(
             "SELECT id, status, office_code, visitor_full_name, arrived_at, arrival_method,
-                    arrival_distance_meters, arrival_accuracy_meters, scheduled_start_at, scheduled_end_at"
-            . (arrival_has_visitor_kind($conn) ? ", visitor_kind" : ", 'visitor' AS visitor_kind") . "
+                    arrival_distance_meters, arrival_accuracy_meters
              FROM appointments WHERE id = ? AND visitor_user_id = ? LIMIT 1 FOR UPDATE"
         );
         $load->bind_param("ii", $appointmentId, $visitorUserId);
@@ -142,18 +125,7 @@ function arrival_record(
             $conn->commit();
             return arrival_public($row) + ["already_recorded" => true];
         }
-        $isStudent = $row["visitor_kind"] === "student";
-        if ($isStudent) {
-            // A student passes no gate: they say "I'm here" once the teacher has accepted, from
-            // half an hour before their time until it ends.
-            $opens = strtotime((string) $row["scheduled_start_at"]) - ARRIVAL_STUDENT_EARLY_MINUTES * 60;
-            if ($row["status"] !== "approved") {
-                throw new RuntimeException("You can say you're here once the teacher has accepted", 409);
-            }
-            if (time() < $opens || time() > strtotime((string) $row["scheduled_end_at"])) {
-                throw new RuntimeException("You can say you're here from 30 minutes before your time until it ends", 409);
-            }
-        } elseif ($row["status"] !== "checked_in") {
+        if ($row["status"] !== "checked_in") {
             throw new RuntimeException("An arrival can only be recorded while the visit is checked in", 409);
         }
 
@@ -175,8 +147,8 @@ function arrival_record(
             $appointmentId,
             $officeCode,
             "visitor_arrived",
-            $isStudent ? "Student is here" : "Visitor arrived",
-            $isStudent ? "{$visitorName} is here for their visit." : "{$visitorName} has arrived at {$officeLabel} ({$how})."
+            "Visitor arrived",
+            "{$visitorName} has arrived at {$officeLabel} ({$how})."
         );
         presence_audit($conn, $visitorUserId, $appointmentId, "visit.arrived", [
             "office_code" => $officeCode,

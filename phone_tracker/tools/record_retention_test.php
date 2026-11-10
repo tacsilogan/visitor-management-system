@@ -114,14 +114,14 @@ if (array_sum($due) > 0) {
 $activities = [];
 $notifications = [];
 try {
-    zz_insert($conn, "offices", ["code" => ZZ_OFFICE, "kind" => "office", "name" => "Zzretain Office", "is_active" => 1]);
+    zz_insert($conn, "offices", ["code" => ZZ_OFFICE, "name" => "Zzretain Office", "is_active" => 1]);
 
     /* ---------- Who ---------- */
     $gone = zz_person($conn, "zzretain_gone", "visitor", 800, 700);
     zz_insert($conn, "api_access_tokens", ["user_id" => $gone, "token_hash" => hash("sha256", random_bytes(16)),
         "expires_at" => zz_ago(670), "last_used_at" => zz_ago(700), "created_at" => zz_ago(700)]);
     // Signed in long ago, but used the app last week: kept.
-    $active = zz_person($conn, "zzretain_active", "student", 800, 700);
+    $active = zz_person($conn, "zzretain_active", "visitor", 800, 700);
     zz_insert($conn, "api_access_tokens", ["user_id" => $active, "token_hash" => hash("sha256", random_bytes(16)),
         "expires_at" => zz_ago(-20), "last_used_at" => zz_ago(7), "created_at" => zz_ago(10)]);
     // Never signs in, but has a visit next week: kept.
@@ -162,13 +162,11 @@ try {
     // Younger than a year, but to someone whose account goes: goes with it.
     $goneEmail = zz_insert($conn, "outbound_emails", ["user_id" => $gone, "recipient_email" => "zzretain.gone@example.com",
         "template_key" => "zzretain", "subject" => "To gone", "status" => "sent", "created_at" => zz_ago(300)]);
-    $oldRequest = zz_insert($conn, "account_requests", ["account_type" => "visitor", "email" => "zzretain.old@example.com",
+    $oldRequest = zz_insert($conn, "account_requests", ["email" => "zzretain.old@example.com",
         "password_hash" => "", "full_name" => "Zzretain Old", "created_at" => zz_ago(400)]);
-    $goneRequest = zz_insert($conn, "account_requests", ["account_type" => "visitor", "email" => "zzretain.gone@example.com",
+    $goneRequest = zz_insert($conn, "account_requests", ["email" => "zzretain.gone@example.com",
         "password_hash" => "", "full_name" => "Zzretain Gone", "status" => "approved", "user_id" => $gone, "created_at" => zz_ago(200)]);
-    $teacherRequest = zz_insert($conn, "account_requests", ["account_type" => "teacher", "email" => "zzretain.teacher@example.com",
-        "password_hash" => "", "full_name" => "Zzretain Teacher", "created_at" => zz_ago(400)]);
-    $newRequest = zz_insert($conn, "account_requests", ["account_type" => "student", "email" => "zzretain.new@example.com",
+    $newRequest = zz_insert($conn, "account_requests", ["email" => "zzretain.new@example.com",
         "password_hash" => "", "full_name" => "Zzretain New", "created_at" => zz_ago(10)]);
 
     /* ---------- The cleanup ---------- */
@@ -198,13 +196,12 @@ try {
     check(zz_has($conn, "app_users", $fresh), "a new account stays");
     check(zz_has($conn, "app_users", $staff), "staff accounts are never removed by this");
 
-    check(!zz_has($conn, "audit_logs", $activeOld) && !zz_has($conn, "audit_logs", $nobodyOld), "a visitor's or student's activity goes after a year, and so does activity with no one behind it");
+    check(!zz_has($conn, "audit_logs", $activeOld) && !zz_has($conn, "audit_logs", $nobodyOld), "a visitor's activity goes after a year, and so does activity with no one behind it");
     check(zz_has($conn, "audit_logs", $activeNew), "recent activity stays");
     check(zz_has($conn, "audit_logs", $staffOld), "what staff did stays when it isn't about a visit");
     check(!zz_has($conn, "app_notifications", $oldNotice) && zz_has($conn, "app_notifications", $recentNotice), "notifications go after a year");
     check(!zz_has($conn, "outbound_emails", $oldEmail) && zz_has($conn, "outbound_emails", $newEmail), "emails go after a year");
-    check(!zz_has($conn, "account_requests", $oldRequest) && zz_has($conn, "account_requests", $newRequest), "visitors' and students' sign-up requests go after a year");
-    check(zz_has($conn, "account_requests", $teacherRequest), "a teacher's account request stays");
+    check(!zz_has($conn, "account_requests", $oldRequest) && zz_has($conn, "account_requests", $newRequest), "sign-up requests go after a year");
 
     same(array_sum(retention_run($conn, false)), 0, "afterwards nothing more is due");
 } finally {

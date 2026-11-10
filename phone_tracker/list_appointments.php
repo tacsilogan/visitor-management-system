@@ -64,7 +64,7 @@ if ($isOfficeUser) {
 $stmt->execute();
 $result = $stmt->get_result();
 $rows = [];
-$map = appointment_office_long_map();
+$map = appointment_office_map();
 while ($row = $result->fetch_assoc()) {
     $code = (string) $row["office_code"];
     $row["id"] = (int) $row["id"];

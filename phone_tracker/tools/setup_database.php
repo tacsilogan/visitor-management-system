@@ -48,6 +48,7 @@ const SETUP_FILES = [
     "school_accounts_migration.sql" => null,
     "account_removal_migration.sql" => null,
     "password_reset_code_migration.sql" => null,
+    "visitor_only_migration.sql" => null,
 ];
 const SETUP_CAMPUS_SEED = "campus_map_isatu_seed.sql";
 const SETUP_PUBLISHED_PASSWORD = "password";
@@ -200,7 +201,7 @@ function setup_secure_default_accounts(mysqli $conn): void
 {
     $result = $conn->query(
         "SELECT id, username, role, password_hash FROM app_users
-         WHERE is_active = 1 AND role IN ('admin', 'security', 'offices', 'teacher', 'visitor')
+         WHERE is_active = 1 AND role IN ('admin', 'security', 'offices', 'visitor')
          ORDER BY id"
     );
     $issued = [];

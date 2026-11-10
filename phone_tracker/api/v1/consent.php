@@ -4,7 +4,7 @@ require_once __DIR__ . "/_bootstrap.php";
 require_once dirname(__DIR__, 2) . "/visit_service.php";
 
 api_require_method("GET", "POST");
-$user = api_require_app_user();
+$user = api_require_visitor();
 $userId = (int) $user["id"];
 $input = $_SERVER["REQUEST_METHOD"] === "POST" ? api_body() : [];
 $appointmentId = (int) ($input["appointment_id"] ?? $_GET["appointment_id"] ?? 0);

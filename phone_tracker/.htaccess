@@ -15,8 +15,3 @@
         Header always set Cache-Control "no-cache"
     </FilesMatch>
 </IfModule>
-
-# Lets a teacher add their dashboard to a phone's home screen.
-<IfModule mod_mime.c>
-    AddType application/manifest+json .webmanifest
-</IfModule>

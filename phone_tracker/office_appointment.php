@@ -43,10 +43,6 @@ if (!$appointment) {
     exit;
 }
 $appointment["id"] = (int) $appointment["id"];
-// A teacher sees who is coming and why. Messages go through the app, so contact details stay private.
-if ($_SESSION["role"] === "teacher") {
-    unset($appointment["visitor_email"], $appointment["contact_number"]);
-}
 
 // For a stop of a multi-stop visit, other offices' stops are shown only as busy times,
 // so this office can suggest a time that fits without seeing the other requests.
