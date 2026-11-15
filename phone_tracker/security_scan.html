@@ -86,7 +86,7 @@
                         <div class="security-camera-placeholder" id="cameraPlaceholder">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h3l1.5-2h7L17 7h3v12H4V7Zm8 9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/></svg>
                             <strong id="cameraPlaceholderTitle">Connecting to camera</strong>
-                            <span id="cameraPlaceholderText">Live scanning needs HTTPS. Local testing can use a QR photo or screenshot.</span>
+                            <span id="cameraPlaceholderText">Allow camera access when your browser asks.</span>
                         </div>
                     </div>
 
@@ -160,11 +160,6 @@
                             <button class="admin-primary-button" id="submitTokenBtn" type="submit">Check in visitor</button>
                         </form>
                     </details>
-
-                    <section class="security-scan-help">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>
-                        <p><strong>Why isn't the camera inside the box?</strong> Phone browsers block live camera streams on local HTTP addresses. Use a photo/screenshot for local testing; the embedded scanner becomes available after trusted HTTPS deployment.</p>
-                    </section>
                 </aside>
             </div>
         </main>

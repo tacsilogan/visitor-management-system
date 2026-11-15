@@ -6,8 +6,6 @@ api_require_method("GET");
 api_success([
     "name" => "ISATU Visitor Mobile API",
     "version" => MOBILE_API_VERSION,
-    "documentation" => "../../../PHASE4_MOBILE_API.md",
-    "openapi" => "openapi.yaml",
     "health" => "health.php",
 ]);
 

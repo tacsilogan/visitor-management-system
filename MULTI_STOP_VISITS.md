@@ -101,5 +101,5 @@ the multi-stop endpoints answer HTTP 503.
   overlap check applies to multi-stop bookings and to times accepted for a visit's stops.
 - Admin analytics count each stop as an appointment. Define visit-level counting in
   Phase 6.
-- The legacy web visitor portal (`index.html`, `visitor_reschedule_response.php`) does not
-  know about visits; visits are created only from the app.
+- Visits are created only from the app. The old web visitor portal was retired on
+  2026-11-15; `index.html` now tells visitor accounts to use the ISATU Visits app.

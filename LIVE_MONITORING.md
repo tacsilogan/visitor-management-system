@@ -107,7 +107,7 @@ maplibre-gl-leaflet 0.1.4 bridge), like Leaflet already did.
 | `phone_tracker/security_visitor_trail.php` | One visitor's walked path, `after_id` for live updates (`routes.view`) |
 | `phone_tracker/scan_checkout.php` | Confirms a check-out offered by the second scan (`visits.complete`) |
 | `phone_tracker/api/v1/campus_map.php` | Boundary, gates, destination, and exit rules for the visitor app's map (`VISITOR_NAVIGATION.md`) |
-| `phone_tracker/api/v1/locations.php`, `save_location.php` | GPS uploads; apply the boundary rules |
+| `phone_tracker/api/v1/locations.php` | GPS uploads; apply the boundary rules |
 | `phone_tracker/appointment_maintenance.php` | Runs the confirmed-exit and end-of-day checks on every dashboard refresh |
 
 Every check-out and boundary crossing is written to `audit_logs` and appears in the admin's

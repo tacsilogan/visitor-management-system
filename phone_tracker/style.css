@@ -88,8 +88,7 @@ textarea {
 
 .security-camera-card,
 .security-scan-result,
-.security-manual-entry,
-.security-scan-help {
+.security-manual-entry {
     border: 1px solid #dfe5ec;
     background: #ffffff;
     box-shadow: 0 7px 22px rgba(24, 45, 72, 0.07);
@@ -710,37 +709,6 @@ textarea {
     width: 100%;
 }
 
-.security-scan-help {
-    display: flex;
-    padding: 13px 15px;
-    align-items: flex-start;
-    gap: 10px;
-    border-radius: 10px;
-    box-shadow: none;
-}
-
-.security-scan-help svg {
-    width: 19px;
-    height: 19px;
-    flex: 0 0 19px;
-    fill: none;
-    stroke: #0755b5;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 1.8;
-}
-
-.security-scan-help p {
-    margin: 0;
-    color: #707b87;
-    font-size: 9px;
-    line-height: 1.5;
-}
-
-.security-scan-help strong {
-    color: #3b4653;
-}
-
 @media (max-width: 1000px) {
     .security-scan-workspace {
         grid-template-columns: 1fr;
@@ -749,10 +717,6 @@ textarea {
     .security-scan-side {
         display: grid;
         grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .security-scan-help {
-        grid-column: 1 / -1;
     }
 }
 

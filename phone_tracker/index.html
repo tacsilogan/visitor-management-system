@@ -3,93 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Phone GPS Tracker</title>
+    <title>ISATU Visitor Management System</title>
     <link rel="stylesheet" href="style.css?v=20261110-1">
-    <link
-      rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
+    <style>
+        .visitor-app-signout {
+            margin-top: 26px;
+        }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <header class="page-header page-header-tight">
-            <h1>Phone GPS Tracker</h1>
-            <nav class="header-actions">
-                <button type="button" id="menuBtn" class="button-secondary button-compact" aria-expanded="false" aria-controls="visitorMenuPanel">Menu</button>
-                <button type="button" id="logoutBtn" class="button-secondary button-compact">Sign out</button>
-            </nav>
-        </header>
-
-        <section class="panel">
-            <h2>Book an office visit</h2>
-            <p class="muted small">Choose an office and appointment time. The office will review your request, and an approved request receives a QR visitor pass. GPS starts only after security checks you in.</p>
-            <form id="appointmentForm" class="appointment-form" novalidate>
-                <div class="form-row">
-                    <label for="officeCode">Office</label>
-                    <select id="officeCode" name="office_code" required>
-                        <option value="">Select office</option>
-                        <option value="IT">IT Department</option>
-                        <option value="IS">IS Department</option>
-                        <option value="CS">CS Department</option>
-                        <option value="DEANS">Dean's Office</option>
-                        <option value="TECH_SUPPORT">Tech Support</option>
-                    </select>
-                </div>
-                <div class="form-row">
-                    <label for="visitorFullName">Your full name</label>
-                    <input type="text" id="visitorFullName" name="visitor_full_name" autocomplete="name" required maxlength="150">
-                </div>
-                <div class="form-row">
-                    <label for="visitorEmail">Email (optional)</label>
-                    <input type="email" id="visitorEmail" name="visitor_email" autocomplete="email" maxlength="190">
-                </div>
-                <div class="form-row">
-                    <label for="appointmentAt">Visit date and time</label>
-                    <input type="datetime-local" id="appointmentAt" name="appointment_at" required>
-                </div>
-                <div class="form-row">
-                    <label for="deviceNameAppt">Device name on map (optional)</label>
-                    <input type="text" id="deviceNameAppt" maxlength="100" placeholder="Defaults to your name">
-                </div>
-                <label class="form-consent" for="visitorConsent">
-                    <input type="checkbox" id="visitorConsent" required>
-                    <span>I consent to location tracking only after security checks me in and only during this visit.</span>
-                </label>
-                <p class="login-error" id="appointmentError" hidden></p>
-                <button type="submit" id="appointmentSubmit">Create appointment</button>
-            </form>
-            <div id="appointmentSuccess" class="appointment-success" hidden>
-                <p id="appointmentStateMessage"><strong>Appointment request sent.</strong> Waiting for the office to respond.</p>
-                <p class="muted small" id="visitCompleteNotice" hidden><strong>Visit complete.</strong> You may create a new appointment below.</p>
-                <div id="qrHost" class="qr-host" hidden></div>
-                <p class="muted small token-line" id="tokenLine" hidden>Code: <code id="tokenDisplay"></code></p>
-                <p class="muted small" id="checkInHint">You will receive your visitor pass after approval.</p>
-                <p class="muted small" id="trackingStatus">Tracking status: standby.</p>
-                <div id="visitorMapPanel" hidden>
-                    <h3>Your live map</h3>
-                    <p class="muted small">This appears once security scans your QR code.</p>
-                    <div id="visitorMap"></div>
-                </div>
-                <p class="muted small"><button type="button" id="clearPassBtn" class="button-secondary button-small">Make another appointment</button></p>
-            </div>
-        </section>
-    </div>
-
-    <div class="menu-overlay" id="menuOverlay" hidden></div>
-    <aside class="menu-panel" id="visitorMenuPanel" hidden>
-        <div class="menu-panel-header">
-            <h2>My Appointments</h2>
-            <button type="button" id="menuCloseBtn" class="button-secondary button-small">Close</button>
+<body class="auth-page">
+    <header class="auth-header">
+        <div class="auth-brand" aria-label="ISATU Visitor Management System">
+            <span class="auth-brand-mark" aria-hidden="true">
+                <img src="assets/images/isatu-logo.png" alt="">
+            </span>
+            <span class="auth-brand-name">ISATU Visitor Management System</span>
         </div>
-        <p class="muted small">Tap an appointment to view its status or approved QR pass.</p>
-        <div id="appointmentsList" class="appointments-list"></div>
-    </aside>
+    </header>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <main class="auth-main">
+        <!-- Visitor accounts that sign in on the website land here (AUTH_ROLE_HOME). Visitors
+             book, carry their pass and get directions in the ISATU Visits app; the website is
+             for Office Personnel, Security and Admin. The card stays hidden until the sign-in
+             check passes, so opening the phone_tracker/ folder shows nothing before it moves
+             on to login.html (which sends signed-in staff to their own dashboard). -->
+        <section class="auth-card" id="visitorAppCard" hidden>
+            <h1 class="auth-panel-title auth-panel-title-small">Use the ISATU Visits app</h1>
+            <p class="auth-panel-subtitle">Visitors book visits, show their visitor pass and get directions in the ISATU Visits app on an Android phone.</p>
+            <ul class="auth-setup-list">
+                <li>Open the ISATU Visits app.</li>
+                <li>Log in with the same email and password you used here.</li>
+            </ul>
+            <p class="auth-panel-subtitle">This website is for ISATU Office Personnel, Security and Admin.</p>
+            <button class="auth-submit visitor-app-signout" id="logoutBtn" type="button">Sign out</button>
+        </section>
+    </main>
+
     <script src="auth.js?v=20261110-1"></script>
-    <script src="dialogs.js?v=20261107-3"></script>
-    <script src="gps_filter.js?v=20261012-1"></script>
-    <script src="app.js?v=20261107-3"></script>
+    <script>
+        (function () {
+            "use strict";
+            const Auth = window.PhoneTrackerAuth;
+            if (!Auth || !Auth.requireRole(["visitor"])) {
+                return;
+            }
+            document.getElementById("visitorAppCard").hidden = false;
+            document.getElementById("logoutBtn").addEventListener("click", function () {
+                Auth.logout().then(function () {
+                    window.location.href = "login.html";
+                });
+            });
+        })();
+    </script>
 </body>
 </html>

@@ -82,8 +82,8 @@ walkways and signs.
 
 ## Server-authoritative campus exit (done)
 
-`phone_tracker/api/v1/locations.php` (and the visitor website's `save_location.php`)
-check every GPS point against the boundary, with a 25 m buffer for drift at gates and
+`phone_tracker/api/v1/locations.php` checks every GPS point against the boundary, with a
+25 m buffer for drift at gates and
 building edges. A single outside reading never ends a visit: an exit is confirmed by at
 least three accurate (≤ 50 m) readings outside, the first one five or more minutes ago.
 

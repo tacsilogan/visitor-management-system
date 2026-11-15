@@ -15,3 +15,10 @@
         Header always set Cache-Control "no-cache"
     </FilesMatch>
 </IfModule>
+
+# The database files (*.sql) and the API description (api/v1/openapi.yaml) are for the
+# setup tools and developers, who read them from the project folder. Browsers get 403,
+# so nobody can download the schema or the seed accounts' notes from the website.
+<FilesMatch "\.(sql|ya?ml)$">
+    Require all denied
+</FilesMatch>
