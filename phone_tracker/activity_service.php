@@ -188,6 +188,20 @@ function activity_describe(array $row): array
             return ["Marked a meeting done", "Finished " . $possessive . " meeting" . ($office !== "" ? " at " . $office : ""), "good"];
 
         case "appointment.checked_in":
+            if (!empty($details["registered_at_gate"])) {
+                return [
+                    "Registered a visitor at the gate",
+                    "Registered " . $visitorName . " at the gate" . ($office !== "" ? " for " . $office : "") . " after an ID check. This visit is not tracked",
+                    "good",
+                ];
+            }
+            if (!empty($details["without_qr"])) {
+                return [
+                    "Checked in without the QR code",
+                    "Checked in " . $visitorName . " without the QR code, after an ID check" . ($office !== "" ? ", for " . $office : ""),
+                    "good",
+                ];
+            }
             return ["Checked in a visitor", "Checked in " . $visitorName . " at the gate" . ($office !== "" ? " for " . $office : ""), "good"];
         case "appointment.completed":
             return activity_visit_ended((string) ($details["method"] ?? ""), $visitorName, $possessive, "visit", $details);

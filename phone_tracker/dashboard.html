@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ISATU Security Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261110-1">
+    <link rel="stylesheet" href="style.css?v=20261116-1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -53,94 +53,142 @@
 
         <main class="admin-main security-main">
             <section class="admin-view security-view" id="securityDashboardView" data-security-panel="dashboard">
-                <div class="admin-mobile-heading">
-                    <p class="admin-eyebrow">Overview</p>
-                    <h1>Security Dashboard</h1>
-                </div>
-
-                <div class="security-overview-row">
-                    <div class="security-stat-grid" aria-label="Today's visitor summary">
-                        <button class="security-stat-card" type="button" data-security-filter="checked_in">
-                            <span>Visitors Inside<br>Campus</span>
-                            <strong id="insideCampusCount">0</strong>
-                        </button>
-                        <button class="security-stat-card" type="button" data-security-type-filter="walk-in">
-                            <span>Walk-In Visitors<br>Today</span>
-                            <strong id="walkInTodayCount">0</strong>
-                        </button>
-                        <button class="security-stat-card" type="button" data-security-type-filter="appointment">
-                            <span>Appointment<br>Visitors Today</span>
-                            <strong id="appointmentTodayCount">0</strong>
-                        </button>
-                        <button class="security-stat-card" type="button" data-security-filter="completed">
-                            <span>Visitors Checked<br>Out</span>
-                            <strong id="checkedOutTodayCount">0</strong>
-                        </button>
-                    </div>
-                    <a class="security-scan-card" href="security_scan.html">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h3v3H8zM13 8h3v3h-3zM8 13h3v3H8zM14 14h2v2h-2z"/></svg>
-                        <span>Scan QR</span>
-                    </a>
-                </div>
-
-                <section class="security-table-card" aria-labelledby="securityVisitorTableTitle">
-                    <div class="security-table-toolbar">
+                <!-- What a guard does most comes first and biggest; information is smaller (GATE_REGISTRATION.md). -->
+                <div class="sd-page">
+                    <header class="sd-head">
                         <div>
-                            <h1 class="sr-only" id="securityVisitorTableTitle">Visitor records</h1>
-                            <label class="admin-search security-search" for="securityVisitorSearch">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                                <input id="securityVisitorSearch" type="search" placeholder="Search visitor" autocomplete="off">
-                            </label>
+                            <p class="sd-date" id="sdDate">Today</p>
+                            <h1>Security Dashboard</h1>
+                            <p class="sd-updated"><span class="sd-live-dot" aria-hidden="true"></span><span id="sdUpdated">Loading visitors…</span></p>
                         </div>
-                        <div class="security-filter-group">
-                            <label for="securityStatusFilter">Status</label>
-                            <select id="securityStatusFilter">
-                                <option value="">All</option>
-                                <option value="checked_in">Active</option>
-                                <option value="pending_approval">Pending approval</option>
-                                <option value="approved">Approved</option>
-                                <option value="reschedule_proposed">Reschedule proposed</option>
-                                <option value="rejected">Declined</option>
-                                <option value="unanswered">Office did not respond</option>
-                                <option value="window_closed">Appointment done</option>
-                                <option value="completed">Checked out</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                            <button type="button" id="securityRefreshBtn" title="Refresh visitor records" aria-label="Refresh visitor records">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 8a7 7 0 0 1 11.8-2L20 8M4 16l2.1 2A7 7 0 0 0 18 16"/></svg>
+                        <div class="sd-actions">
+                            <a class="sd-btn sd-btn-primary" href="security_scan.html">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h3v3H8zM13 8h3v3h-3zM8 13h3v3H8zM14 14h2v2h-2z"/></svg>
+                                <strong>Scan visitor pass</strong>
+                                <small>Check in or check out</small>
+                            </a>
+                            <button class="sd-btn sd-btn-secondary" type="button" id="sdRegisterBtn">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 20v-1.5a4 4 0 0 0-4-4H6.5a4 4 0 0 0-4 4V20"/><circle cx="8.8" cy="7.5" r="3.6"/><path d="M19 8v6M16 11h6"/></svg>
+                                <strong>Register at the gate</strong>
+                                <small>Visitor has no app or no QR</small>
                             </button>
                         </div>
+                    </header>
+
+                    <div class="sd-notice" id="sdNotice" role="status" hidden>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6"/></svg>
+                        <p id="sdNoticeText"></p>
+                        <button class="sd-notice-close" type="button" id="sdNoticeClose" aria-label="Dismiss">×</button>
+                    </div>
+                    <p class="admin-message is-error" id="sdError" role="alert" hidden></p>
+
+                    <div class="sd-find">
+                        <label for="sdFind">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                            <span class="sr-only">Find a visitor</span>
+                            <input id="sdFind" type="search" autocomplete="off" spellcheck="false" placeholder="Find a visitor by name or reference (V-2026-…)" aria-controls="sdFindResults">
+                            <kbd aria-hidden="true">/</kbd>
+                        </label>
+                        <div class="sd-find-results" id="sdFindResults" hidden></div>
                     </div>
 
-                    <p class="admin-message is-error" id="securityDashboardError" role="alert" hidden></p>
-                    <div class="admin-table-wrap security-table-wrap">
-                        <table class="admin-table security-table">
-                            <thead>
-                                <tr>
-                                    <th>Registration ID</th>
-                                    <th>Name</th>
-                                    <th>Status</th>
-                                    <th>Reason for Visiting</th>
-                                    <th>Destination</th>
-                                    <th>Subject / Concern</th>
-                                    <th>Time In</th>
-                                    <th>Time Out</th>
-                                    <th><span class="sr-only">Actions</span></th>
-                                </tr>
-                            </thead>
-                            <tbody id="securityVisitorsBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state security-empty" id="securityVisitorsEmpty" hidden>
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5M19.5 5.5v5"/></svg>
-                        <strong>No visitor records yet</strong>
-                        <span>Appointments will appear here when visitors submit them.</span>
-                    </div>
-                    <div class="admin-pagination security-pagination">
-                        <p id="securityVisitorsShowing">Showing 0 visitors</p>
-                        <div class="admin-page-buttons" id="securityPageButtons" aria-label="Visitor list pages"></div>
-                    </div>
-                </section>
+                    <section class="sd-summary">
+                        <article class="sd-card sd-inside">
+                            <p class="sd-label">Inside campus now</p>
+                            <p class="sd-big" id="sdInsideCount">0</p>
+                            <ul class="sd-breakdown" id="sdBreakdown"></ul>
+                            <button class="sd-link" type="button" id="sdOpenMap">Open the live map →</button>
+                        </article>
+                        <article class="sd-card sd-attention" id="sdAttention">
+                            <div class="sd-attention-head">
+                                <h2>Needs attention <span class="sd-count" id="sdAttentionCount">0</span></h2>
+                            </div>
+                            <ul class="sd-alerts" id="sdAlerts"></ul>
+                            <p class="sd-calm" id="sdAttentionEmpty">Nothing needs attention right now.</p>
+                            <p class="sd-attention-foot" id="sdAttentionRules">Overstay: 30 minutes past the booked time. Signal lost: no position for over 3 minutes.</p>
+                        </article>
+                    </section>
+
+                    <section class="sd-today" aria-label="Today's numbers">
+                        <button class="sd-stat" type="button" data-sd-tab="inside">Walk-ins today <strong id="sdWalkIns">0</strong></button>
+                        <button class="sd-stat" type="button" data-sd-tab="inside">Appointments today <strong id="sdAppointments">0</strong></button>
+                        <button class="sd-stat" type="button" data-sd-tab="expected">Still expected <strong id="sdExpected">0</strong></button>
+                        <button class="sd-stat" type="button" data-sd-tab="left">Left today <strong id="sdLeft">0</strong></button>
+                    </section>
+
+                    <section class="sd-listcard" aria-label="Visitors">
+                        <div class="sd-tabs">
+                            <div class="sd-tablist" role="tablist" aria-label="Visitors">
+                                <button class="sd-tab" role="tab" type="button" id="sdTabInside" aria-selected="true" aria-controls="sdPanelInside" data-sd-tab="inside">Inside now <span id="sdTabInsideCount">0</span></button>
+                                <button class="sd-tab" role="tab" type="button" id="sdTabExpected" aria-selected="false" aria-controls="sdPanelExpected" data-sd-tab="expected" tabindex="-1">Expected today <span id="sdTabExpectedCount">0</span></button>
+                                <button class="sd-tab" role="tab" type="button" id="sdTabLeft" aria-selected="false" aria-controls="sdPanelLeft" data-sd-tab="left" tabindex="-1">Left today <span id="sdTabLeftCount">0</span></button>
+                                <button class="sd-tab" role="tab" type="button" id="sdTabAll" aria-selected="false" aria-controls="sdPanelAll" data-sd-tab="all" tabindex="-1">All records</button>
+                            </div>
+                        </div>
+
+                        <div class="sd-panel" id="sdPanelInside" role="tabpanel" aria-labelledby="sdTabInside" data-sd-panel="inside"></div>
+                        <div class="sd-panel" id="sdPanelExpected" role="tabpanel" aria-labelledby="sdTabExpected" data-sd-panel="expected" hidden></div>
+                        <div class="sd-panel" id="sdPanelLeft" role="tabpanel" aria-labelledby="sdTabLeft" data-sd-panel="left" hidden></div>
+
+                        <div class="sd-panel sd-panel-all" id="sdPanelAll" role="tabpanel" aria-labelledby="sdTabAll" data-sd-panel="all" hidden>
+                            <div class="security-table-toolbar">
+                                <div>
+                                    <label class="admin-search security-search" for="securityVisitorSearch">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                                        <input id="securityVisitorSearch" type="search" placeholder="Search all records" autocomplete="off">
+                                    </label>
+                                </div>
+                                <div class="security-filter-group">
+                                    <label for="securityStatusFilter">Status</label>
+                                    <select id="securityStatusFilter">
+                                        <option value="">All</option>
+                                        <option value="checked_in">Active</option>
+                                        <option value="pending_approval">Pending approval</option>
+                                        <option value="approved">Approved</option>
+                                        <option value="reschedule_proposed">Reschedule proposed</option>
+                                        <option value="rejected">Declined</option>
+                                        <option value="unanswered">Office did not respond</option>
+                                        <option value="window_closed">Appointment done</option>
+                                        <option value="completed">Checked out</option>
+                                        <option value="cancelled">Cancelled</option>
+                                    </select>
+                                    <button type="button" id="securityRefreshBtn" title="Refresh visitor records" aria-label="Refresh visitor records">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 8a7 7 0 0 1 11.8-2L20 8M4 16l2.1 2A7 7 0 0 0 18 16"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <p class="admin-message is-error" id="securityDashboardError" role="alert" hidden></p>
+                            <div class="admin-table-wrap security-table-wrap">
+                                <table class="admin-table security-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Registration ID</th>
+                                            <th>Name</th>
+                                            <th>Status</th>
+                                            <th>Reason for Visiting</th>
+                                            <th>Destination</th>
+                                            <th>Subject / Concern</th>
+                                            <th>Time In</th>
+                                            <th>Time Out</th>
+                                            <th><span class="sr-only">Actions</span></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="securityVisitorsBody"></tbody>
+                                </table>
+                            </div>
+                            <div class="admin-empty-state security-empty" id="securityVisitorsEmpty" hidden>
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5M19.5 5.5v5"/></svg>
+                                <strong>No visitor records yet</strong>
+                                <span>Appointments will appear here when visitors submit them.</span>
+                            </div>
+                            <div class="admin-pagination security-pagination">
+                                <p id="securityVisitorsShowing">Showing 0 visitors</p>
+                                <div class="admin-page-buttons" id="securityPageButtons" aria-label="Visitor list pages"></div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
             </section>
 
             <section class="admin-view security-view security-monitoring-view" id="securityMonitoringView" data-security-panel="monitoring" hidden>
@@ -229,14 +277,40 @@
         </main>
     </div>
 
+    <!-- Check in without the QR code, outside the booked time: the same recorded exception as on the scan page. -->
+    <dialog class="admin-dialog security-override-dialog" id="sdOverrideDialog" aria-labelledby="sdOverrideTitle">
+        <form id="sdOverrideForm" novalidate>
+            <header class="admin-dialog-header">
+                <div><p class="admin-eyebrow">Recorded security exception</p><h2 id="sdOverrideTitle">Let them in outside their time?</h2></div>
+                <button class="admin-dialog-close" type="button" data-sd-override-close aria-label="Close">×</button>
+            </header>
+            <p class="security-override-help" id="sdOverrideHelp"></p>
+            <dl class="security-override-summary">
+                <div><dt>Visitor</dt><dd id="sdOverrideVisitor">—</dd></div>
+                <div><dt>Destination</dt><dd id="sdOverrideDestination">—</dd></div>
+                <div><dt>Booked time</dt><dd id="sdOverrideSchedule">—</dd></div>
+            </dl>
+            <label class="office-field"><span>Reason</span><textarea id="sdOverrideReason" rows="3" maxlength="500" placeholder="Why this visitor is let in outside their booked time"></textarea></label>
+            <label class="office-field"><span>Their pass stays valid for</span>
+                <select id="sdOverrideMinutes"><option value="15">15 minutes</option><option value="30" selected>30 minutes</option><option value="60">1 hour</option></select>
+            </label>
+            <p class="admin-message is-error" id="sdOverrideError" role="alert" hidden></p>
+            <div class="admin-dialog-actions">
+                <button class="admin-cancel-button" type="button" data-sd-override-close>Cancel</button>
+                <button class="admin-primary-button" type="submit" id="sdOverrideSubmit">Allow and check in</button>
+            </div>
+        </form>
+    </dialog>
+
     <script src="auth.js?v=20261110-1"></script>
     <script src="dialogs.js?v=20261107-3"></script>
+    <script src="gate_register.js?v=20261116-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
     <!-- Sharp map at every zoom (campus_map.js falls back to OpenStreetMap images without it). -->
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
     <script src="campus_map.js?v=20261005-2"></script>
-    <script src="dashboard.js?v=20261107-3"></script>
+    <script src="dashboard.js?v=20261116-1"></script>
 </body>
 </html>

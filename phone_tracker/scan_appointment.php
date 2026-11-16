@@ -5,10 +5,15 @@ require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/visit_service.php";
 require_once __DIR__ . "/monitoring_service.php";
+require_once __DIR__ . "/gate_service.php";
 
 // First scan of a pass checks the visitor in. A later scan of the same pass offers a
 // one-tap check-out (scan_checkout.php), except within GATE_RESCAN_GRACE_SECONDS of
 // check-in, when it is treated as an accidental repeat.
+//
+// {"appointment_id": n} instead of {"token": …} checks a booked visitor in without their QR
+// code (GATE_REGISTRATION.md): the guard found the booking on the Security dashboard by name
+// or reference and checked the visitor's ID. Every other rule is the same as a scan.
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     http_response_code(405);
@@ -24,6 +29,11 @@ if (!is_array($input)) {
 }
 
 $token = isset($input["token"]) ? preg_replace("/[^a-f0-9]/i", "", (string) $input["token"]) : "";
+$withoutQr = false;
+if ($token === "" && isset($input["appointment_id"])) {
+    $token = (string) (gate_token_for_appointment($conn, (int) $input["appointment_id"]) ?? "");
+    $withoutQr = true;
+}
 if (strlen($token) !== 64) {
     echo json_encode(["success" => false, "message" => "Invalid QR code"]);
     exit;
@@ -64,6 +74,12 @@ if ($visitId > 0) {
             : gate_scan_completed($conn, $trackingId, $details);
     } else {
         $response = visit_handle_scan($conn, $visitId, $securityUserId);
+        if ($withoutQr && !empty($response["success"]) && ($response["action"] ?? "") === "checked_in" && gate_schema_ready($conn)) {
+            $mark = $conn->prepare("UPDATE appointments SET checked_in_without_qr = 1 WHERE visit_id = ? AND status = 'checked_in'");
+            $mark->bind_param("i", $visitId);
+            $mark->execute();
+            $mark->close();
+        }
     }
     $conn->close();
     echo json_encode($response);
@@ -222,6 +238,9 @@ try {
     } elseif ($appt["visit_type"] === "walk_in") {
         $updateSql .= ", scheduled_end_at = GREATEST(scheduled_end_at, DATE_ADD(NOW(), INTERVAL 4 HOUR))";
     }
+    if ($withoutQr && gate_schema_ready($conn)) {
+        $updateSql .= ", checked_in_without_qr = 1";
+    }
     $updateSql .= " WHERE id = ? AND status = 'approved'";
     $update = $conn->prepare($updateSql);
     if (!$update) {
@@ -238,7 +257,13 @@ try {
     }
     $update->close();
 
-    $historyNote = $hasOverride ? "Checked in using an authorized QR time override" : "Checked in by security scan";
+    if ($withoutQr) {
+        $historyNote = $hasOverride
+            ? "Checked in without the QR code after an ID check, with an authorized time override"
+            : "Checked in without the QR code after an ID check";
+    } else {
+        $historyNote = $hasOverride ? "Checked in using an authorized QR time override" : "Checked in by security scan";
+    }
     $history = $conn->prepare(
         "INSERT INTO appointment_status_history
          (appointment_id, from_status, to_status, changed_by_user_id, note)
@@ -266,6 +291,7 @@ try {
             "used_time_override" => $hasOverride,
             "override_id" => $overrideId ?: null,
             "effective_visit_end" => $hasOverride ? $overrideValidUntil : $appt["scheduled_end_at"],
+            "without_qr" => $withoutQr,
         ]);
         $ipAddress = isset($_SERVER["REMOTE_ADDR"]) ? substr((string) $_SERVER["REMOTE_ADDR"], 0, 45) : "";
         $audit->bind_param("iisss", $securityUserId, $appointmentId, $entityId, $auditDetails, $ipAddress);

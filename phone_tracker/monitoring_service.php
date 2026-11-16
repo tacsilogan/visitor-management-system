@@ -11,6 +11,7 @@
 require_once __DIR__ . "/presence_service.php";
 require_once __DIR__ . "/arrival_service.php";
 require_once __DIR__ . "/personnel.php";
+require_once __DIR__ . "/gate_service.php";
 
 // A position older than these is shown as stale / offline.
 const MONITOR_LIVE_SECONDS = 45;
@@ -61,6 +62,9 @@ function monitor_visitor(mysqli $conn, int $appointmentId): ?array
 function monitor_single_entries(mysqli $conn, string $scope, int $appointmentId): array
 {
     $checkoutColumn = presence_schema_ready($conn) ? "a.checkout_method" : "NULL AS checkout_method";
+    $gateColumns = gate_schema_ready($conn)
+        ? ", a.registration_source, a.id_type_shown, a.checked_in_without_qr"
+        : ", 'app' AS registration_source, '' AS id_type_shown, 0 AS checked_in_without_qr";
     $singleOnly = visit_schema_ready($conn) ? "a.visit_id IS NULL" : "1 = 1";
     $scopes = [
         "active" => "a.status = 'checked_in'",
@@ -70,7 +74,7 @@ function monitor_single_entries(mysqli $conn, string $scope, int $appointmentId)
     $stmt = $conn->prepare(
         "SELECT a.id, a.visitor_full_name, a.registration_code, a.created_at, a.office_code, a.visit_type,
                 a.purpose, a.subject, a.scheduled_start_at, a.scheduled_end_at, a.status,
-                a.checked_in_at, a.checked_in_by_user_id, a.completed_at, a.completed_by_user_id, {$checkoutColumn}
+                a.checked_in_at, a.checked_in_by_user_id, a.completed_at, a.completed_by_user_id, {$checkoutColumn}{$gateColumns}
          FROM appointments a
          WHERE {$singleOnly} AND {$scopes[$scope]}
          ORDER BY a.id DESC
@@ -114,6 +118,10 @@ function monitor_single_entries(mysqli $conn, string $scope, int $appointmentId)
             "completed_at" => $row["status"] === "checked_in" ? null : $row["completed_at"],
             "completed_by_user_id" => $row["completed_by_user_id"] !== null ? (int) $row["completed_by_user_id"] : null,
             "checkout_method" => $row["checkout_method"],
+            // "gate": registered by Security at the gate, never tracked (GATE_REGISTRATION.md).
+            "registration_source" => (string) ($row["registration_source"] ?: "app"),
+            "id_type_shown" => (string) $row["id_type_shown"],
+            "checked_in_without_qr" => (bool) (int) $row["checked_in_without_qr"],
         ];
     }
     return $entries;
@@ -188,6 +196,10 @@ function monitor_visit_entries(mysqli $conn, string $scope, int $visitId): array
             "completed_at" => $row["status"] === "checked_in" ? null : $row["completed_at"],
             "completed_by_user_id" => $row["completed_by_user_id"] !== null ? (int) $row["completed_by_user_id"] : null,
             "checkout_method" => $row["checkout_method"],
+            // Multi-office visits are booked in the app; the gate registers one office at a time.
+            "registration_source" => "app",
+            "id_type_shown" => "",
+            "checked_in_without_qr" => false,
         ];
     }
     return $entries;
@@ -247,9 +259,14 @@ function monitor_finish_entries(mysqli $conn, array $entries, bool $withPosition
         $entry["outside_since"] = $row && $row["state"] === "outside" ? $row["outside_since"] : null;
         $entry["point_count"] = $pointCounts[$id] ?? 0;
         $entry["arrivals"] = monitor_confirmed_arrivals($campus, $entry["stops"]);
-        $position = $withPosition && $onCampus
-            ? monitor_position($conn, $id, (string) $entry["checked_in_at"], $row, $campus)
-            : monitor_empty_position($onCampus ? "waiting" : "ended");
+        if (($entry["registration_source"] ?? "app") === "gate") {
+            // Registered at the gate: no phone and no consent to tracking, so never a position.
+            $position = monitor_empty_position($onCampus ? "not_tracked" : "ended");
+        } else {
+            $position = $withPosition && $onCampus
+                ? monitor_position($conn, $id, (string) $entry["checked_in_at"], $row, $campus)
+                : monitor_empty_position($onCampus ? "waiting" : "ended");
+        }
         $finished[] = array_merge($entry, $position);
     }
     return $finished;

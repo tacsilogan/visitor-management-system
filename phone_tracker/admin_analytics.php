@@ -42,6 +42,9 @@ $hasZoneName = analytics_column_exists($conn, "locations", "zone_name");
 $purposeSelect = $hasPurpose ? "a.purpose" : "NULL AS purpose";
 $subjectSelect = $hasSubject ? "a.subject" : "NULL AS subject";
 $visitTypeSelect = $hasVisitType ? "a.visit_type" : "'Appointment' AS visit_type";
+// Visitors registered at the gate by Security (GATE_REGISTRATION.md) are walk-ins with no app.
+$gateSelect = analytics_column_exists($conn, "appointments", "registration_source")
+    ? "a.registration_source" : "'app' AS registration_source";
 
 $exportFormat = (string) ($_GET["format"] ?? "");
 if ($exportFormat === "csv" || $exportFormat === "xlsx") {
@@ -54,7 +57,7 @@ if ($exportFormat === "csv" || $exportFormat === "xlsx") {
     $exportStmt = $conn->prepare(
         "SELECT a.id, a.visitor_full_name, a.office_code, a.status, a.appointment_at,
                 a.checked_in_at, a.completed_at, a.created_at,
-                {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}
+                {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}, {$gateSelect}
          FROM appointments a
          WHERE COALESCE(a.checked_in_at, a.appointment_at, a.created_at) BETWEEN ? AND ?
          ORDER BY COALESCE(a.checked_in_at, a.appointment_at, a.created_at) DESC"
@@ -73,7 +76,7 @@ if ($exportFormat === "csv" || $exportFormat === "xlsx") {
         $exportRows[] = [
             "registration" => "V-" . $year . "-" . str_pad((string) $row["id"], 6, "0", STR_PAD_LEFT),
             "visitor" => (string) $row["visitor_full_name"],
-            "visit_type" => (string) ($row["visit_type"] ?? ""),
+            "visit_type" => ($row["registration_source"] ?? "app") === "gate" ? "walk_in_gate" : (string) ($row["visit_type"] ?? ""),
             "purpose" => (string) ($row["purpose"] ?? ""),
             "destination" => (string) ($officeMap[$officeCode] ?? $officeCode),
             "subject" => (string) ($row["subject"] ?? ""),
@@ -118,7 +121,7 @@ header("Content-Type: application/json; charset=utf-8");
 $records = [];
 $recordStmt = $conn->prepare(
     "SELECT a.id, a.office_code, a.status, a.appointment_at, a.checked_in_at,
-            a.completed_at, a.cancelled_at, {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}
+            a.completed_at, a.cancelled_at, {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}, {$gateSelect}
      FROM appointments a
      WHERE (a.checked_in_at BETWEEN ? AND ?)
         OR (a.completed_at BETWEEN ? AND ?)
@@ -168,6 +171,7 @@ $officeDurations = [];
 $lateExits = 0;
 $completedDurations = [];
 $totalVisitors = 0;
+$gateRegistered = 0;
 
 function analytics_bucket_key(string $value, string $period): string
 {
@@ -184,6 +188,9 @@ function analytics_bucket_key(string $value, string $period): string
 foreach ($records as $record) {
     if ($record["checked_in_at"] && $record["checked_in_at"] >= $startSql && $record["checked_in_at"] <= $endSql) {
         $totalVisitors++;
+        if (($record["registration_source"] ?? "app") === "gate") {
+            $gateRegistered++;
+        }
         $key = analytics_bucket_key($record["checked_in_at"], $period);
         if (isset($bucketKeys[$key])) {
             $checkIns[$bucketKeys[$key]]++;
@@ -360,6 +367,7 @@ echo json_encode([
     "range" => ["start" => $startSql, "end" => $endSql],
     "summary" => [
         "total_visitors" => $totalVisitors,
+        "gate_registered" => $gateRegistered,
         "gps_tracked_now" => $trackedNow,
         "average_duration_minutes" => $averageDuration,
     ],

@@ -30,7 +30,7 @@ const ANALYTICS_EXPORT_PERIODS = [
 /** "walk_in" → "Walk-in", "appointment" → "Appointment". */
 function analytics_export_visit_type(string $type): string
 {
-    $labels = ["walk_in" => "Walk-in", "appointment" => "Appointment"];
+    $labels = ["walk_in" => "Walk-in", "walk_in_gate" => "Walk-in (registered at the gate)", "appointment" => "Appointment"];
     return $labels[strtolower($type)] ?? ucfirst(str_replace("_", " ", $type));
 }
 

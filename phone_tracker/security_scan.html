@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0755b5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Scan Visitor Pass | ISATU Security Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261110-1">
+    <link rel="stylesheet" href="style.css?v=20261116-1">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body class="admin-page security-page security-scan-page">
@@ -160,6 +160,17 @@
                             <button class="admin-primary-button" id="submitTokenBtn" type="submit">Check in visitor</button>
                         </form>
                     </details>
+
+                    <!-- A visitor with no pass at all (GATE_REGISTRATION.md). -->
+                    <section class="gate-scan-card" aria-labelledby="gateScanTitle">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 20v-1.5a4 4 0 0 0-4-4H6.5a4 4 0 0 0-4 4V20"/><circle cx="8.8" cy="7.5" r="3.6"/><path d="M19 8v6M16 11h6"/></svg>
+                        <div>
+                            <strong id="gateScanTitle">Visitor has no QR code?</strong>
+                            <small>No app, an iPhone, or no tracking wanted: register them here. They are checked in and not tracked.</small>
+                            <small>Booked, but can't show the pass? <a href="dashboard.html">Find their booking on the dashboard.</a></small>
+                        </div>
+                        <button class="admin-primary-button" type="button" id="gateRegisterBtn">Register at the gate</button>
+                    </section>
                 </aside>
             </div>
         </main>
@@ -191,8 +202,9 @@
 
     <script src="auth.js?v=20261110-1"></script>
     <script src="dialogs.js?v=20261107-3"></script>
+    <script src="gate_register.js?v=20261116-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
-    <script src="security_scan.js?v=20261105-1"></script>
+    <script src="security_scan.js?v=20261116-1"></script>
 </body>
 </html>

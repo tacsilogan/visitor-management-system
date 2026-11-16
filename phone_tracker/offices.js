@@ -605,18 +605,22 @@
         status.textContent = meta.label;
         const schedule = formatSchedule(appointment);
         const details = byId("officeAppointmentDetails");
-        details.replaceChildren(
+        const atGate = appointment.registration_source === "gate";
+        details.replaceChildren(...[
             detailPair("Visitor's name", appointment.visitor_full_name),
             detailPair("Contact number", appointment.contact_number),
-            detailPair("Email", appointment.visitor_email),
-            detailPair("Visit type", appointment.visit_type === "walk_in" ? "Walk-in" : "Appointment"),
+            atGate ? null : detailPair("Email", appointment.visitor_email),
+            detailPair("Visit type", atGate
+                ? "Walk-in, registered at the gate by Security (not tracked)"
+                : (appointment.visit_type === "walk_in" ? "Walk-in" : "Appointment")),
+            atGate ? detailPair("ID checked at the gate", appointment.id_type_shown) : null,
             detailPair("Purpose", appointment.purpose),
             detailPair("Destination", appointment.destination),
             detailPair("Subject / concern", appointment.subject),
-            detailPair("Schedule", schedule.date + " · " + schedule.time),
+            detailPair("Schedule", atGate ? "Walk-in, no booked time" : schedule.date + " · " + schedule.time),
             detailPair("Additional details", appointment.additional_details, true),
-            detailPair("Date submitted", formatDateTime(appointment.created_at), true)
-        );
+            detailPair(atGate ? "Registered at the gate" : "Date submitted", formatDateTime(appointment.created_at), true),
+        ].filter(Boolean));
         if (appointment.rejection_reason) {
             details.appendChild(detailPair("Decision reason", appointment.rejection_reason, true));
         }

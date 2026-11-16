@@ -4,6 +4,7 @@ require_once __DIR__ . "/session_bootstrap.php";
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/visit_service.php";
 require_once __DIR__ . "/arrival_service.php";
+require_once __DIR__ . "/gate_service.php";
 
 require_permission_json("office.appointments");
 $appointmentId = isset($_GET["id"]) ? (int) $_GET["id"] : 0;
@@ -15,6 +16,8 @@ if ($appointmentId <= 0 || $officeCode === "") {
 
 $visitColumns = visit_appointment_columns($conn, "a");
 $arrivalColumns = arrival_schema_ready($conn) ? ", a.arrived_at, a.arrival_method, a.arrival_accuracy_meters" : "";
+// Registered at the gate by Security (GATE_REGISTRATION.md): shown so the office knows it is not tracked.
+$arrivalColumns .= gate_schema_ready($conn) ? ", a.registration_source, a.id_type_shown, a.checked_in_without_qr" : "";
 $stmt = $conn->prepare(
     "SELECT a.id, a.registration_code, a.visitor_full_name, a.visitor_email,
             a.contact_number, a.visit_type, a.purpose, a.destination, a.subject,

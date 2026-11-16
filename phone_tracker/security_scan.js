@@ -951,6 +951,22 @@
         }
     });
 
+    // A visitor with no pass at all: no app, an iPhone, or no tracking wanted (GATE_REGISTRATION.md).
+    document.getElementById("gateRegisterBtn").addEventListener("click", function () {
+        GateRegister.open({
+            onRegistered: function (visit) {
+                AppDialog.alert({
+                    eyebrow: "Registered at the gate",
+                    title: visit.visitor_full_name + " is checked in",
+                    message: "Office: " + visit.office_label + ". This visit is not tracked."
+                        + "\n\nGive the visitor this reference: " + visit.registration_code
+                        + "\n\nWhen they leave, end their visit on the Security dashboard.",
+                    confirmLabel: "Done",
+                });
+            },
+        });
+    });
+
     showReadyResult();
     loadCameras();
 })();

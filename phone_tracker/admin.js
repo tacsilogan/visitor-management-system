@@ -1224,6 +1224,10 @@
             const summary = data.summary || {};
             text("analyticsRangeLabel", formatAnalyticsRange(data.range));
             text("analyticsTotalVisitors", summary.total_visitors || 0);
+            const atGate = Number(summary.gate_registered || 0);
+            text("analyticsTotalVisitorsNote", atGate > 0
+                ? "Checked in during this period, " + atGate + " registered at the gate"
+                : "Checked in during this period");
             text("analyticsGpsTracked", summary.gps_tracked_now || 0);
             text("analyticsAverageDuration", formatDuration(summary.average_duration_minutes));
             renderTrendChart(data.trend || {});

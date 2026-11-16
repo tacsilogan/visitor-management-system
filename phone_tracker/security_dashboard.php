@@ -5,9 +5,75 @@ require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/session_bootstrap.php";
 require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/appointment_maintenance.php";
+require_once __DIR__ . "/monitoring_service.php";
+require_once __DIR__ . "/gate_service.php";
+
+// The Security dashboard: who is inside now (with how their location is reporting), who is still
+// expected today, who left today, and the latest records for "All records and filters".
 
 require_permission_json("visits.monitor");
 refresh_appointment_time_states($conn);
+
+/** The fields the dashboard lists show; exact positions stay on the live map. */
+function security_list_entry(array $entry): array
+{
+    unset($entry["latitude"], $entry["longitude"], $entry["accuracy"], $entry["heading"], $entry["moving"]);
+    return $entry;
+}
+
+/**
+ * Bookings and walk-in passes for today that have not reached the gate: approved ones can be
+ * checked in (with or without the QR code), the others are still waiting for the office.
+ *
+ * @return list<array<string, mixed>>
+ */
+function security_expected_today(mysqli $conn): array
+{
+    $statuses = "'approved', 'pending_approval', 'reschedule_proposed'";
+    $today = "a.scheduled_start_at >= CURDATE() AND a.scheduled_start_at < CURDATE() + INTERVAL 1 DAY";
+    $visitReady = visit_schema_ready($conn);
+    $rows = [];
+    $result = $conn->query(
+        "SELECT a.id, a.registration_code, a.visitor_full_name, a.office_code, a.visit_type, a.purpose,
+                a.subject, a.scheduled_start_at, a.scheduled_end_at, a.status, a.created_at
+         FROM appointments a
+         WHERE a.status IN ({$statuses}) AND {$today}" . ($visitReady ? " AND a.visit_id IS NULL" : "") . "
+         ORDER BY a.scheduled_start_at ASC, a.id ASC
+         LIMIT 200"
+    );
+    foreach ($result ? $result->fetch_all(MYSQLI_ASSOC) : [] as $row) {
+        $id = (int) $row["id"];
+        $year = $row["created_at"] ? date("Y", strtotime((string) $row["created_at"])) : date("Y");
+        $rows[] = [
+            "id" => $id,
+            "visit_id" => null,
+            "registration_id" => $row["registration_code"] ?: ("V-" . $year . "-" . str_pad((string) $id, 6, "0", STR_PAD_LEFT)),
+            "visitor_full_name" => (string) $row["visitor_full_name"],
+            "office_label" => appointment_office_label((string) $row["office_code"]),
+            "visit_type" => (string) $row["visit_type"],
+            "purpose" => (string) $row["purpose"],
+            "subject" => (string) $row["subject"],
+            "scheduled_start_at" => $row["scheduled_start_at"],
+            "scheduled_end_at" => $row["scheduled_end_at"],
+            "status" => (string) $row["status"],
+        ];
+    }
+    if ($visitReady) {
+        $visits = $conn->query(
+            "SELECT DISTINCT a.visit_id FROM appointments a JOIN visits v ON v.id = a.visit_id
+             WHERE v.status = 'open' AND a.status IN ({$statuses}) AND {$today}
+             LIMIT 100"
+        );
+        foreach ($visits ? $visits->fetch_all(MYSQLI_ASSOC) : [] as $visit) {
+            $row = security_visit_row($conn, (int) $visit["visit_id"]);
+            if ($row && in_array($row["status"], ["approved", "pending_approval", "reschedule_proposed"], true)) {
+                $rows[] = $row;
+            }
+        }
+    }
+    usort($rows, fn (array $a, array $b): int => strcmp((string) $a["scheduled_start_at"], (string) $b["scheduled_start_at"]));
+    return $rows;
+}
 
 /**
  * One Security dashboard row summarizing a multi-stop visit. Its id is the stop that
@@ -132,12 +198,13 @@ $officeMap = appointment_office_map();
 $visitColumns = visit_appointment_columns($conn, "a");
 // The QR pass codes stay out of this list: Security reads them from the visitor's pass.
 $checkoutSelect = presence_schema_ready($conn) ? "a.checkout_method" : "NULL AS checkout_method";
+$gateSelect = gate_schema_ready($conn) ? ", a.registration_source" : ", 'app' AS registration_source";
 $result = $conn->query(
     "SELECT a.id, a.visitor_full_name, a.visitor_email,
             a.registration_code, a.office_code, a.device_name, a.appointment_at,
             a.scheduled_start_at, a.scheduled_end_at, a.status,
             a.checked_in_at, a.completed_at, a.cancelled_at, a.created_at, {$checkoutSelect},
-            {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}{$visitColumns}
+            {$visitTypeSelect}, {$purposeSelect}, {$subjectSelect}{$visitColumns}{$gateSelect}
      FROM appointments a
      ORDER BY COALESCE(a.status_updated_at, a.created_at) DESC, a.id DESC
      LIMIT 100"
@@ -170,10 +237,19 @@ if ($result) {
     }
 }
 
+$inside = array_map("security_list_entry", monitor_visitors($conn, "active"));
+$left = array_map("security_list_entry", monitor_visitors($conn, "finished"));
+$expected = security_expected_today($conn);
+
 $conn->close();
 
 echo json_encode([
     "success" => true,
+    "server_time" => date("Y-m-d H:i:s"),
+    "rules" => monitor_rules(),
     "summary" => $summary,
+    "inside" => $inside,
+    "expected" => $expected,
+    "left" => $left,
     "visitors" => $rows,
 ]);

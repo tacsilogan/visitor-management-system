@@ -57,8 +57,11 @@
         offline: "Offline",
         waiting: "Waiting for GPS",
         outside: "Outside campus",
+        // Registered at the gate without the app (GATE_REGISTRATION.md): never tracked.
+        not_tracked: "Not tracked",
         ended: "Visit ended",
     };
+    const STATE_TONES = { live: "good", stale: "warn", offline: "muted", waiting: "info", outside: "danger", not_tracked: "muted" };
     const STOP_LABELS = {
         checked_in: "Checked in",
         completed: "Meeting done",
@@ -223,6 +226,17 @@
 
     /* ---------- Visitor records table ---------- */
 
+    /** "Appointment", "Walk-in", "Visit to several offices" or "Registered at the gate". */
+    function visitTypeText(visitor) {
+        if (visitor.registration_source === "gate") {
+            return "Registered at the gate";
+        }
+        if (visitor.visit_type === "multi_stop") {
+            return "Visit to several offices";
+        }
+        return String(visitor.visit_type || "").toLowerCase().replace(/_/g, "-") === "walk-in" ? "Walk-in" : "Appointment";
+    }
+
     function statusMeta(visitor) {
         if (visitor.status === "checked_in") {
             return visitor.is_inside_campus
@@ -361,7 +375,10 @@
             const row = document.createElement("tr");
             const status = statusMeta(visitor);
             appendCell(row, visitor.registration_id, "security-registration-cell");
-            appendCell(row, visitor.visitor_full_name || "Visitor", "admin-cell-strong");
+            const nameCell = appendCell(row, visitor.visitor_full_name || "Visitor", "admin-cell-strong");
+            if (visitor.registration_source === "gate") {
+                nameCell.append(document.createElement("br"), element("span", "sd-type is-gate", "Registered at the gate"));
+            }
 
             const statusCell = document.createElement("td");
             const statusBadge = document.createElement("span");
@@ -389,12 +406,16 @@
             const actions = document.createElement("td");
             actions.className = "security-row-actions";
             if (visitor.is_inside_campus) {
-                const monitor = createRowAction("Monitor", "security-monitor-button", visitor);
-                monitor.dataset.action = "monitor";
+                // A visitor registered at the gate is not tracked, so there is nothing to monitor.
+                if (visitor.registration_source !== "gate") {
+                    const monitor = createRowAction("Monitor", "security-monitor-button", visitor);
+                    monitor.dataset.action = "monitor";
+                    actions.append(monitor);
+                }
                 const end = createRowAction("End visit", "security-end-button", visitor);
                 end.dataset.action = "complete";
-                actions.append(monitor, end);
-            } else if (visitor.status === "completed") {
+                actions.append(end);
+            } else if (visitor.status === "completed" && visitor.registration_source !== "gate") {
                 const route = createRowAction("View route", "security-monitor-button", visitor);
                 route.dataset.action = "monitor";
                 actions.append(route);
@@ -416,32 +437,664 @@
         renderVisitorPages(totalPages);
     }
 
+    /* ---------- Overview: gate actions, inside now, needs attention, the lists ---------- */
+    // What a guard does most, or must act on now, comes first and biggest (GATE_REGISTRATION.md).
+
+    const overview = {
+        tab: "inside",
+        inside: [],
+        expected: [],
+        left: [],
+        summary: {},
+    };
+    let noticeTimer = 0;
+    let pendingOverride = null;
+
+    function svgIcon(paths) {
+        const ns = "http://www.w3.org/2000/svg";
+        const svg = document.createElementNS(ns, "svg");
+        svg.setAttribute("viewBox", "0 0 24 24");
+        svg.setAttribute("aria-hidden", "true");
+        paths.forEach(function (d) {
+            const path = document.createElementNS(ns, "path");
+            path.setAttribute("d", d);
+            svg.appendChild(path);
+        });
+        return svg;
+    }
+
+    const ICONS = {
+        clock: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z", "M12 7v5l3 2"],
+        signal: ["M2 8.8a15 15 0 0 1 20 0", "M5 12.6a10 10 0 0 1 9.5-2.4", "M8.5 16.4a5 5 0 0 1 5.4-1", "M12 20h.01", "M3 3l18 18"],
+        exit: ["M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4", "M10 17l5-5-5-5", "M15 12H3"],
+        off: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z", "M5.7 5.7l12.6 12.6"],
+    };
+
+    function chip(className, text, icon) {
+        const node = element("span", "sd-chip " + className);
+        if (icon === "dot") {
+            node.appendChild(element("i"));
+        } else if (icon) {
+            node.appendChild(svgIcon(ICONS[icon]));
+        }
+        node.appendChild(document.createTextNode(text));
+        return node;
+    }
+
+    function clockText(date) {
+        return new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date);
+    }
+
+    function timeRange(visitor) {
+        return visitor.scheduled_start_at
+            ? formatTime(visitor.scheduled_start_at) + "–" + formatTime(visitor.scheduled_end_at)
+            : "";
+    }
+
+    function isWalkIn(visitor) {
+        return visitor.registration_source === "gate" || String(visitor.visit_type || "").toLowerCase() === "walk_in";
+    }
+
+    /** The small labels under a visitor's name. */
+    function typeTags(visitor) {
+        const tags = [];
+        if (visitor.registration_source === "gate") {
+            tags.push(element("span", "sd-type is-gate", "Registered at the gate"));
+        } else if (visitor.visit_type === "multi_stop") {
+            const count = Array.isArray(visitor.stops) ? visitor.stops.length : 0;
+            tags.push(element("span", "sd-type", count > 1 ? "Appointment · " + count + " offices" : "Several offices"));
+        } else {
+            tags.push(element("span", "sd-type", visitTypeText(visitor)));
+        }
+        if (visitor.checked_in_without_qr) {
+            tags.push(element("span", "sd-type is-note", "Checked in without QR"));
+        }
+        return tags;
+    }
+
+    /** How the visitor's location is reporting, as a label. */
+    function locationChip(visitor) {
+        switch (visitor.location_state) {
+            case "live":
+                return chip("is-live", "Live", "dot");
+            case "stale":
+                return chip("is-stale", "Stale · seen " + formatAgo(visitor.seconds_since_update), "dot");
+            case "offline":
+                return chip("is-lost", "Signal lost · " + formatDuration(visitor.seconds_since_update || 0), "dot");
+            case "outside": {
+                const outside = secondsSince(visitor.outside_since);
+                return chip("is-danger", "Outside the campus" + (outside != null ? " · " + formatDuration(outside) : ""), "dot");
+            }
+            case "not_tracked":
+                return chip("is-off", "Not tracked", "off");
+            default:
+                return chip("is-waiting", "Waiting for GPS", "dot");
+        }
+    }
+
+    /** Overstays, lost signals and visitors outside the boundary, most urgent first. */
+    function attentionItems() {
+        const items = [];
+        overview.inside.forEach(function (visitor) {
+            const slot = slotStatus(visitor);
+            if (slot && slot.overstay) {
+                items.push({ visitor: visitor, tone: "danger", rank: 0, icon: "clock", issue: slot.text + " past the booked time" });
+            }
+            if (visitor.location_state === "outside") {
+                const outside = secondsSince(visitor.outside_since);
+                items.push({
+                    visitor: visitor, tone: "danger", rank: 1, icon: "exit",
+                    issue: "Outside the campus" + (outside != null ? " · " + formatDuration(outside) : ""),
+                });
+            } else if (visitor.location_state === "offline") {
+                items.push({
+                    visitor: visitor, tone: "warn", rank: 2, icon: "signal",
+                    issue: "Signal lost · " + formatDuration(visitor.seconds_since_update || 0),
+                });
+            }
+        });
+        return items.sort(function (a, b) {
+            return a.rank - b.rank;
+        });
+    }
+
+    function actionButton(label, action, visitor, className) {
+        const button = element("button", "sd-act" + (className ? " " + className : ""), label);
+        button.type = "button";
+        button.dataset.sdAction = action;
+        button.dataset.id = String(visitor.id);
+        return button;
+    }
+
+    function insideActions(visitor) {
+        const box = element("div", "sd-cell sd-acts");
+        if (visitor.location_state !== "not_tracked") {
+            box.appendChild(actionButton("Monitor", "monitor", visitor));
+        }
+        box.appendChild(actionButton("End visit", "end", visitor, "is-end"));
+        return box;
+    }
+
+    function cell(className, children) {
+        const node = element("div", "sd-cell" + (className ? " " + className : ""));
+        children.forEach(function (child) {
+            if (child) {
+                node.appendChild(child);
+            }
+        });
+        return node;
+    }
+
+    function twoLine(main, sub, className) {
+        return cell(className, [element("span", "sd-main", main || "—"), sub ? element("span", "sd-sub", sub) : null]);
+    }
+
+    function whoCell(visitor) {
+        const tags = element("span", "sd-sub sd-tags");
+        tags.append(element("code", "", visitor.registration_id || ""), ...typeTags(visitor));
+        return cell("sd-who", [element("strong", "", visitor.visitor_full_name || "Visitor"), tags]);
+    }
+
+    function whereText(visitor) {
+        const parts = [visitor.purpose, visitor.subject];
+        if (visitor.registration_source === "gate" && visitor.id_type_shown) {
+            parts.push("ID: " + visitor.id_type_shown);
+        }
+        return parts.filter(Boolean).join(" · ");
+    }
+
+    function bookedCell(visitor) {
+        const slot = slotStatus(visitor);
+        const until = visitor.scheduled_end_at ? element("span", "sd-sub", "Booked until " + formatTime(visitor.scheduled_end_at)) : null;
+        if (slot && slot.tone === "danger") {
+            return cell("", [chip("is-danger", slot.text), until]);
+        }
+        if (slot && slot.tone === "warn") {
+            return cell("", [chip("is-warn", slot.text), until]);
+        }
+        if (isWalkIn(visitor)) {
+            return twoLine("Walk-in", "No booked time");
+        }
+        return twoLine(visitor.scheduled_end_at ? "Until " + formatTime(visitor.scheduled_end_at) : "—", slot ? slot.text : "");
+    }
+
+    function headRow(labels) {
+        const row = element("div", "sd-row is-head");
+        labels.forEach(function (label) {
+            row.appendChild(element("span", "", label));
+        });
+        return row;
+    }
+
+    function emptyPanel(text) {
+        return element("p", "sd-empty", text);
+    }
+
+    function renderInsidePanel(attentionIds) {
+        const panel = document.getElementById("sdPanelInside");
+        if (!overview.inside.length) {
+            panel.replaceChildren(emptyPanel("No visitors are inside the campus right now."));
+            return;
+        }
+        const rows = [headRow(["Visitor", "Going to", "Time in", "Location", "Booked time", ""])];
+        overview.inside.forEach(function (visitor) {
+            const row = element("div", "sd-row" + (attentionIds.has(visitor.id) ? " is-attention" : ""));
+            row.append(
+                whoCell(visitor),
+                twoLine(visitor.office_label, whereText(visitor), "sd-where"),
+                twoLine(formatTime(visitor.checked_in_at), formatDuration(secondsSince(visitor.checked_in_at)) + " inside", "sd-time"),
+                cell("", [locationChip(visitor)]),
+                bookedCell(visitor),
+                insideActions(visitor)
+            );
+            rows.push(row);
+        });
+        panel.replaceChildren(...rows);
+    }
+
+    /** Whether a booking can be checked in now: from 30 minutes before its start until it ends. */
+    function windowOpen(visitor) {
+        const start = parseServerDate(visitor.scheduled_start_at);
+        const end = parseServerDate(visitor.scheduled_end_at);
+        const now = serverNow();
+        return Boolean(start && end && now >= start.getTime() - 30 * 60000 && now <= end.getTime());
+    }
+
+    function startsText(visitor) {
+        const start = parseServerDate(visitor.scheduled_start_at);
+        const end = parseServerDate(visitor.scheduled_end_at);
+        if (!start) {
+            return "";
+        }
+        const seconds = Math.round((start.getTime() - serverNow()) / 1000);
+        if (seconds > 0) {
+            return "in " + formatDuration(seconds);
+        }
+        if (end && end.getTime() > serverNow()) {
+            return isWalkIn(visitor) ? "pass made " + formatTime(visitor.scheduled_start_at) : "started " + formatDuration(-seconds) + " ago";
+        }
+        return "time has passed";
+    }
+
+    function expectedChip(visitor) {
+        if (visitor.status === "approved") {
+            return isWalkIn(visitor) ? chip("is-ok", "Walk-in pass ready") : chip("is-ok", "Approved · pass ready");
+        }
+        if (visitor.status === "reschedule_proposed") {
+            return chip("is-stale", "New time offered, waiting for the visitor");
+        }
+        return chip("is-stale", "Waiting for the office to approve");
+    }
+
+    function renderExpectedPanel() {
+        const panel = document.getElementById("sdPanelExpected");
+        if (!overview.expected.length) {
+            panel.replaceChildren(emptyPanel("No more visitors are expected today."));
+            return;
+        }
+        const rows = [headRow(["Visitor", "Going to", "Booked time", "Status", ""])];
+        overview.expected.forEach(function (visitor) {
+            const row = element("div", "sd-row");
+            const actions = element("div", "sd-cell sd-acts");
+            if (visitor.status === "approved") {
+                actions.appendChild(actionButton("Check in without QR", "checkin", visitor, windowOpen(visitor) ? "is-primary" : ""));
+            }
+            row.append(
+                whoCell(visitor),
+                twoLine(visitor.office_label, whereText(visitor), "sd-where"),
+                twoLine(isWalkIn(visitor) ? "Until " + formatTime(visitor.scheduled_end_at) : timeRange(visitor), startsText(visitor), "sd-time"),
+                cell("", [expectedChip(visitor)]),
+                actions
+            );
+            rows.push(row);
+        });
+        panel.replaceChildren(...rows);
+    }
+
+    const LEFT_CHIPS = {
+        scan: ["is-ok", "Checked out at the gate"],
+        guard: ["is-stale", "Ended by Security"],
+        left_campus: ["is-lost", "Left the campus without checking out"],
+        end_of_day: ["is-lost", "Still open at the end of the day"],
+    };
+
+    function renderLeftPanel() {
+        const panel = document.getElementById("sdPanelLeft");
+        if (!overview.left.length) {
+            panel.replaceChildren(emptyPanel("No visitors have left yet today."));
+            return;
+        }
+        const rows = [headRow(["Visitor", "Went to", "In → out", "How the visit ended", ""])];
+        overview.left.forEach(function (visitor) {
+            const row = element("div", "sd-row");
+            const start = parseServerDate(visitor.checked_in_at);
+            const end = parseServerDate(visitor.completed_at);
+            const how = LEFT_CHIPS[visitor.checkout_method] || ["is-stale", "Visit ended"];
+            const actions = element("div", "sd-cell sd-acts");
+            if (visitor.registration_source !== "gate" && Number(visitor.point_count || 0) > 0) {
+                actions.appendChild(actionButton("View route", "route", visitor));
+            }
+            row.append(
+                whoCell(visitor),
+                twoLine(visitor.office_label, whereText(visitor), "sd-where"),
+                twoLine(formatTime(visitor.checked_in_at) + "–" + formatTime(visitor.completed_at),
+                    start && end ? formatDuration((end.getTime() - start.getTime()) / 1000) : "", "sd-time"),
+                cell("", [chip(how[0], how[1])]),
+                actions
+            );
+            rows.push(row);
+        });
+        panel.replaceChildren(...rows);
+    }
+
+    function renderBreakdown() {
+        const counts = { map: 0, waiting: 0, lost: 0, outside: 0, off: 0 };
+        overview.inside.forEach(function (visitor) {
+            const state = visitor.location_state;
+            if (state === "live" || state === "stale") {
+                counts.map += 1;
+            } else if (state === "offline") {
+                counts.lost += 1;
+            } else if (state === "outside") {
+                counts.outside += 1;
+            } else if (state === "not_tracked") {
+                counts.off += 1;
+            } else {
+                counts.waiting += 1;
+            }
+        });
+        const items = [];
+        [
+            ["map", "is-live", "on the live map"],
+            ["waiting", "is-waiting", "waiting for GPS"],
+            ["lost", "is-lost", "signal lost"],
+            ["outside", "is-danger", "outside the campus"],
+            ["off", "is-off", "not tracked (registered at the gate)"],
+        ].forEach(function (entry) {
+            if (counts[entry[0]] > 0) {
+                const item = element("li");
+                item.append(element("span", "sd-dot " + entry[1]), element("b", "", counts[entry[0]]), document.createTextNode(entry[2]));
+                items.push(item);
+            }
+        });
+        if (!items.length) {
+            items.push(element("li", "sd-calm-line", "No visitors inside right now."));
+        }
+        document.getElementById("sdBreakdown").replaceChildren(...items);
+    }
+
+    function attentionRow(item) {
+        const visitor = item.visitor;
+        const row = element("li", "sd-alert is-" + item.tone);
+        const icon = element("span", "sd-alert-icon");
+        icon.appendChild(svgIcon(ICONS[item.icon]));
+        const title = element("p", "sd-alert-title");
+        title.append(element("strong", "", visitor.visitor_full_name || "Visitor"), element("span", "sd-issue", item.issue));
+        const facts = [visitor.office_label, "inside since " + formatTime(visitor.checked_in_at)];
+        if (item.icon === "clock" && visitor.scheduled_end_at) {
+            facts.push("booked until " + formatTime(visitor.scheduled_end_at));
+        }
+        if (item.icon === "signal") {
+            facts.push("last position shown on the map");
+        }
+        const body = element("div", "sd-alert-body");
+        body.append(title, element("span", "sd-sub", facts.filter(Boolean).join(" · ")));
+        row.append(icon, body, insideActions(visitor));
+        return row;
+    }
+
+    function renderAttention(items) {
+        document.getElementById("sdAlerts").replaceChildren(...items.map(attentionRow));
+        const count = document.getElementById("sdAttentionCount");
+        count.textContent = String(items.length);
+        count.hidden = items.length === 0;
+        document.getElementById("sdAttentionEmpty").hidden = items.length > 0;
+        document.getElementById("sdAttention").classList.toggle("is-calm", items.length === 0);
+        const rules = monitoringState.rules || {};
+        setText("sdAttentionRules", "Overstay: " + (rules.overstay_grace_minutes || 30) + " minutes past the booked time. Signal lost: no position for over "
+            + Math.round((rules.stale_seconds || 180) / 60) + " minutes.");
+    }
+
+    function renderOverview() {
+        const now = new Date(serverNow());
+        setText("sdDate", new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(now));
+        setText("sdUpdated", "Updated " + clockText(now) + " · refreshes by itself");
+        const summary = overview.summary || {};
+        const items = attentionItems();
+        setText("sdInsideCount", overview.inside.length);
+        renderBreakdown();
+        renderAttention(items);
+        setText("sdWalkIns", summary.walk_in_today || 0);
+        setText("sdAppointments", summary.appointment_today || 0);
+        setText("sdExpected", overview.expected.length);
+        setText("sdLeft", overview.left.length);
+        setText("sdTabInsideCount", overview.inside.length);
+        setText("sdTabExpectedCount", overview.expected.length);
+        setText("sdTabLeftCount", overview.left.length);
+        renderInsidePanel(new Set(items.map(function (item) {
+            return item.visitor.id;
+        })));
+        renderExpectedPanel();
+        renderLeftPanel();
+        if (document.getElementById("sdFind").value.trim()) {
+            renderFind();
+        }
+    }
+
+    function selectTab(name) {
+        overview.tab = name;
+        document.querySelectorAll(".sd-tab").forEach(function (tab) {
+            const active = tab.dataset.sdTab === name;
+            tab.setAttribute("aria-selected", String(active));
+            tab.tabIndex = active ? 0 : -1;
+        });
+        document.querySelectorAll("[data-sd-panel]").forEach(function (panel) {
+            panel.hidden = panel.dataset.sdPanel !== name;
+        });
+    }
+
+    function showNotice(message, reference) {
+        const box = document.getElementById("sdNotice");
+        const text = document.getElementById("sdNoticeText");
+        text.replaceChildren(document.createTextNode(message));
+        if (reference) {
+            text.append(document.createTextNode(" Give the visitor this reference: "), element("code", "", reference));
+        }
+        box.hidden = false;
+        window.clearTimeout(noticeTimer);
+        noticeTimer = window.setTimeout(function () {
+            box.hidden = true;
+        }, 120000);
+    }
+
+    /* Find a visitor by name or reference, including today's bookings (check in without QR). */
+
+    function findMatches(query) {
+        const needle = query.trim().toLowerCase();
+        if (!needle) {
+            return [];
+        }
+        const seen = new Set();
+        const matches = [];
+        function add(visitor, where) {
+            const key = visitor.visit_id ? "visit-" + visitor.visit_id : "appointment-" + visitor.id;
+            if (seen.has(key)) {
+                return;
+            }
+            const haystack = [visitor.visitor_full_name, visitor.registration_id, visitor.registration_code].join(" ").toLowerCase();
+            if (haystack.indexOf(needle) === -1) {
+                return;
+            }
+            seen.add(key);
+            matches.push({ visitor: visitor, where: where });
+        }
+        overview.expected.forEach(function (visitor) { add(visitor, "expected"); });
+        overview.inside.forEach(function (visitor) { add(visitor, "inside"); });
+        overview.left.forEach(function (visitor) { add(visitor, "left"); });
+        dashboardState.visitors.forEach(function (visitor) { add(visitor, "record"); });
+        return matches.slice(0, 8);
+    }
+
+    function findItem(match) {
+        const visitor = match.visitor;
+        const row = element("div", "sd-find-item");
+        const facts = [visitor.registration_id, visitor.office_label];
+        let state;
+        let actions = element("div", "sd-acts");
+        if (match.where === "expected") {
+            facts.push(isWalkIn(visitor) ? "walk-in pass until " + formatTime(visitor.scheduled_end_at) : "booked " + timeRange(visitor));
+            state = visitor.status === "approved" ? chip("is-ok", "Not arrived yet") : expectedChip(visitor);
+            if (visitor.status === "approved") {
+                actions.appendChild(actionButton("Check in without QR", "checkin", visitor, "is-primary"));
+            }
+        } else if (match.where === "inside") {
+            state = chip("is-live", "Inside since " + formatTime(visitor.checked_in_at));
+            actions = insideActions(visitor);
+        } else if (match.where === "left") {
+            state = chip("is-stale", "Left at " + formatTime(visitor.completed_at));
+        } else {
+            state = chip("is-stale", statusMeta(visitor).label);
+        }
+        const who = element("div", "sd-find-who");
+        who.append(element("strong", "", visitor.visitor_full_name || "Visitor"), element("span", "sd-sub", facts.filter(Boolean).join(" · ")));
+        row.append(who, state, actions);
+        return row;
+    }
+
+    function renderFind() {
+        const input = document.getElementById("sdFind");
+        const box = document.getElementById("sdFindResults");
+        const query = input.value.trim();
+        if (!query) {
+            box.hidden = true;
+            box.replaceChildren();
+            return;
+        }
+        const matches = findMatches(query);
+        const parts = [element("p", "sd-find-head", matches.length
+            ? matches.length + (matches.length === 1 ? " match" : " matches")
+            : "No visitor matches “" + query + "” today or in the latest records.")];
+        matches.forEach(function (match) {
+            parts.push(findItem(match));
+        });
+        if (matches.some(function (match) { return match.where === "expected" && match.visitor.status === "approved"; })) {
+            parts.push(element("p", "sd-find-foot", "Check the visitor's ID before checking them in without a QR code."));
+        }
+        box.replaceChildren(...parts);
+        box.hidden = false;
+    }
+
+    function closeFind() {
+        const input = document.getElementById("sdFind");
+        input.value = "";
+        renderFind();
+    }
+
+    function findOverviewVisitor(id) {
+        const key = Number(id);
+        return overview.inside.concat(overview.expected, overview.left, dashboardState.visitors).find(function (visitor) {
+            return Number(visitor.id) === key;
+        }) || null;
+    }
+
+    /* Check in without the QR code: same rules as a scan (scan_appointment.php, appointment_id). */
+
+    async function checkInWithoutQr(visitor, button) {
+        const name = visitor.visitor_full_name || "this visitor";
+        const when = isWalkIn(visitor) ? "walk-in pass until " + formatTime(visitor.scheduled_end_at) : "booked " + timeRange(visitor);
+        if (!(await AppDialog.confirm({
+            eyebrow: "Check in without the QR code",
+            title: "Check in " + name + "?",
+            message: "First check their ID. The name on it must match " + name + ".\n\n" + [visitor.office_label, when].filter(Boolean).join(" · "),
+            confirmLabel: "Check in",
+        }))) {
+            return;
+        }
+        await sendCheckIn(visitor, button);
+    }
+
+    async function sendCheckIn(visitor, button) {
+        const name = visitor.visitor_full_name || "this visitor";
+        if (button) {
+            button.disabled = true;
+        }
+        try {
+            const data = await fetchJson("scan_appointment.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ appointment_id: Number(visitor.id) }),
+            });
+            if (data && data.success && data.action === "checked_in") {
+                showNotice(name + " is checked in for " + (visitor.office_label || "their office") + ", without the QR code.");
+                closeFind();
+                selectTab("inside");
+                await loadSecurityDashboard();
+                return;
+            }
+            if (data && data.can_override) {
+                openOverride(visitor, data);
+                return;
+            }
+            await AppDialog.alert({ title: "Couldn't check in " + name, message: (data && data.message) || "Please try again." });
+        } catch (error) {
+            if (error.message !== "Not authenticated") {
+                await AppDialog.alert(error instanceof TypeError
+                    ? { title: "Couldn't reach the server", message: "Check your connection and try again." }
+                    : { title: "Couldn't check in " + name, message: error.message || "Please try again." });
+            }
+        } finally {
+            if (button) {
+                button.disabled = false;
+            }
+        }
+    }
+
+    function openOverride(visitor, data) {
+        pendingOverride = { visitor: visitor, appointmentId: Number(data.appointment_id || visitor.id) };
+        setText("sdOverrideHelp", (data.message || "This pass can't be used right now.")
+            + " Use this only when Security has confirmed the visitor may enter now. The reason is saved in the activity log.");
+        setText("sdOverrideVisitor", visitor.visitor_full_name || "Visitor");
+        setText("sdOverrideDestination", visitor.office_label || "—");
+        setText("sdOverrideSchedule", timeRange(visitor) || "—");
+        document.getElementById("sdOverrideReason").value = "";
+        showMessage("sdOverrideError", "");
+        document.getElementById("sdOverrideDialog").showModal();
+        document.getElementById("sdOverrideReason").focus();
+    }
+
+    async function submitOverride(event) {
+        event.preventDefault();
+        if (!pendingOverride) {
+            return;
+        }
+        const reason = document.getElementById("sdOverrideReason").value.trim();
+        if (reason.length < 5) {
+            showMessage("sdOverrideError", "Write a clear reason, at least 5 characters.");
+            return;
+        }
+        const submit = document.getElementById("sdOverrideSubmit");
+        submit.disabled = true;
+        try {
+            const data = await fetchJson("create_qr_override.php", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    appointment_id: pendingOverride.appointmentId,
+                    reason: reason,
+                    valid_minutes: Number(document.getElementById("sdOverrideMinutes").value || 30),
+                }),
+            });
+            if (!data || !data.success) {
+                showMessage("sdOverrideError", (data && data.message) || "Could not allow this visitor in.");
+                return;
+            }
+            const visitor = pendingOverride.visitor;
+            pendingOverride = null;
+            document.getElementById("sdOverrideDialog").close();
+            await sendCheckIn(visitor, null);
+        } catch (error) {
+            if (error.message !== "Not authenticated") {
+                showMessage("sdOverrideError", error instanceof TypeError ? "Couldn't reach the server. Try again." : error.message);
+            }
+        } finally {
+            submit.disabled = false;
+        }
+    }
+
     async function loadSecurityDashboard() {
         showMessage("securityDashboardError", "");
+        showMessage("sdError", "");
         try {
             const data = await fetchJson("security_dashboard.php");
             if (!data || !data.success) {
-                showMessage("securityDashboardError", (data && data.message) || "Could not load visitor records.");
+                const message = (data && data.message) || "Could not load visitor records.";
+                showMessage("sdError", message);
+                showMessage("securityDashboardError", message);
                 return;
             }
-            const summary = data.summary || {};
-            setText("insideCampusCount", summary.inside_campus || 0);
-            setText("walkInTodayCount", summary.walk_in_today || 0);
-            setText("appointmentTodayCount", summary.appointment_today || 0);
-            setText("checkedOutTodayCount", summary.checked_out_today || 0);
+            syncServerClock(data.server_time);
+            if (data.rules) {
+                monitoringState.rules = Object.assign(monitoringState.rules, data.rules);
+            }
+            overview.summary = data.summary || {};
+            overview.inside = Array.isArray(data.inside) ? data.inside : [];
+            overview.expected = Array.isArray(data.expected) ? data.expected : [];
+            overview.left = Array.isArray(data.left) ? data.left : [];
             dashboardState.visitors = Array.isArray(data.visitors) ? data.visitors : [];
+            renderOverview();
             renderVisitors();
         } catch (error) {
             if (error.message !== "Not authenticated") {
+                showMessage("sdError", error.message || "Could not reach the server.");
                 showMessage("securityDashboardError", error.message || "Could not reach the server.");
             }
         }
     }
 
-    async function completeVisit(appointmentId, name, button) {
+    async function completeVisit(appointmentId, name, button, message) {
         if (!(await AppDialog.confirm({
             title: "End the visit for " + (name || "this visitor") + "?",
-            message: "Use this only if they cannot show their pass at the gate.",
+            message: message || "Use this only if they cannot show their pass at the gate.",
             confirmLabel: "End visit",
         }))) {
             return false;
@@ -678,7 +1331,7 @@
     function renderSummary() {
         const host = document.getElementById("monitorSummary");
         host.replaceChildren();
-        const counts = { live: 0, stale: 0, offline: 0, waiting: 0, outside: 0 };
+        const counts = { live: 0, stale: 0, offline: 0, waiting: 0, outside: 0, not_tracked: 0 };
         let overstays = 0;
         monitoringState.active.forEach(function (visitor) {
             counts[visitor.location_state] = (counts[visitor.location_state] || 0) + 1;
@@ -689,7 +1342,7 @@
         });
         const total = monitoringState.active.length;
         host.appendChild(element("strong", "monitor-summary-total", total + (total === 1 ? " visitor on campus" : " visitors on campus")));
-        [["live", "live"], ["stale", "stale"], ["offline", "offline"], ["waiting", "waiting for GPS"], ["outside", "outside"]].forEach(function (pair) {
+        [["live", "live"], ["stale", "stale"], ["offline", "offline"], ["waiting", "waiting for GPS"], ["outside", "outside"], ["not_tracked", "not tracked"]].forEach(function (pair) {
             if (counts[pair[0]] > 0 || pair[0] === "live") {
                 const chip = element("span", "monitor-summary-chip is-" + pair[0]);
                 chip.append(element("i"), document.createTextNode(counts[pair[0]] + " " + pair[1]));
@@ -758,7 +1411,7 @@
             );
             const meta = element("span", "monitor-row-meta");
             if (onCampus) {
-                const tone = { live: "good", stale: "warn", offline: "muted", waiting: "info", outside: "danger" }[visitor.location_state] || "muted";
+                const tone = STATE_TONES[visitor.location_state] || "muted";
                 meta.appendChild(element("span", "monitor-badge is-" + tone, stateText(visitor)));
                 const arrival = currentArrival(visitor);
                 if (arrival) {
@@ -919,13 +1572,12 @@
             icon.appendChild(svg);
         }
         setText("monitorDetailName", visitor.visitor_full_name || "Visitor");
-        setText("monitorDetailMeta", visitor.registration_id + " · "
-            + (visitor.visit_type === "multi_stop" ? "Visit to several offices" : (visitor.visit_type === "walk_in" ? "Walk-in" : "Appointment")));
+        setText("monitorDetailMeta", visitor.registration_id + " · " + visitTypeText(visitor));
 
         const chips = document.getElementById("monitorDetailChips");
         chips.replaceChildren();
         if (onCampus) {
-            const tone = { live: "good", stale: "warn", offline: "muted", waiting: "info", outside: "danger" }[visitor.location_state] || "muted";
+            const tone = STATE_TONES[visitor.location_state] || "muted";
             chips.appendChild(element("span", "monitor-badge is-" + tone, stateText(visitor)));
             const slot = slotStatus(visitor);
             if (slot) {
@@ -952,6 +1604,9 @@
             } else if (visitor.has_location) {
                 addFact(facts, "Last update", formatAgo(visitor.seconds_since_update)
                     + (visitor.accuracy != null ? " · accurate to ±" + Math.round(visitor.accuracy) + " m" : ""), "is-live-age");
+            } else if (visitor.location_state === "not_tracked") {
+                addFact(facts, "Location", "Not tracked. Registered at the gate without the app"
+                    + (visitor.id_type_shown ? " (ID checked: " + visitor.id_type_shown + ")" : "") + ".");
             } else {
                 addFact(facts, "Last update", "No position yet. The visitor's phone has not shared GPS since check-in.");
             }
@@ -1289,23 +1944,98 @@
         });
     });
 
-    document.querySelectorAll("[data-security-filter]").forEach(function (card) {
-        card.addEventListener("click", function () {
-            dashboardState.status = card.getAttribute("data-security-filter") || "";
-            dashboardState.type = "";
-            dashboardState.page = 1;
-            document.getElementById("securityStatusFilter").value = dashboardState.status;
-            renderVisitors();
+    /* Overview */
+
+    document.getElementById("sdRegisterBtn").addEventListener("click", function () {
+        GateRegister.open({
+            onRegistered: function (visit) {
+                showNotice(visit.visitor_full_name + " is checked in for " + visit.office_label + ". This visit is not tracked.", visit.registration_code);
+                selectTab("inside");
+                loadSecurityDashboard();
+            },
         });
     });
+    document.getElementById("sdOpenMap").addEventListener("click", function () {
+        switchSecurityView("monitoring");
+    });
+    document.getElementById("sdNoticeClose").addEventListener("click", function () {
+        document.getElementById("sdNotice").hidden = true;
+    });
 
-    document.querySelectorAll("[data-security-type-filter]").forEach(function (card) {
-        card.addEventListener("click", function () {
-            dashboardState.type = card.getAttribute("data-security-type-filter") || "";
-            dashboardState.status = "";
-            dashboardState.page = 1;
-            document.getElementById("securityStatusFilter").value = "";
-            renderVisitors();
+    document.querySelectorAll("[data-sd-tab]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            selectTab(button.dataset.sdTab);
+        });
+    });
+    document.querySelector(".sd-tablist").addEventListener("keydown", function (event) {
+        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
+            return;
+        }
+        const tabs = Array.from(document.querySelectorAll(".sd-tab"));
+        const index = tabs.findIndex(function (tab) { return tab.dataset.sdTab === overview.tab; });
+        const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+        selectTab(next.dataset.sdTab);
+        next.focus();
+        event.preventDefault();
+    });
+
+    // One handler for every Monitor, End visit, View route and Check in without QR button.
+    document.querySelector(".sd-page").addEventListener("click", function (event) {
+        const button = event.target.closest("button[data-sd-action]");
+        if (!button) {
+            return;
+        }
+        const visitor = findOverviewVisitor(button.dataset.id);
+        if (!visitor) {
+            return;
+        }
+        const action = button.dataset.sdAction;
+        if (action === "monitor" || action === "route") {
+            openOnMap(visitor.id);
+        } else if (action === "end") {
+            completeVisit(visitor.id, visitor.visitor_full_name, button, visitor.registration_source === "gate"
+                ? "They were registered at the gate without the app, so ending the visit here is how they check out. Make sure they have left."
+                : null);
+        } else if (action === "checkin") {
+            checkInWithoutQr(visitor, button);
+        }
+    });
+
+    const findInput = document.getElementById("sdFind");
+    findInput.addEventListener("input", renderFind);
+    findInput.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+            closeFind();
+        }
+    });
+    document.addEventListener("click", function (event) {
+        if (!event.target.closest(".sd-find") && !event.target.closest("dialog")) {
+            document.getElementById("sdFindResults").hidden = true;
+        }
+    });
+    findInput.addEventListener("focus", function () {
+        if (findInput.value.trim()) {
+            renderFind();
+        }
+    });
+    // "/" jumps to the search, unless the guard is typing somewhere or a dialog is open.
+    document.addEventListener("keydown", function (event) {
+        if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) {
+            return;
+        }
+        if (event.target.closest("input, textarea, select, [contenteditable]") || document.querySelector("dialog[open]")
+            || document.getElementById("securityDashboardView").hidden) {
+            return;
+        }
+        event.preventDefault();
+        findInput.focus();
+    });
+
+    document.getElementById("sdOverrideForm").addEventListener("submit", submitOverride);
+    document.querySelectorAll("[data-sd-override-close]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            pendingOverride = null;
+            document.getElementById("sdOverrideDialog").close();
         });
     });
 
