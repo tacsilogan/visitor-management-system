@@ -16,9 +16,10 @@ if (!auth_schema_ready($conn)) {
     api_fail("Mobile API database migration is required", 503);
 }
 
+$notice = api_notice_columns($conn);
 $stmt = $conn->prepare(
     "SELECT id, username, email, password_hash, display_name, contact_number,
-            email_verified_at, role, is_active, must_change_password
+            email_verified_at, role, is_active, must_change_password{$notice}
      FROM app_users
      WHERE (LOWER(email) = ? OR LOWER(username) = ?) AND role = 'visitor'
      LIMIT 1"

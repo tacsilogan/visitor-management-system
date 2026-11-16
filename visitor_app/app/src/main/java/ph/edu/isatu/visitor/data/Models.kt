@@ -21,6 +21,8 @@ data class UserDto(
     val contactNumber: String = "",
     val emailVerified: Boolean = false,
     val role: String = "visitor",
+    /** The Terms and Privacy Notice version this account last agreed to, as the server recorded it. */
+    val noticeVersion: String = "",
 )
 
 data class LoginRequest(
@@ -81,6 +83,13 @@ data class PasswordResetData(
 data class ResetPasswordRequest(val email: String, val token: String, val newPassword: String)
 data class ProfileData(val user: UserDto = UserDto())
 data class ProfileUpdateRequest(val fullName: String, val contactNumber: String)
+
+/** "I agree" on the notice's agree-again screen, kept on the server (api/v1/notice_agreement.php). */
+data class NoticeAgreementRequest(val version: String)
+
+/** Profile → Delete my account (api/v1/account_delete.php). */
+data class AccountDeleteRequest(val password: String)
+data class AccountDeleteData(val deleted: Boolean = false, val cancelledVisits: Int = 0)
 
 data class OfficeRuleDto(
     val dayOfWeek: Int = 1,

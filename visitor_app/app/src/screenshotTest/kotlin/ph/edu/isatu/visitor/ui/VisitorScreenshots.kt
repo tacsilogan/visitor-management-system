@@ -439,8 +439,8 @@ fun AppIcon() {
 }
 
 @Composable
-private fun SignInFrame(rememberedEmail: String = "", message: String? = null) = ISATUVisitorTheme {
-    BrandedAuthPage(onBack = null, busy = false, banner = { message?.let { MessageCard(it, true) {} } }) {
+private fun SignInFrame(rememberedEmail: String = "", message: String? = null, error: Boolean = true) = ISATUVisitorTheme {
+    BrandedAuthPage(onBack = null, busy = false, banner = { message?.let { MessageCard(it, error) {} } }) {
         LoginForm(busy = false, onLogin = { _, _ -> }, onRegister = {}, onRecover = {}, rememberedEmail = rememberedEmail)
     }
 }
@@ -518,7 +518,7 @@ fun CreateAccount() = ISATUVisitorTheme {
 }
 
 @PreviewTest
-@Preview(name = "The agreement, ticked", widthDp = 320, heightDp = 130, showBackground = true)
+@Preview(name = "The agreement, ticked", widthDp = 320, heightDp = 170, showBackground = true)
 @Composable
 fun AgreementTicked() = ISATUVisitorTheme {
     Column(Modifier.padding(16.dp)) { NoticeAgreement(true, {}, includeLocation = true, onOpenNotice = {}) }
@@ -560,3 +560,79 @@ fun NoticeLinkInProfile() = ISATUVisitorTheme {
     Column(Modifier.padding(16.dp)) { NoticeLink {} }
 }
 
+
+private val profileVisitor = UserDto(fullName = "Juan Dela Cruz", email = "juan.delacruz@gmail.com", contactNumber = "0917 555 0101")
+
+/** Profile inside the app's bars, as MainShell draws it, with whatever is over the whole screen. */
+@Composable
+private fun ProfileFrame(over: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {}) = ISATUVisitorTheme {
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = AppBackground,
+            topBar = { MainTopBar(unreadCount = 1, busy = false, goldEdge = true, onNotifications = {}, onProfile = {}) },
+            bottomBar = { MainBottomBar(selected = null) {} },
+        ) { padding ->
+            Column(Modifier.fillMaxSize().padding(padding)) {
+                ProfileContent(profileVisitor, busy = false, onEdit = {}, onOpenNotice = {}, onSignOut = {}, onDeleteAccount = {})
+            }
+        }
+        over()
+    }
+}
+
+@PreviewTest
+@Preview(name = "Profile, all of it", widthDp = 360, heightDp = 1060)
+@Composable
+fun ProfileWhole() = ProfileFrame()
+
+@PreviewTest
+@Preview(name = "Delete account, asking for the password", widthDp = 360, heightDp = 800)
+@Composable
+fun DeleteAccountAsk() = ProfileFrame {
+    DeleteAccountSheet(UpcomingBookings(visits = 1, offices = 1), busy = false, error = null, onDelete = {}, onDismiss = {})
+}
+
+@PreviewTest
+@Preview(name = "Delete account, nothing booked", widthDp = 360, heightDp = 800)
+@Composable
+fun DeleteAccountNothingBooked() = ProfileFrame {
+    DeleteAccountSheet(UpcomingBookings(visits = 0, offices = 0), busy = false, error = null, onDelete = {}, onDismiss = {})
+}
+
+@PreviewTest
+@Preview(name = "Delete account, a wrong password", widthDp = 360, heightDp = 800)
+@Composable
+fun DeleteAccountWrongPassword() = ProfileFrame {
+    DeleteAccountSheet(UpcomingBookings(visits = 2, offices = 2), busy = false, error = "That password isn't right.", onDelete = {}, onDismiss = {})
+}
+
+@PreviewTest
+@Preview(name = "Delete account, deleting", widthDp = 360, heightDp = 800)
+@Composable
+fun DeleteAccountDeleting() = ProfileFrame {
+    DeleteAccountSheet(UpcomingBookings(visits = 1, offices = 1), busy = true, error = null, onDelete = {}, onDismiss = {})
+}
+
+@PreviewTest
+@Preview(name = "Delete account, small phone", widthDp = 320, heightDp = 568)
+@Composable
+fun DeleteAccountSmallPhone() = ProfileFrame {
+    DeleteAccountSheet(UpcomingBookings(visits = 1, offices = 1), busy = false, error = "That password isn't right.", onDelete = {}, onDismiss = {})
+}
+
+@PreviewTest
+@Preview(name = "Delete account, on campus", widthDp = 360, heightDp = 800)
+@Composable
+fun DeleteAccountOnCampus() = ProfileFrame { OnCampusDeleteNotice(onDismiss = {}) }
+
+@PreviewTest
+@Preview(name = "Sign in, after deleting the account", widthDp = 360, heightDp = 780)
+@Composable
+fun SignInAfterDeleting() = SignInFrame(message = "Your account was deleted. Thank you for visiting ISATU.", error = false)
+
+@PreviewTest
+@Preview(name = "Agreeing, saving didn't work", widthDp = 360, heightDp = 780)
+@Composable
+fun AgreementScreenError() = ISATUVisitorTheme {
+    TermsAgreementScreen(busy = false, onAgree = {}, onSignOut = {}, error = "Can't reach ISATU Visits. Check your internet connection and try again.")
+}

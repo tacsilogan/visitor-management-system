@@ -1,5 +1,5 @@
 (function () {
-    if (!PhoneTrackerAuth.requireRole(["security", "admin"])) {
+    if (!PhoneTrackerAuth.requireRole(["security"])) {
         return;
     }
 

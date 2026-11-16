@@ -40,8 +40,9 @@ try {
     api_fail("Could not create the account. Please try again.", 500, [], $error);
 }
 
+$notice = api_notice_columns($conn);
 $stmt = $conn->prepare(
-    "SELECT id, username, email, display_name, contact_number, email_verified_at, role FROM app_users WHERE id = ?"
+    "SELECT id, username, email, display_name, contact_number, email_verified_at, role{$notice} FROM app_users WHERE id = ?"
 );
 $stmt->bind_param("i", $userId);
 $stmt->execute();

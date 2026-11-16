@@ -6,6 +6,7 @@ header("Cache-Control: no-store, max-age=0");
 header("X-Content-Type-Options: nosniff");
 
 require_once dirname(__DIR__, 2) . "/db.php";
+require_once dirname(__DIR__, 2) . "/visitor_rights_service.php";
 
 const MOBILE_API_VERSION = "1.0";
 const MOBILE_API_MAX_BODY_BYTES = 1048576;
@@ -151,10 +152,11 @@ function api_require_visitor(): array
         api_fail("Authentication required", 401);
     }
     $hash = hash("sha256", $rawToken);
+    $notice = api_notice_columns($conn, "u");
     $stmt = $conn->prepare(
         "SELECT t.id AS access_token_id, t.installation_id, t.device_name, t.expires_at,
                 u.id, u.username, u.email, u.display_name, u.contact_number,
-                u.email_verified_at, u.role, u.is_active
+                u.email_verified_at, u.role, u.is_active{$notice}
          FROM api_access_tokens t
          INNER JOIN app_users u ON u.id = t.user_id
          WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > NOW()
@@ -288,7 +290,16 @@ function api_user_payload(array $user): array
         "contact_number" => (string) ($user["contact_number"] ?? ""),
         "email_verified" => !empty($user["email_verified_at"]),
         "role" => "visitor",
+        // The notice version the visitor last agreed to, so a new phone doesn't ask again.
+        "notice_version" => (string) ($user["notice_version"] ?? ""),
     ];
+}
+
+/** ", u.notice_version" for a SELECT of app_users, or an empty stand-in before visitor_rights_migration.sql. */
+function api_notice_columns(mysqli $conn, string $alias = ""): string
+{
+    $prefix = $alias !== "" ? $alias . "." : "";
+    return visitor_rights_schema_ready($conn) ? ", {$prefix}notice_version" : ", '' AS notice_version";
 }
 
 function api_setting(mysqli $conn, string $key, int $default, int $minimum, int $maximum): int

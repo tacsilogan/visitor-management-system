@@ -11,6 +11,7 @@
 
 require_once __DIR__ . "/auth_totp.php";
 require_once __DIR__ . "/mail_service.php";
+require_once __DIR__ . "/visitor_rights_service.php";
 
 /** How long a code works, how many wrong tries it allows, and how often a new one can be sent. */
 const SIGNUP_CODE_MINUTES = 10;
@@ -307,5 +308,12 @@ function signup_create_account(mysqli $conn, array $request): int
     $done->bind_param("ii", $userId, $requestId);
     $done->execute();
     $done->close();
+    // They agreed to the notice on the sign-up form, before the code was sent.
+    visitor_record_notice_agreement(
+        $conn,
+        $userId,
+        (string) ($request["consent_version"] ?? ""),
+        !empty($request["created_at"]) ? (string) $request["created_at"] : null
+    );
     return $userId;
 }

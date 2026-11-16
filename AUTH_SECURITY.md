@@ -114,7 +114,8 @@ Endpoints check a permission, not a role name (`permissions.php`).
 | Permission | Admin | Security | Office | Visitor |
 |---|:-:|:-:|:-:|:-:|
 | `dashboard.admin`, `users.manage`, `departments.manage`, `activity.view`, `security.manage`, `analytics.view`, `campus_map.edit` | ✓ | | | |
-| `campus_map.view`, `visits.scan`, `visits.complete`, `visits.qr_override`, `visits.monitor`, `locations.view_live`, `routes.view` | ✓ | ✓ | | |
+| `campus_map.view` | ✓ | ✓ | | |
+| `visits.scan`, `visits.complete`, `visits.qr_override`, `visits.monitor`, `locations.view_live`, `routes.view` | | ✓ | | |
 | `appointments.list` | ✓ | | ✓ | |
 | `office.dashboard`, `office.appointments`, `office.availability`, `office.notifications` | | | ✓ | |
 | `profile.self` | ✓ | ✓ | ✓ | |
@@ -122,6 +123,11 @@ Endpoints check a permission, not a role name (`permissions.php`).
 
 Office Personnel still only see their own office's records. To add a role, add it to
 `AUTH_ROLE_PERMISSIONS`; new endpoints should call `require_permission_json("...")`.
+
+Watching visitors is Security's job alone (since 2026-11-17): the gate, the Security dashboard, the
+live map and walked paths. The Admin sees records, reports and the activity log, but not where a
+visitor is, as the visitor app's privacy notice (Version 5) says. `dashboard.html` and
+`security_scan.html` send any other role back to its own home.
 
 ## Admin tools
 
@@ -155,6 +161,18 @@ and does everything in one transaction, so it either all happens or nothing chan
 Removing is for accounts that should not exist, like test accounts or people who asked to be
 deleted. To keep someone out, **suspend** the account instead: it signs them out and can be undone,
 while a removed person can sign up again with the same email, as a new account with no history.
+
+## Visitors' own accounts
+
+- **Delete my account** (visitor app, Profile; `api/v1/account_delete.php`,
+  `account_remove_own()`): the visitor types their password, and the account is removed exactly as
+  above, except that the activity log records it as "deleted their own account" with no staff actor.
+  Wrong passwords count toward 5 tries per 15 minutes. Refused while they are inside the campus.
+- **The notice they agreed to** (`visitor_rights_migration.sql`, `visitor_rights_service.php`):
+  `app_users.notice_version` and `notice_agreed_at` record the last version of the Terms and Privacy
+  Notice each visitor agreed to: at sign-up, and again when the app asks after the notice changes
+  (`api/v1/notice_agreement.php`). Since Version 5 the agreement includes "I am 18 or older, or my
+  parent or guardian agrees for me."
 
 `php phone_tracker/tools/account_removal_test.php` checks all of this on the database with throwaway
 accounts that it removes again. The server check on GitHub runs it on every push.

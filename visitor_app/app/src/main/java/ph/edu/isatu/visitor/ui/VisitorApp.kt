@@ -23,6 +23,7 @@ fun VisitorApp(viewModel: AppViewModel) {
             busy = state.busy,
             onAgree = viewModel::agreeToNotice,
             onSignOut = viewModel::logout,
+            error = state.error,
         )
         else -> MainShell(state, viewModel)
     }

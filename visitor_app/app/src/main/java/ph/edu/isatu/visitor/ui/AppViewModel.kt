@@ -77,7 +77,15 @@ data class VisitorUiState(
     val passwordChanged: PasswordChanged? = null,
     val error: String? = null,
     val message: String? = null,
+    /** Profile → Delete my account is open: sending, or why it didn't work. */
+    val accountDeletion: AccountDeletion? = null,
 )
+
+/**
+ * Profile → Delete my account: refused while the visitor is inside the campus ([onCampus]), or the
+ * sheet asking for the password, waiting for the server ([busy]) or saying what went wrong ([error]).
+ */
+data class AccountDeletion(val onCampus: Boolean = false, val busy: Boolean = false, val error: String? = null)
 
 fun stopAvailabilityKey(officeCode: String, date: String): String = "$officeCode|$date"
 
@@ -105,6 +113,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _state = MutableStateFlow(VisitorUiState())
     val state: StateFlow<VisitorUiState> = _state.asStateFlow()
 
+    /** Shown on the sign-in screen after the next sign-out, like "Your account was deleted." */
+    private var signedOutMessage: String? = null
+
     init {
         viewModelScope.launch {
             repository.signedIn.collectLatest { signedIn ->
@@ -113,7 +124,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     refreshAll(initial = true)
                     syncFirebaseToken()
                 } else {
-                    _state.value = VisitorUiState(signedIn = false, initializing = false)
+                    _state.value = VisitorUiState(signedIn = false, initializing = false, message = signedOutMessage)
+                    signedOutMessage = null
                 }
             }
         }
@@ -138,10 +150,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun openingGreeting(): String =
         greetingFor(repository.signedIn.value, _state.value.user?.fullName ?: repository.savedName)
 
-    fun agreeToNotice() {
-        val user = _state.value.user ?: return
-        repository.saveNoticeAgreement(user.id)
-        _state.update { it.copy(noticeAgreementNeeded = false) }
+    /** "Agree and continue": ISATU keeps the agreement on the server (Data Privacy Act), then this phone does. */
+    fun agreeToNotice() = launchTask {
+        val user = _state.value.user ?: return@launchTask
+        val saved = repository.recordNoticeAgreement(user.id)
+        _state.update { it.copy(user = saved, noticeAgreementNeeded = false) }
     }
 
     /** Logging in plays the seal once more, with "Welcome back" and their first name. */
@@ -252,7 +265,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         initializing = false,
                         busy = false,
                         user = profileData,
-                        noticeAgreementNeeded = !repository.agreedToNotice(profileData.id),
+                        noticeAgreementNeeded = !repository.agreedToNotice(profileData),
                         offices = officeData,
                         appointments = appointmentData,
                         notifications = notificationData.notifications,
@@ -569,6 +582,38 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() = launchTask {
         repository.logout()
+    }
+
+    /** Fetches the visits again too, so the count of bookings, and being on campus, are current. */
+    fun openAccountDeletion() {
+        _state.update { it.copy(accountDeletion = AccountDeletion(onCampus = onCampusNow(it.appointments))) }
+        refreshAppointments()
+    }
+
+    fun closeAccountDeletion() = _state.update {
+        if (it.accountDeletion?.busy == true) it else it.copy(accountDeletion = null)
+    }
+
+    /**
+     * Profile → Delete my account. The server checks [password] and deletes the account; this phone then
+     * signs out and the sign-in screen says so. A wrong password, or being on campus, stays in the dialog.
+     */
+    fun deleteAccount(password: String) {
+        if (_state.value.accountDeletion?.busy == true) return
+        if (password.isBlank()) {
+            _state.update { it.copy(accountDeletion = AccountDeletion(error = "Enter your password to confirm.")) }
+            return
+        }
+        _state.update { it.copy(accountDeletion = AccountDeletion(busy = true)) }
+        viewModelScope.launch {
+            try {
+                repository.deleteAccount(_state.value.user?.id, password)
+                signedOutMessage = "Your account was deleted. Thank you for visiting ISATU."
+                repository.forgetSession()
+            } catch (error: Exception) {
+                _state.update { it.copy(accountDeletion = AccountDeletion(error = readableError(error))) }
+            }
+        }
     }
 
     fun clearBanner() = _state.update { it.copy(error = null, message = null) }

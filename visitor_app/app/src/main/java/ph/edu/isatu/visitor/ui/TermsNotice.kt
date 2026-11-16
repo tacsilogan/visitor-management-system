@@ -18,16 +18,18 @@ object TermsNotice {
     const val TITLE = "Terms and Privacy Notice"
     /** Ends a visitor's agreement, so the one box names location sharing too. */
     const val LOCATION_PART = ", including sharing my location during my visits."
+    /** The last words in the box, since Version 5: the server keeps which version each visitor agreed to. */
+    const val AGE_PART = "I am 18 or older, or my parent or guardian agrees for me."
 
     val BLOCKS: List<NoticeBlock> = listOf(
-        NoticeBlock.Fine("ISATU Visits app. Version 4, effective November 15, 2026."),
+        NoticeBlock.Fine("ISATU Visits app. Version 5, effective November 17, 2026."),
         NoticeBlock.Summary(
             "In short",
             listOf(
                 "ISATU uses your details to handle your visits and keep the campus safe.",
                 "Your location is shared only from when a guard checks you in until your visit ends, and you can stop sharing at any time.",
                 "ISATU doesn't sell your information or use it for advertising.",
-                "You can ask to see, correct, or delete your information.",
+                "You can see and correct your details in the app, and delete your account there at any time.",
             ),
         ),
 
@@ -121,7 +123,10 @@ object TermsNotice {
         NoticeBlock.Point(
             "**Guards:** your name, contact details, visit details, your position on campus, and the path you walked.",
         ),
-        NoticeBlock.Point("**Administrators:** all of the above, activity records, and reports they can download."),
+        NoticeBlock.Point(
+            "**Administrators:** your account, your visit records, activity records, and reports they can " +
+                "download. They can't see your position on a map.",
+        ),
         NoticeBlock.Paragraph("Apart from the services below, we share your information only when the law requires it."),
         NoticeBlock.Heading("Services that help run the app"),
         NoticeBlock.Paragraph("Your information may be handled outside the Philippines by:"),
@@ -137,13 +142,18 @@ object TermsNotice {
         NoticeBlock.Point(
             "**Visits, consent records, and activity records:** 1 year after the visit or activity, then deleted automatically.",
         ),
-        NoticeBlock.Point("**Your account:** deleted automatically after 1 year without use, meaning no sign-in and no visit."),
+        NoticeBlock.Point(
+            "**Your account:** deleted right away when you delete it in Profile, or automatically after 1 year " +
+                "without use, meaning no sign-in and no visit.",
+        ),
         NoticeBlock.Heading("Your rights"),
         NoticeBlock.Paragraph(
             "You can ask to see your information, correct it, get a copy, object to how it is used, or have " +
                 "it blocked or deleted. We may have to keep some records for security or legal reasons. You " +
-                "can change your name and contact number yourself in Profile. For anything else, contact us " +
-                "below. You can also complain to the National Privacy Commission (privacy.gov.ph).",
+                "can change your name and contact number yourself in Profile, and delete your account there " +
+                "too: bookings that haven't happened yet are cancelled, and records of past visits are kept " +
+                "for 1 year for campus security, no longer linked to you, then deleted. For anything else, " +
+                "contact us below. You can also complain to the National Privacy Commission (privacy.gov.ph).",
         ),
         NoticeBlock.Heading("Contact"),
         NoticeBlock.Paragraph(

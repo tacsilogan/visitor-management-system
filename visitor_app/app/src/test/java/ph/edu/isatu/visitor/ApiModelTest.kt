@@ -9,6 +9,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import ph.edu.isatu.visitor.data.AccountDeleteData
 import ph.edu.isatu.visitor.data.ApiEnvelope
 import ph.edu.isatu.visitor.data.AppointmentData
 import ph.edu.isatu.visitor.data.CampusMapData
@@ -57,6 +58,23 @@ class ApiModelTest {
     @Test
     fun anEmptyArrayInsideAReplyReadsAsAnEmptyObjectToo() {
         assertEquals(UserDto(), envelope<ProfileData>("""{"success":true,"data":{"user":[]}}""").data?.user)
+    }
+
+    @Test
+    fun theAgreedNoticeVersionAndADeletedAccountAreRead() {
+        // As notice_agreement.php, login.php and me.php send the account since notice Version 5.
+        val user = envelope<ProfileData>(
+            """{"success":true,"data":{"user":{"id":41,"full_name":"Maria Santos","notice_version":"terms-privacy-v5"}},"message":"Thank you. Your agreement is saved."}""",
+        ).data!!.user
+        assertEquals("terms-privacy-v5", user.noticeVersion)
+        // A server without it: the app asks for the agreement, as it did before.
+        assertEquals("", envelope<ProfileData>("""{"success":true,"data":{"user":{"id":41}}}""").data!!.user.noticeVersion)
+        // As account_delete.php answers.
+        val deleted = envelope<AccountDeleteData>(
+            """{"success":true,"data":{"deleted":true,"cancelled_visits":2},"message":"Your account was deleted."}""",
+        ).data!!
+        assertTrue(deleted.deleted)
+        assertEquals(2, deleted.cancelledVisits)
     }
 
     @Test

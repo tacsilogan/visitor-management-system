@@ -34,9 +34,10 @@ Rules (`gate_register_visitor()`):
 - The office gets the usual "Walk-in visitor arriving" notice. The activity log records it as
   a check-in by that guard ("Registered … at the gate after an ID check"), with the notice
   version, and never the contact number.
-- The visit ends when the guard taps **End visit** (there is no pass to scan out), when the
-  office marks it done, or automatically at the end of the day. It is deleted after a year
-  with every other visit.
+- The visit ends when the guard taps **End visit** (there is no pass to scan out) or
+  automatically at the end of the day. (An office's "Mark done" is only for one stop of a
+  multi-office visit, so it does not apply here.) It is deleted after a year with every
+  other visit.
 
 ## Check in without QR
 

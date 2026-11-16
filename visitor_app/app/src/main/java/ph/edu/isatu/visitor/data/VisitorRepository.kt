@@ -49,11 +49,44 @@ class VisitorRepository(
         return result.user
     }
 
-    /** Has this account agreed to the current notice on this phone? The server sees it with their next visit. */
-    fun agreedToNotice(userId: Long): Boolean =
-        installationStore.agreedNotice(userId) == BuildConfig.CONSENT_VERSION
+    /**
+     * Has this account agreed to the current notice? On this phone, or on another one, which the
+     * server remembers ([UserDto.noticeVersion]); then this phone remembers it too.
+     */
+    fun agreedToNotice(user: UserDto): Boolean {
+        if (installationStore.agreedNotice(user.id) == BuildConfig.CONSENT_VERSION) return true
+        if (user.noticeVersion == BuildConfig.CONSENT_VERSION) {
+            saveNoticeAgreement(user.id)
+            return true
+        }
+        return false
+    }
 
     fun saveNoticeAgreement(userId: Long) = installationStore.saveAgreedNotice(userId, BuildConfig.CONSENT_VERSION)
+
+    /** "Agree and continue" on the agree-again screen: the server keeps it, then this phone does. */
+    suspend fun recordNoticeAgreement(userId: Long): UserDto {
+        val user = apiClient.requireData(apiClient.api.agreeToNotice(NoticeAgreementRequest(BuildConfig.CONSENT_VERSION))).user
+        saveNoticeAgreement(userId)
+        return user
+    }
+
+    /**
+     * Profile → Delete my account. The server checks [password], cancels upcoming visits and deletes
+     * the account; this phone forgets its email, then [forgetSession] signs out without asking the
+     * server again.
+     */
+    suspend fun deleteAccount(userId: Long?, password: String): AccountDeleteData =
+        apiClient.requireData(apiClient.api.deleteAccount(AccountDeleteRequest(password)))
+            .also { installationStore.forgetAccount(userId) }
+
+    /** What signing out leaves on this phone: nothing of the account. */
+    fun forgetSession() {
+        tokenStore.clear()
+        installationStore.clearActiveTracking()
+        campusMapCache.clear()
+        directionPhotos.clear()
+    }
 
     /** [beforeSignIn] gets the account just before the app switches to it, as [confirmSignup] does. */
     suspend fun login(identifier: String, password: String, beforeSignIn: (UserDto) -> Unit = {}): UserDto {
@@ -74,10 +107,7 @@ class VisitorRepository(
             runCatching { apiClient.requireData(apiClient.api.unregisterDevice(DeviceUnregisterRequest(installationStore.installationId))) }
             runCatching { apiClient.requireData(apiClient.api.logout()) }
         } finally {
-            tokenStore.clear()
-            installationStore.clearActiveTracking()
-            campusMapCache.clear()
-            directionPhotos.clear()
+            forgetSession()
         }
     }
 

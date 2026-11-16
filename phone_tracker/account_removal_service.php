@@ -34,6 +34,26 @@ function account_remove(mysqli $conn, int $userId, int $actorId): array
     if ($userId === $actorId) {
         throw new AccountRemovalError("You cannot remove your own account.");
     }
+    return account_removal_run($conn, $userId, $actorId, false);
+}
+
+/**
+ * A visitor deletes their own account in the app (Profile → Delete my account; the app asks for their
+ * password first, api/v1/account_delete.php). The same removal as an administrator's: upcoming visits
+ * are cancelled and each office is told, and past visits stay in the records, no longer linked to the
+ * account, until the 1-year cleanup. Not while the visitor is inside the campus.
+ *
+ * @return array{name:string, role:string, cancelled_visits:int}
+ * @throws AccountRemovalError when it can't be deleted now, with nothing changed
+ */
+function account_remove_own(mysqli $conn, int $userId): array
+{
+    return account_removal_run($conn, $userId, $userId, true);
+}
+
+/** account_remove() and account_remove_own(). [$own]: the visitor is deleting their own account. */
+function account_removal_run(mysqli $conn, int $userId, int $actorId, bool $own): array
+{
     $conn->begin_transaction();
     try {
         $lookup = $conn->prepare("SELECT id, username, display_name, role, office_code, is_active FROM app_users WHERE id = ? FOR UPDATE");
@@ -47,6 +67,9 @@ function account_remove(mysqli $conn, int $userId, int $actorId): array
         $name = trim((string) ($user["display_name"] ?? ""));
         $name = $name !== "" ? $name : (string) $user["username"];
         $role = (string) $user["role"];
+        if ($own && $role !== "visitor") {
+            throw new AccountRemovalError("Only a visitor account can be deleted from the app.");
+        }
         if ($role === "admin" && (int) $user["is_active"] === 1
             && auth_scalar($conn, "SELECT COUNT(*) FROM app_users WHERE role = 'admin' AND is_active = 1 FOR UPDATE") <= 1) {
             throw new AccountRemovalError("You cannot remove the last active administrator.");
@@ -54,7 +77,7 @@ function account_remove(mysqli $conn, int $userId, int $actorId): array
 
         $cancelled = 0;
         if ($role === "visitor") {
-            $cancelled = account_removal_close_visits($conn, $userId, $actorId, $name);
+            $cancelled = account_removal_close_visits($conn, $userId, $actorId, $name, $own);
         }
 
         // Emails still waiting in the queue are not sent to someone who is no longer here.
@@ -68,11 +91,13 @@ function account_remove(mysqli $conn, int $userId, int $actorId): array
         $delete->execute();
         $delete->close();
 
-        auth_audit($conn, $actorId, "user.deleted", "app_user", (string) $userId, [
+        // A visitor deleting their own account is no longer there to be the actor.
+        auth_audit($conn, $own ? null : $actorId, "user.deleted", "app_user", (string) $userId, [
             "username" => (string) $user["username"],
             "name" => $name,
             "role" => $role,
             "cancelled_visits" => $cancelled,
+            "by_self" => $own,
         ]);
         $conn->commit();
     } catch (Throwable $error) {
@@ -91,7 +116,7 @@ function account_remove(mysqli $conn, int $userId, int $actorId): array
  *
  * @throws AccountRemovalError while the person is inside the campus
  */
-function account_removal_close_visits(mysqli $conn, int $userId, int $actorId, string $name): int
+function account_removal_close_visits(mysqli $conn, int $userId, int $actorId, string $name, bool $own = false): int
 {
     // Visits before their stops, the order the gate scan locks them in.
     $visitsReady = visit_schema_ready($conn);
@@ -127,9 +152,10 @@ function account_removal_close_visits(mysqli $conn, int $userId, int $actorId, s
     }
     if ($insideSince !== null) {
         $since = $insideSince !== "" ? " since " . date("g:i A", strtotime($insideSince)) : "";
-        throw new AccountRemovalError(
-            "{$name} is inside the campus now{$since}. Ask the guard to end the visit, or remove the account after they leave."
-        );
+        throw new AccountRemovalError($own
+            ? "You're checked in on campus right now. Your account can be deleted after your visit ends. "
+                . "Have your pass scanned at the gate when you leave, then try again."
+            : "{$name} is inside the campus now{$since}. Ask the guard to end the visit, or remove the account after they leave.");
     }
 
     $upcoming = 0;
@@ -148,7 +174,9 @@ function account_removal_close_visits(mysqli $conn, int $userId, int $actorId, s
         $cancel->execute();
         $cancel->close();
         visit_withdraw_open_proposals($conn, $appointmentId);
-        visit_history($conn, $appointmentId, $from, "cancelled", $actorId, "Cancelled because the visitor's account was removed");
+        visit_history($conn, $appointmentId, $from, "cancelled", $actorId, $own
+            ? "Cancelled because the visitor deleted their account"
+            : "Cancelled because the visitor's account was removed");
         if (strtotime((string) $appointment["scheduled_end_at"]) <= time()) {
             // Its time is already over; no one is waiting for it.
             continue;
@@ -163,7 +191,7 @@ function account_removal_close_visits(mysqli $conn, int $userId, int $actorId, s
             (string) $appointment["office_code"],
             "appointment.cancelled",
             "Visit cancelled",
-            "{$visitor}'s account was removed, so their {$what} is cancelled."
+            $own ? "{$visitor} deleted their account, so their {$what} is cancelled." : "{$visitor}'s account was removed, so their {$what} is cancelled."
         );
         $upcoming++;
     }

@@ -4,6 +4,11 @@
  * What each role may do. Endpoints check a permission instead of a role name, so a
  * new role (for example a security supervisor) only needs a new entry here.
  * Office Personnel stay limited to their own office inside the office endpoints.
+ *
+ * Watching visitors is Security's job alone: the gate (scan, register, check-out, time
+ * overrides), the Security dashboard, the live map and walked paths. The Admin sees records,
+ * reports and the activity log, but not where a visitor is (the visitor app's privacy notice
+ * says so, Version 5).
  */
 const AUTH_ROLE_PERMISSIONS = [
     "admin" => [
@@ -17,12 +22,6 @@ const AUTH_ROLE_PERMISSIONS = [
         "campus_map.view",
         "campus_map.edit",
         "appointments.list",
-        "visits.scan",
-        "visits.complete",
-        "visits.qr_override",
-        "visits.monitor",
-        "locations.view_live",
-        "routes.view",
         "profile.self",
     ],
     "security" => [

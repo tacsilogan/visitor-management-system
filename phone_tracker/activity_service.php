@@ -312,7 +312,16 @@ function activity_describe(array $row): array
             }
             return ["Updated account details", "Changed " . $target . "'s " . ($parts ? implode(", ", $parts) : "details"), isset($details["changes"]["office_code"]) ? "warn" : "info"];
         case "user.deleted":
+            if (!empty($details["by_self"])) {
+                return ["Deleted their own account", ucfirst($target) . " deleted their own account in the app", "muted"];
+            }
             return ["Removed an account", "Removed " . $target . "'s account", "danger"];
+        case "mobile.notice_agreed":
+            return [
+                "Agreed to the privacy notice",
+                "Agreed to the Terms and Privacy Notice (" . str_replace("terms-privacy-v", "version ", (string) ($details["version"] ?? "")) . ")",
+                "info",
+            ];
         case "user.suspended":
             return ["Suspended an account", "Suspended " . $target . "'s account", "danger"];
         case "user.activated":

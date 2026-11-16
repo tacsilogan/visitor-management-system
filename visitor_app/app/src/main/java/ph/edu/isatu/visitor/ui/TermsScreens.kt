@@ -69,10 +69,11 @@ fun TermsNoticeScreen(backLabel: String, onBack: () -> Unit) {
 
 /**
  * For an account that hasn't agreed to this version of the notice, once, before the app opens.
- * Someone who doesn't agree can sign out.
+ * Someone who doesn't agree can sign out. [error]: saving the agreement failed (it is kept on the
+ * server too, api/v1/notice_agreement.php).
  */
 @Composable
-fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Unit) {
+fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Unit, error: String? = null) {
     var agreed by rememberSaveable { mutableStateOf(false) }
     Scaffold(
         containerColor = AppBackground,
@@ -82,6 +83,9 @@ fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Un
         bottomBar = {
             Surface(color = Color.White, shadowElevation = 10.dp) {
                 Column(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 18.dp, vertical = 10.dp)) {
+                    error?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(bottom = 6.dp))
+                    }
                     NoticeAgreement(agreed, { agreed = it }, includeLocation = true)
                     Spacer(Modifier.height(6.dp))
                     PrimaryButton(
@@ -104,7 +108,7 @@ fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Un
             before = {
                 item {
                     Text(
-                        "ISATU Visits now has written terms and a privacy notice. Please read them and agree to keep using the app.",
+                        "We updated the Terms and Privacy Notice. Please read it and agree to keep using the app.",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = Ink,
@@ -118,8 +122,8 @@ fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Un
 
 /**
  * What someone agrees to, in one box. A visitor's also names location sharing
- * ([includeLocation]), so it stays clear that this is part of what they agree to. With
- * [onOpenNotice], the notice's name opens it.
+ * ([includeLocation]), so it stays clear that this is part of what they agree to, and ends with
+ * the age statement ([TermsNotice.AGE_PART]). With [onOpenNotice], the notice's name opens it.
  */
 @Composable
 internal fun NoticeAgreement(
@@ -144,6 +148,8 @@ internal fun NoticeAgreement(
             append(TermsNotice.TITLE)
         }
         append(if (includeLocation) TermsNotice.LOCATION_PART else ".")
+        append(" ")
+        append(TermsNotice.AGE_PART)
     }
     NoticeCheck(agreed, onAgreedChange, agreement)
 }

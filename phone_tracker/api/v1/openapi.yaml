@@ -150,6 +150,47 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Success" }
         "422": { $ref: "#/components/responses/Error" }
+  /notice_agreement.php:
+    post:
+      summary: Record that the visitor agreed to this version of the Terms and Privacy Notice
+      description: >
+        Sent when the app asks an account to agree again after the notice changes (sign-up records
+        it by itself). Since terms-privacy-v5 the agreement includes "I am 18 or older, or my parent
+        or guardian agrees for me". The visitor's notice_version comes back in the user object.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: string, example: "terms-privacy-v5" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "422": { $ref: "#/components/responses/Error" }
+  /account_delete.php:
+    post:
+      summary: Delete the visitor's own account (Profile, Delete my account)
+      description: >
+        Needs the visitor's password; wrong passwords count toward 5 tries per 15 minutes (429).
+        Upcoming visits are cancelled and each office is told; past visits stay, no longer linked
+        to the account, until the 1-year cleanup; every sign-in of the account ends. 409 while the
+        visitor is checked in on campus.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "403": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "429": { $ref: "#/components/responses/Error" }
   /offices.php:
     get:
       summary: List the offices a visitor can book (those with Office Personnel), with their availability rules

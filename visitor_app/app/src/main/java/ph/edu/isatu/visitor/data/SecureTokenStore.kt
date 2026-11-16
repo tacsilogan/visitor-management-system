@@ -111,6 +111,16 @@ class InstallationStore(context: Context) {
         preferences.edit().putString("agreed_notice_$userId", version).apply()
     }
 
+    /**
+     * After Delete my account: the account's email leaves the sign-in screen and its agreement goes.
+     * The email is always the deleted account's, since every sign-in saves its own.
+     */
+    fun forgetAccount(userId: Long?) {
+        val editor = preferences.edit().remove("last_email")
+        if (userId != null) editor.remove("agreed_notice_$userId")
+        editor.apply()
+    }
+
     fun saveActiveTracking(appointmentId: Long, sessionId: Long) {
         preferences.edit()
             .putLong("tracking_appointment_id", appointmentId)

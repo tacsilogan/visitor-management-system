@@ -37,13 +37,28 @@ class TermsNoticeTest {
 
     @Test
     fun everyBlankIsFilledIn() {
-        // Version 4 has ISATU's answers in place of the highlighted blanks.
+        // Since Version 4, ISATU's answers are in place of the highlighted blanks.
         assertEquals(emptyList<String>(), TermsNotice.blanks)
         listOf(
-            "Version 4, effective November 15, 2026",
+            "Version 5, effective November 17, 2026",
             "If you are under 18, a parent or guardian must agree for you.",
             "mail@isatu.edu.ph",
         ).forEach { assertTrue("missing: $it", readable.contains(it)) }
+    }
+
+    @Test
+    fun versionFiveSaysWhatChanged() {
+        listOf(
+            // Profile → Delete my account (account_delete.php).
+            "delete your account there at any time",
+            "deleted right away when you delete it in Profile",
+            "bookings that haven't happened yet are cancelled",
+            "no longer linked to you",
+            // Monitoring is Security's alone (permissions.php).
+            "Administrators:",
+            "They can't see your position on a map.",
+        ).forEach { assertTrue("missing: $it", readable.contains(it)) }
+        assertEquals("I am 18 or older, or my parent or guardian agrees for me.", TermsNotice.AGE_PART)
     }
 
     @Test

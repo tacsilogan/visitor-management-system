@@ -47,14 +47,14 @@ android {
         applicationId = "ph.edu.isatu.visitor"
         minSdk = 26
         targetSdk = 37
-        versionCode = 16
-        versionName = "0.11.0"
+        versionCode = 17
+        versionName = "0.12.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "API_BASE_URL", "\"$normalizedApiUrl\"")
         // The version of the Terms and Privacy Notice (ui/TermsNotice.kt). It goes to the server with
         // the sign-up and each visit's consent. Changing it asks everyone to read and agree again.
-        buildConfigField("String", "CONSENT_VERSION", "\"terms-privacy-v4\"")
+        buildConfigField("String", "CONSENT_VERSION", "\"terms-privacy-v5\"")
         buildConfigField("String", "MAP_STYLE_URL", "\"$configuredMapStyleUrl\"")
 
         ndk {

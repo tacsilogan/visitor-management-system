@@ -74,6 +74,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -140,53 +141,69 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
         return
     }
 
-    Scaffold(
-        containerColor = AppBackground,
-        topBar = {
-            MainTopBar(
-                unreadCount = state.unreadCount,
-                busy = state.busy,
-                // On Home the navy goes on into the greeting, and the gold edge comes under that.
-                goldEdge = !(headerScreen == null && selectedTab == 0),
-                onNotifications = {
-                    headerScreen = HeaderScreen.Notifications
-                    viewModel.refreshNotifications()
-                },
-                onProfile = { headerScreen = HeaderScreen.Profile },
+    val deletion = state.accountDeletion
+    Box(Modifier.fillMaxSize()) {
+        Scaffold(
+            // While Delete my account is over the screen, TalkBack reads only that.
+            modifier = if (deletion != null) Modifier.clearAndSetSemantics {} else Modifier,
+            containerColor = AppBackground,
+            topBar = {
+                MainTopBar(
+                    unreadCount = state.unreadCount,
+                    busy = state.busy,
+                    // On Home the navy goes on into the greeting, and the gold edge comes under that.
+                    goldEdge = !(headerScreen == null && selectedTab == 0),
+                    onNotifications = {
+                        headerScreen = HeaderScreen.Notifications
+                        viewModel.refreshNotifications()
+                    },
+                    onProfile = { headerScreen = HeaderScreen.Profile },
+                )
+            },
+            bottomBar = {
+                MainBottomBar(selected = if (headerScreen == null) selectedTab else null) { index ->
+                    selectedTab = index
+                    headerScreen = null
+                }
+            },
+        ) { innerPadding ->
+            Column(Modifier.fillMaxSize().padding(innerPadding)) {
+                if (state.error != null || state.message != null) {
+                    Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                        MessageCard(
+                            message = state.error ?: state.message.orEmpty(),
+                            error = state.error != null,
+                            onDismiss = viewModel::clearBanner,
+                        )
+                    }
+                }
+                when (headerScreen) {
+                    HeaderScreen.Notifications -> NotificationsScreen(state.notifications, state.unreadCount, viewModel)
+                    HeaderScreen.Profile -> ProfileScreen(state, viewModel, onOpenNotice = { noticeOpen = true })
+                    null -> when (selectedTab) {
+                        0 -> HomeScreen(
+                            user = state.user,
+                            appointments = state.appointments,
+                            onOpenAppointment = viewModel::openAppointment,
+                            onOpenVisit = viewModel::openVisit,
+                            onBook = { selectedTab = 2 },
+                        )
+                        1 -> AppointmentsScreen(state.appointments, viewModel::openAppointment, viewModel::openVisit, viewModel::refreshAll)
+                        else -> BookingScreen(state, viewModel)
+                    }
+                }
+            }
+        }
+        when {
+            deletion == null -> Unit
+            deletion.onCampus -> OnCampusDeleteNotice(onDismiss = viewModel::closeAccountDeletion)
+            else -> DeleteAccountSheet(
+                upcoming = upcomingBookings(state.appointments),
+                busy = deletion.busy,
+                error = deletion.error,
+                onDelete = viewModel::deleteAccount,
+                onDismiss = viewModel::closeAccountDeletion,
             )
-        },
-        bottomBar = {
-            MainBottomBar(selected = if (headerScreen == null) selectedTab else null) { index ->
-                selectedTab = index
-                headerScreen = null
-            }
-        },
-    ) { innerPadding ->
-        Column(Modifier.fillMaxSize().padding(innerPadding)) {
-            if (state.error != null || state.message != null) {
-                Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                    MessageCard(
-                        message = state.error ?: state.message.orEmpty(),
-                        error = state.error != null,
-                        onDismiss = viewModel::clearBanner,
-                    )
-                }
-            }
-            when (headerScreen) {
-                HeaderScreen.Notifications -> NotificationsScreen(state.notifications, state.unreadCount, viewModel)
-                HeaderScreen.Profile -> ProfileScreen(state, viewModel, onOpenNotice = { noticeOpen = true })
-                null -> when (selectedTab) {
-                    0 -> HomeScreen(
-                        user = state.user,
-                        appointments = state.appointments,
-                        onOpenAppointment = viewModel::openAppointment,
-                        onOpenVisit = viewModel::openVisit,
-                        onBook = { selectedTab = 2 },
-                    )
-                    1 -> AppointmentsScreen(state.appointments, viewModel::openAppointment, viewModel::openVisit, viewModel::refreshAll)
-                    else -> BookingScreen(state, viewModel)
-                }
-            }
         }
     }
 }
@@ -803,6 +820,32 @@ private fun NotificationCard(notification: NotificationDto, onClick: () -> Unit)
 private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel, onOpenNotice: () -> Unit) {
     var showEdit by remember { mutableStateOf(false) }
     val user = state.user
+    ProfileContent(
+        user = user,
+        busy = state.busy,
+        onEdit = { showEdit = true },
+        onOpenNotice = onOpenNotice,
+        onSignOut = viewModel::logout,
+        onDeleteAccount = viewModel::openAccountDeletion,
+    )
+    if (showEdit && user != null) {
+        EditProfileDialog(user.fullName, user.contactNumber, { showEdit = false }) { name, contact ->
+            viewModel.updateProfile(name, contact)
+            showEdit = false
+        }
+    }
+}
+
+/** Profile as it is drawn, apart from the view model, so it can be pictured with a sample visitor. */
+@Composable
+internal fun ProfileContent(
+    user: UserDto?,
+    busy: Boolean,
+    onEdit: () -> Unit,
+    onOpenNotice: () -> Unit,
+    onSignOut: () -> Unit,
+    onDeleteAccount: () -> Unit,
+) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(18.dp),
@@ -833,7 +876,7 @@ private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel, onOpen
                     Text(user?.email.orEmpty(), color = MutedInk)
                     Text(user?.contactNumber?.ifBlank { "No contact number" }.orEmpty(), color = MutedInk)
                     Spacer(Modifier.height(14.dp))
-                    FilledTonalButton(onClick = { showEdit = true }) {
+                    FilledTonalButton(onClick = onEdit) {
                         Icon(Icons.Rounded.Edit, contentDescription = null)
                         Spacer(Modifier.size(8.dp))
                         Text("Edit profile")
@@ -863,14 +906,17 @@ private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel, onOpen
         }
         item {
             OutlinedButton(
-                onClick = viewModel::logout,
+                onClick = onSignOut,
                 modifier = Modifier.fillMaxWidth().height(52.dp),
-                enabled = !state.busy,
+                enabled = !busy,
             ) {
                 Icon(Icons.AutoMirrored.Rounded.Logout, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
                 Text("Sign out")
             }
+        }
+        item {
+            DeleteAccountCard(enabled = !busy, onDelete = onDeleteAccount)
         }
         item {
             Text(
@@ -880,12 +926,6 @@ private fun ProfileScreen(state: VisitorUiState, viewModel: AppViewModel, onOpen
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
-        }
-    }
-    if (showEdit && user != null) {
-        EditProfileDialog(user.fullName, user.contactNumber, { showEdit = false }) { name, contact ->
-            viewModel.updateProfile(name, contact)
-            showEdit = false
         }
     }
 }

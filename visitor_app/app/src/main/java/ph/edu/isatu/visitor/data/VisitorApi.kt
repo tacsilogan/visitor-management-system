@@ -37,6 +37,12 @@ interface VisitorApi {
     @PATCH("me.php")
     suspend fun updateProfile(@Body request: ProfileUpdateRequest): Response<ApiEnvelope<ProfileData>>
 
+    @POST("notice_agreement.php")
+    suspend fun agreeToNotice(@Body request: NoticeAgreementRequest): Response<ApiEnvelope<ProfileData>>
+
+    @POST("account_delete.php")
+    suspend fun deleteAccount(@Body request: AccountDeleteRequest): Response<ApiEnvelope<AccountDeleteData>>
+
     @GET("offices.php")
     suspend fun offices(): Response<ApiEnvelope<OfficesData>>
 
