@@ -15,6 +15,11 @@
     document.getElementById("securityAdminLink").hidden = role !== "admin";
 
     profileButton.addEventListener("click", function () {
+        // On a phone the account is on the dashboard's Menu page, as on every Security page.
+        if (window.matchMedia("(max-width: 720px)").matches) {
+            window.location.href = "dashboard.html#menu";
+            return;
+        }
         const willOpen = profileMenu.hidden;
         profileMenu.hidden = !willOpen;
         profileButton.setAttribute("aria-expanded", String(willOpen));
@@ -27,7 +32,14 @@
         }
     });
 
-    document.getElementById("logoutBtn").addEventListener("click", function () {
+    document.getElementById("logoutBtn").addEventListener("click", async function () {
+        if (!(await AppDialog.confirm({
+            title: "Sign out?",
+            message: "You'll need your password to sign in again.",
+            confirmLabel: "Sign out",
+        }))) {
+            return;
+        }
         PhoneTrackerAuth.logout().then(function () {
             window.location.href = "login.html";
         });

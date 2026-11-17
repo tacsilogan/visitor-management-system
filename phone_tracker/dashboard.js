@@ -268,7 +268,30 @@
         return cell;
     }
 
-    function switchSecurityView(view) {
+    /* ---------- Views: Home, Live map, Visitors, Menu ---------- */
+    // Each view has its own address (#map, #visitors, #menu), so a phone's Back button returns to
+    // the view before. "#monitoring" is the old address of the map, still used by saved links.
+    const VIEW_HASH = { dashboard: "", monitoring: "#map", visitors: "#visitors", menu: "#menu" };
+    const phoneQuery = window.matchMedia("(max-width: 720px)");
+
+    function viewFromHash(hash) {
+        if (hash === "#map" || hash === "#monitoring") {
+            return "monitoring";
+        }
+        if (hash === "#visitors") {
+            return "visitors";
+        }
+        return hash === "#menu" ? "menu" : "dashboard";
+    }
+
+    /** options.history: "push" (a tap on the menu), "replace" (the default) or "none" (Back). */
+    function switchSecurityView(view, options) {
+        const settings = options || {};
+        if (!Object.prototype.hasOwnProperty.call(VIEW_HASH, view)) {
+            view = "dashboard";
+        }
+        const changed = document.body.dataset.securityCurrent !== view;
+        document.body.dataset.securityCurrent = view;
         document.querySelectorAll("[data-security-panel]").forEach(function (panel) {
             panel.hidden = panel.getAttribute("data-security-panel") !== view;
         });
@@ -281,17 +304,27 @@
                 button.removeAttribute("aria-current");
             }
         });
-        window.history.replaceState(null, "", view === "monitoring" ? "#monitoring" : window.location.pathname);
+        const url = window.location.pathname + window.location.search + VIEW_HASH[view];
+        if (settings.history === "push" && changed) {
+            window.history.pushState({ securityView: view }, "", url);
+        } else if (settings.history !== "none") {
+            window.history.replaceState({ securityView: view }, "", url);
+        }
         if (view === "monitoring") {
             initializeMap();
             window.setTimeout(function () {
                 if (monitoringState.map) {
                     monitoringState.map.invalidateSize();
+                    updateBackToCampus();
                 }
             }, 80);
             loadLiveLocations();
+        } else {
+            toggleLegend(false);
         }
-        window.scrollTo({ top: 0, behavior: "smooth" });
+        if (changed) {
+            window.scrollTo(0, 0);
+        }
     }
 
     function monitoringVisible() {
@@ -446,7 +479,11 @@
         expected: [],
         left: [],
         summary: {},
+        /** The search on the Visitors page; it filters every tab, All records too. */
+        query: "",
     };
+    /** How many visitors inside are shown on Home; "See all visitors" opens the rest. */
+    const HOME_INSIDE_LIMIT = 6;
     let noticeTimer = 0;
     let pendingOverride = null;
 
@@ -630,25 +667,70 @@
         return element("p", "sd-empty", text);
     }
 
+    function matchesListQuery(visitor) {
+        const needle = overview.query.trim().toLowerCase();
+        if (!needle) {
+            return true;
+        }
+        return [visitor.visitor_full_name, visitor.registration_id, visitor.registration_code, visitor.office_label, visitor.purpose, visitor.subject]
+            .join(" ").toLowerCase().indexOf(needle) !== -1;
+    }
+
+    function noMatchPanel() {
+        return emptyPanel("No visitor here matches “" + overview.query.trim() + "”.");
+    }
+
+    function insideRow(visitor, attentionIds) {
+        const row = element("div", "sd-row" + (attentionIds.has(visitor.id) ? " is-attention" : ""));
+        row.append(
+            whoCell(visitor),
+            twoLine(visitor.office_label, whereText(visitor), "sd-where"),
+            twoLine(formatTime(visitor.checked_in_at), formatDuration(secondsSince(visitor.checked_in_at)) + " inside", "sd-time"),
+            cell("", [locationChip(visitor)]),
+            bookedCell(visitor),
+            insideActions(visitor)
+        );
+        return row;
+    }
+
+    const INSIDE_HEAD = ["Visitor", "Going to", "Time in", "Location", "Booked time", ""];
+
     function renderInsidePanel(attentionIds) {
         const panel = document.getElementById("sdPanelInside");
         if (!overview.inside.length) {
             panel.replaceChildren(emptyPanel("No visitors are inside the campus right now."));
             return;
         }
-        const rows = [headRow(["Visitor", "Going to", "Time in", "Location", "Booked time", ""])];
-        overview.inside.forEach(function (visitor) {
-            const row = element("div", "sd-row" + (attentionIds.has(visitor.id) ? " is-attention" : ""));
-            row.append(
-                whoCell(visitor),
-                twoLine(visitor.office_label, whereText(visitor), "sd-where"),
-                twoLine(formatTime(visitor.checked_in_at), formatDuration(secondsSince(visitor.checked_in_at)) + " inside", "sd-time"),
-                cell("", [locationChip(visitor)]),
-                bookedCell(visitor),
-                insideActions(visitor)
-            );
-            rows.push(row);
-        });
+        const list = overview.inside.filter(matchesListQuery);
+        if (!list.length) {
+            panel.replaceChildren(noMatchPanel());
+            return;
+        }
+        panel.replaceChildren(headRow(INSIDE_HEAD), ...list.map(function (visitor) {
+            return insideRow(visitor, attentionIds);
+        }));
+    }
+
+    /** Home shows the first few visitors inside, those who need attention first. */
+    function renderHomeInside(attentionIds) {
+        const panel = document.getElementById("sdHomeInside");
+        if (!overview.inside.length) {
+            panel.replaceChildren(emptyPanel("No visitors are inside the campus right now."));
+            return;
+        }
+        const ordered = overview.inside.filter(function (visitor) { return attentionIds.has(visitor.id); })
+            .concat(overview.inside.filter(function (visitor) { return !attentionIds.has(visitor.id); }));
+        const rows = [headRow(INSIDE_HEAD)].concat(ordered.slice(0, HOME_INSIDE_LIMIT).map(function (visitor) {
+            return insideRow(visitor, attentionIds);
+        }));
+        const more = overview.inside.length - HOME_INSIDE_LIMIT;
+        if (more > 0) {
+            const button = element("button", "sd-more", "See " + more + " more inside →");
+            button.type = "button";
+            button.dataset.goView = "visitors";
+            button.dataset.goTab = "inside";
+            rows.push(button);
+        }
         panel.replaceChildren(...rows);
     }
 
@@ -692,8 +774,13 @@
             panel.replaceChildren(emptyPanel("No more visitors are expected today."));
             return;
         }
+        const list = overview.expected.filter(matchesListQuery);
+        if (!list.length) {
+            panel.replaceChildren(noMatchPanel());
+            return;
+        }
         const rows = [headRow(["Visitor", "Going to", "Booked time", "Status", ""])];
-        overview.expected.forEach(function (visitor) {
+        list.forEach(function (visitor) {
             const row = element("div", "sd-row");
             const actions = element("div", "sd-cell sd-acts");
             if (visitor.status === "approved") {
@@ -724,8 +811,13 @@
             panel.replaceChildren(emptyPanel("No visitors have left yet today."));
             return;
         }
+        const list = overview.left.filter(matchesListQuery);
+        if (!list.length) {
+            panel.replaceChildren(noMatchPanel());
+            return;
+        }
         const rows = [headRow(["Visitor", "Went to", "In → out", "How the visit ended", ""])];
-        overview.left.forEach(function (visitor) {
+        list.forEach(function (visitor) {
             const row = element("div", "sd-row");
             const start = parseServerDate(visitor.checked_in_at);
             const end = parseServerDate(visitor.completed_at);
@@ -810,6 +902,12 @@
         count.hidden = items.length === 0;
         document.getElementById("sdAttentionEmpty").hidden = items.length > 0;
         document.getElementById("sdAttention").classList.toggle("is-calm", items.length === 0);
+        // The red number on Home in the menu, so a guard on another view sees it too.
+        document.querySelectorAll("[data-attention-badge]").forEach(function (badge) {
+            badge.textContent = String(items.length);
+            badge.hidden = items.length === 0;
+            badge.setAttribute("aria-label", items.length + (items.length === 1 ? " visitor needs" : " visitors need") + " attention");
+        });
         const rules = monitoringState.rules || {};
         setText("sdAttentionRules", "Overstay: " + (rules.overstay_grace_minutes || 30) + " minutes past the booked time. Signal lost: no position for over "
             + Math.round((rules.stale_seconds || 180) / 60) + " minutes.");
@@ -819,6 +917,7 @@
         const now = new Date(serverNow());
         setText("sdDate", new Intl.DateTimeFormat(undefined, { weekday: "long", month: "long", day: "numeric" }).format(now));
         setText("sdUpdated", "Updated " + clockText(now) + " · refreshes by itself");
+        setText("secMenuUpdated", "Updated " + clockText(now) + " · the lists also refresh by themselves");
         const summary = overview.summary || {};
         const items = attentionItems();
         setText("sdInsideCount", overview.inside.length);
@@ -831,9 +930,11 @@
         setText("sdTabInsideCount", overview.inside.length);
         setText("sdTabExpectedCount", overview.expected.length);
         setText("sdTabLeftCount", overview.left.length);
-        renderInsidePanel(new Set(items.map(function (item) {
+        const attentionIds = new Set(items.map(function (item) {
             return item.visitor.id;
-        })));
+        }));
+        renderInsidePanel(attentionIds);
+        renderHomeInside(attentionIds);
         renderExpectedPanel();
         renderLeftPanel();
         if (document.getElementById("sdFind").value.trim()) {
@@ -841,7 +942,9 @@
         }
     }
 
-    function selectTab(name) {
+    // Its own name: the map's list has a selectTab too, and two functions with one name meant the
+    // second replaced the first, so these tabs used to switch the map's list instead.
+    function selectListTab(name) {
         overview.tab = name;
         document.querySelectorAll(".sd-tab").forEach(function (tab) {
             const active = tab.dataset.sdTab === name;
@@ -987,7 +1090,7 @@
             if (data && data.success && data.action === "checked_in") {
                 showNotice(name + " is checked in for " + (visitor.office_label || "their office") + ", without the QR code.");
                 closeFind();
-                selectTab("inside");
+                selectListTab("inside");
                 await loadSecurityDashboard();
                 return;
             }
@@ -1139,8 +1242,10 @@
             showMessage("securityMapError", "The map library could not load. Check your internet connection and refresh the page.");
             return;
         }
-        // Zoom buttons sit top-right so they never cover the visitor panel on the left.
-        const map = L.map("securityMap", CampusMap.mapOptions({ zoomControl: false })).setView([10.7177, 122.5559], 17);
+        // The map moves freely, out to the city around the campus (no lock to the campus, so a
+        // guard can drag past the edge after zooming in). The boundary and the shaded outside
+        // show where the campus ends; "Back to campus" returns when it is out of view.
+        const map = L.map("securityMap", CampusMap.mapOptions({ zoomControl: false, minZoom: FREE_MIN_ZOOM })).setView([10.7177, 122.5559], 17);
         L.control.zoom({ position: "topright" }).addTo(map);
         monitoringState.map = map;
         CampusMap.addBaseLayer(map);
@@ -1148,27 +1253,143 @@
         CampusMap.enableLabels(map);
         // Full view keeps the visitor panel with the map.
         CampusMap.addExpandControl(map, document.getElementById("monitorShell"), {
-            onChange: function () {
-                CampusMap.lockToCampus(map, monitoringState.campus, false);
-            },
+            onChange: updateBackToCampus,
         });
+        map.addControl(new MapTools());
+        placeAttribution();
         const campusLayer = L.layerGroup().addTo(map);
         monitoringState.trailLayer = L.layerGroup().addTo(map);
         monitoringState.markerLayer = L.layerGroup().addTo(map);
         CampusMap.load().then(function (campus) {
             monitoringState.campus = campus;
             drawCampus(campusLayer, campus);
-            // Keep the map on the ISATU campus; frame it unless visitors were already framed.
-            CampusMap.lockToCampus(map, campus, !monitoringState.fittedOnce);
+            // Frame the campus, unless the visitors were framed already.
+            if (!monitoringState.fittedOnce) {
+                fitCampus(false);
+            }
+            updateBackToCampus();
         });
         map.on("dragstart", function () {
             if (monitoringState.follow) {
                 setFollow(false);
             }
         });
+        map.on("moveend zoomend resize", updateBackToCampus);
     }
 
-    /** The campus boundary as a bold line, with everything outside it dimmed. */
+    /** How far out the map zooms: the city around the campus, not the whole world. */
+    const FREE_MIN_ZOOM = 13;
+
+    /**
+     * Zoom in and out, then these: the whole campus, every visitor, and what the colours mean.
+     * Built only when the map library loaded; without it the rest of the dashboard still works.
+     */
+    const MapTools = typeof L === "undefined" ? null : L.Control.extend({
+        options: { position: "topright" },
+        onAdd: function () {
+            const bar = L.DomUtil.create("div", "leaflet-bar monitor-map-tools");
+            [
+                ["campus", "Show the whole campus", '<path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/><path d="M8 9.5 12 7l4 2.5V15H8z"/>'],
+                ["visitors", "Show every visitor", '<circle cx="8" cy="9" r="2.5"/><circle cx="16" cy="9" r="2.5"/><circle cx="12" cy="16" r="2.5"/><path d="M3 5V3h2M19 3h2v2M21 19v2h-2M5 21H3v-2"/>'],
+                ["legend", "What the colours mean", '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>'],
+            ].forEach(function (tool) {
+                const button = L.DomUtil.create("a", "monitor-map-tool", bar);
+                button.href = "#";
+                button.setAttribute("role", "button");
+                button.title = tool[1];
+                button.setAttribute("aria-label", tool[1]);
+                button.dataset.mapTool = tool[0];
+                if (tool[0] === "legend") {
+                    button.setAttribute("aria-expanded", "false");
+                    button.setAttribute("aria-controls", "mapLegend");
+                }
+                button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + tool[2] + "</svg>";
+            });
+            L.DomEvent.disableClickPropagation(bar);
+            L.DomEvent.on(bar, "click", function (event) {
+                const button = event.target.closest("[data-map-tool]");
+                // Never let these clicks reach the map.
+                L.DomEvent.stop(event);
+                if (!button) {
+                    return;
+                }
+                if (button.dataset.mapTool === "campus") {
+                    fitCampus(true);
+                } else if (button.dataset.mapTool === "visitors") {
+                    fitVisitors();
+                } else {
+                    toggleLegend();
+                }
+            });
+            return bar;
+        },
+    });
+
+    function campusBounds() {
+        return monitoringState.campus ? CampusMap.boundaryBounds(monitoringState.campus) : null;
+    }
+
+    function fitCampus(animate) {
+        const map = monitoringState.map;
+        const bounds = campusBounds();
+        if (!map) {
+            return;
+        }
+        if (bounds) {
+            map.fitBounds(bounds, mapPadding({ animate: animate !== false }));
+        } else {
+            map.setView([10.7177, 122.5559], 17, { animate: animate !== false });
+        }
+    }
+
+    function fitVisitors() {
+        const map = monitoringState.map;
+        if (!map) {
+            return;
+        }
+        const points = monitoringState.active.filter(function (visitor) {
+            return visitor.has_location;
+        }).map(function (visitor) {
+            return [visitor.latitude, visitor.longitude];
+        });
+        if (!points.length) {
+            fitCampus(true);
+            return;
+        }
+        map.fitBounds(L.latLngBounds(points), mapPadding({ maxZoom: 19 }));
+    }
+
+    /** "Back to campus" shows only while no part of the campus is on screen. */
+    function updateBackToCampus() {
+        const button = document.getElementById("mapBackCampus");
+        const map = monitoringState.map;
+        const bounds = campusBounds();
+        if (!map || !bounds || map.getSize().x === 0) {
+            button.hidden = true;
+            return;
+        }
+        button.hidden = map.getBounds().intersects(bounds);
+    }
+
+    function toggleLegend(force) {
+        const legend = document.getElementById("mapLegend");
+        const open = typeof force === "boolean" ? force : legend.hidden;
+        legend.hidden = !open;
+        document.querySelectorAll('[data-map-tool="legend"]').forEach(function (button) {
+            button.setAttribute("aria-expanded", String(open));
+            button.classList.toggle("is-active", open);
+        });
+    }
+
+    /** On a phone the panel covers the bottom of the map, so the map credit moves to the top. */
+    function placeAttribution() {
+        const map = monitoringState.map;
+        if (map && map.attributionControl) {
+            map.attributionControl.setPosition(phoneQuery.matches ? "topleft" : "bottomright");
+        }
+    }
+
+    /** The campus boundary as a bold dashed line, with everything outside it shaded. */
     function drawCampus(layer, campus) {
         CampusMap.drawOverlay(layer, campus);
         if (!campus || !Array.isArray(campus.boundary) || campus.boundary.length < 3) {
@@ -1180,15 +1401,29 @@
         L.polygon([world, campus.boundary], {
             stroke: false,
             fillColor: "#0d1b2a",
-            fillOpacity: 0.32,
+            fillOpacity: 0.34,
             interactive: false,
         }).addTo(layer);
         L.polygon(campus.boundary, {
             color: "#0755b5",
-            weight: 4,
-            opacity: 0.55,
+            weight: 3.5,
+            opacity: 0.95,
+            dashArray: "10 7",
             fill: false,
             interactive: false,
+        }).addTo(layer);
+        // "Campus boundary" over the middle of the northern edge.
+        const points = campus.boundary.map(function (point, index) {
+            return { lat: Number(point[0]), lng: Number(point[1]), index: index };
+        });
+        const north = points.reduce(function (best, point) { return point.lat > best.lat ? point : best; }, points[0]);
+        const before = points[(north.index - 1 + points.length) % points.length];
+        const after = points[(north.index + 1) % points.length];
+        const next = before.lat > after.lat ? before : after;
+        L.marker([(north.lat + next.lat) / 2, (north.lng + next.lng) / 2], {
+            interactive: false,
+            keyboard: false,
+            icon: L.divIcon({ className: "monitor-boundary-label", html: "<span>Campus boundary</span>", iconSize: [130, 16], iconAnchor: [65, 20] }),
         }).addTo(layer);
     }
 
@@ -1319,13 +1554,21 @@
         }
     }
 
-    /** Map padding that keeps fitted content clear of the panel on wide screens. */
+    /** Map padding that keeps fitted content clear of the visitor panel, whatever its size. */
     function mapPadding(extra) {
-        const wide = window.innerWidth > 720;
-        const panelWidth = wide && monitorPanel ? monitorPanel.offsetWidth + 36 : 24;
-        return Object.assign(wide
-            ? { paddingTopLeft: [panelWidth, 40], paddingBottomRight: [40, 40] }
-            : { paddingTopLeft: [24, 24], paddingBottomRight: [24, Math.min(window.innerHeight * 0.45, 360)] }, extra || {});
+        const size = monitorPanel.dataset.size;
+        let padding;
+        if (!phoneQuery.matches) {
+            padding = size === "peek"
+                ? { paddingTopLeft: [24, monitorPanel.offsetHeight + 40], paddingBottomRight: [70, 40] }
+                : { paddingTopLeft: [monitorPanel.offsetWidth + 36, 40], paddingBottomRight: [70, 40] };
+        } else {
+            const shell = document.getElementById("monitorShell");
+            // A big panel leaves only a strip of map; frame for the normal size then.
+            const covered = size === "full" ? shell.clientHeight * 0.52 : monitorPanel.offsetHeight;
+            padding = { paddingTopLeft: [24, 40], paddingBottomRight: [64, Math.min(covered + 16, shell.clientHeight - 120)] };
+        }
+        return Object.assign(padding, extra || {});
     }
 
     function renderSummary() {
@@ -1472,9 +1715,112 @@
         }
     }
 
-    function setSheetOpen(open) {
-        monitorPanel.classList.toggle("is-collapsed", !open);
-        document.getElementById("monitorSheetToggle").setAttribute("aria-expanded", String(open));
+    /* The visitor panel: small (just the counts), normal (the list) or big. Each device type
+       remembers its own last size (browser storage, only a convenience). */
+    const PANEL_SIZES = ["peek", "half", "full"];
+
+    function panelStorageKey() {
+        return "isatu.security.monitorPanel." + (phoneQuery.matches ? "phone" : "wide");
+    }
+
+    function rememberedPanelSize() {
+        try {
+            const value = window.localStorage.getItem(panelStorageKey());
+            return PANEL_SIZES.indexOf(value) !== -1 ? value : "half";
+        } catch (error) {
+            return "half";
+        }
+    }
+
+    function setPanelSize(size, options) {
+        const settings = options || {};
+        if (PANEL_SIZES.indexOf(size) === -1) {
+            size = "half";
+        }
+        monitorPanel.dataset.size = size;
+        monitorPanel.style.height = "";
+        const smaller = document.getElementById("monitorSmaller");
+        const bigger = document.getElementById("monitorBigger");
+        smaller.disabled = size === "peek";
+        bigger.disabled = size === "full";
+        const smallerLabel = size === "full" ? "Make the panel normal size" : "Make the panel small";
+        const biggerLabel = size === "peek" ? "Open the visitor list" : "Make the panel big";
+        smaller.title = smallerLabel;
+        smaller.setAttribute("aria-label", smallerLabel);
+        bigger.title = biggerLabel;
+        bigger.setAttribute("aria-label", biggerLabel);
+        document.getElementById("monitorPanelHeader").title = size === "peek" ? "Tap to open the visitor list" : "";
+        if (settings.remember !== false) {
+            try {
+                window.localStorage.setItem(panelStorageKey(), size);
+            } catch (error) {
+                // Private windows may refuse storage; the size still applies now.
+            }
+        }
+        window.requestAnimationFrame(function () {
+            if (monitoringState.map) {
+                monitoringState.map.invalidateSize({ pan: false });
+                updateBackToCampus();
+            }
+        });
+    }
+
+    function stepPanelSize(step) {
+        const index = PANEL_SIZES.indexOf(monitorPanel.dataset.size);
+        setPanelSize(PANEL_SIZES[Math.max(0, Math.min(PANEL_SIZES.length - 1, index + step))]);
+    }
+
+    /** Opening a visitor needs room for their details. */
+    function ensurePanelOpen() {
+        if (monitorPanel.dataset.size === "peek") {
+            setPanelSize("half");
+        }
+    }
+
+    /** On a phone, drag the handle (or the panel's title) up or down; it settles on the nearest size. */
+    function enablePanelDrag() {
+        let start = null;
+        function onMove(event) {
+            if (!start) {
+                return;
+            }
+            const shell = document.getElementById("monitorShell");
+            const height = Math.max(90, Math.min(shell.clientHeight - 40, start.height + (start.y - event.clientY)));
+            if (Math.abs(start.y - event.clientY) > 6) {
+                start.moved = true;
+                monitorPanel.classList.add("is-dragging");
+                monitorPanel.style.height = height + "px";
+            }
+        }
+        function onEnd() {
+            window.removeEventListener("pointermove", onMove);
+            window.removeEventListener("pointerup", onEnd);
+            window.removeEventListener("pointercancel", onEnd);
+            monitorPanel.classList.remove("is-dragging");
+            if (!start) {
+                return;
+            }
+            const moved = start.moved;
+            start = null;
+            if (!moved) {
+                monitorPanel.style.height = "";
+                return;
+            }
+            const total = document.getElementById("monitorShell").clientHeight;
+            const height = monitorPanel.getBoundingClientRect().height;
+            setPanelSize(height < total * 0.3 ? "peek" : height < total * 0.74 ? "half" : "full");
+        }
+        function onStart(event) {
+            if (!phoneQuery.matches || event.button > 0 || event.target.closest("button, a, input")) {
+                return;
+            }
+            start = { y: event.clientY, height: monitorPanel.getBoundingClientRect().height, moved: false };
+            window.addEventListener("pointermove", onMove);
+            window.addEventListener("pointerup", onEnd);
+            window.addEventListener("pointercancel", onEnd);
+        }
+        document.getElementById("monitorGrab").addEventListener("pointerdown", onStart);
+        document.getElementById("monitorPanelHeader").addEventListener("pointerdown", onStart);
     }
 
     function selectVisitor(id, options) {
@@ -1491,7 +1837,7 @@
             }
             loadTrail(true, options && options.pan !== false);
         }
-        setSheetOpen(true);
+        ensurePanelOpen();
         document.getElementById("monitorListView").hidden = true;
         document.getElementById("monitorDetail").hidden = false;
         renderDetail();
@@ -1930,7 +2276,7 @@
 
     /** Opens the live map focused on one visitor (from the records table). */
     function openOnMap(appointmentId) {
-        switchSecurityView("monitoring");
+        switchSecurityView("monitoring", { history: "push" });
         loadLiveLocations(true).then(function () {
             selectVisitor(appointmentId, { pan: true });
         });
@@ -1938,25 +2284,43 @@
 
     /* ---------- Events ---------- */
 
+    // The menu (side menu and bottom bar) and every "open that view" link.
     document.querySelectorAll("[data-security-view]").forEach(function (button) {
         button.addEventListener("click", function () {
-            switchSecurityView(button.getAttribute("data-security-view"));
+            switchSecurityView(button.getAttribute("data-security-view"), { history: "push" });
         });
+    });
+    document.addEventListener("click", function (event) {
+        const link = event.target.closest("[data-go-view]");
+        if (!link) {
+            return;
+        }
+        switchSecurityView(link.dataset.goView, { history: "push" });
+        if (link.dataset.goTab) {
+            selectListTab(link.dataset.goTab);
+        }
+    });
+    window.addEventListener("popstate", function () {
+        switchSecurityView(viewFromHash(window.location.hash), { history: "none" });
     });
 
     /* Overview */
 
-    document.getElementById("sdRegisterBtn").addEventListener("click", function () {
+    function openGateRegister() {
         GateRegister.open({
             onRegistered: function (visit) {
+                // The confirmation (with the reference to give the visitor) is on Home.
+                switchSecurityView("dashboard", { history: "push" });
                 showNotice(visit.visitor_full_name + " is checked in for " + visit.office_label + ". This visit is not tracked.", visit.registration_code);
-                selectTab("inside");
+                selectListTab("inside");
                 loadSecurityDashboard();
             },
         });
-    });
+    }
+
+    document.getElementById("sdRegisterBtn").addEventListener("click", openGateRegister);
     document.getElementById("sdOpenMap").addEventListener("click", function () {
-        switchSecurityView("monitoring");
+        switchSecurityView("monitoring", { history: "push" });
     });
     document.getElementById("sdNoticeClose").addEventListener("click", function () {
         document.getElementById("sdNotice").hidden = true;
@@ -1964,7 +2328,7 @@
 
     document.querySelectorAll("[data-sd-tab]").forEach(function (button) {
         button.addEventListener("click", function () {
-            selectTab(button.dataset.sdTab);
+            selectListTab(button.dataset.sdTab);
         });
     });
     document.querySelector(".sd-tablist").addEventListener("keydown", function (event) {
@@ -1974,13 +2338,23 @@
         const tabs = Array.from(document.querySelectorAll(".sd-tab"));
         const index = tabs.findIndex(function (tab) { return tab.dataset.sdTab === overview.tab; });
         const next = tabs[(index + (event.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
-        selectTab(next.dataset.sdTab);
+        selectListTab(next.dataset.sdTab);
         next.focus();
         event.preventDefault();
     });
 
-    // One handler for every Monitor, End visit, View route and Check in without QR button.
-    document.querySelector(".sd-page").addEventListener("click", function (event) {
+    // The Visitors page search filters every tab, All records too.
+    document.getElementById("sdListSearch").addEventListener("input", function (event) {
+        overview.query = event.target.value;
+        dashboardState.query = event.target.value.trim();
+        dashboardState.page = 1;
+        renderOverview();
+        renderVisitors();
+    });
+
+    // One handler for every Monitor, End visit, View route and Check in without QR button, on
+    // Home and on the Visitors page.
+    document.querySelector(".security-main").addEventListener("click", function (event) {
         const button = event.target.closest("button[data-sd-action]");
         if (!button) {
             return;
@@ -2039,11 +2413,6 @@
         });
     });
 
-    document.getElementById("securityVisitorSearch").addEventListener("input", function (event) {
-        dashboardState.query = event.target.value.trim();
-        dashboardState.page = 1;
-        renderVisitors();
-    });
     document.getElementById("securityStatusFilter").addEventListener("change", function (event) {
         dashboardState.status = event.target.value;
         dashboardState.type = "";
@@ -2115,8 +2484,31 @@
             await completeVisit(visitor.id, visitor.visitor_full_name, event.currentTarget);
         }
     });
-    document.getElementById("monitorSheetToggle").addEventListener("click", function () {
-        setSheetOpen(monitorPanel.classList.contains("is-collapsed"));
+    document.getElementById("monitorSmaller").addEventListener("click", function () {
+        stepPanelSize(-1);
+    });
+    document.getElementById("monitorBigger").addEventListener("click", function () {
+        stepPanelSize(1);
+    });
+    // The small panel opens with a tap anywhere on it.
+    document.getElementById("monitorPanelHeader").addEventListener("click", function (event) {
+        if (monitorPanel.dataset.size === "peek" && !event.target.closest("button")) {
+            setPanelSize("half");
+        }
+    });
+    document.getElementById("monitorSummary").addEventListener("click", function () {
+        if (monitorPanel.dataset.size === "peek") {
+            setPanelSize("half");
+        }
+    });
+    enablePanelDrag();
+    document.getElementById("mapBackCampus").addEventListener("click", function () {
+        fitCampus(true);
+    });
+    // Turning a tablet, or a window crossing the phone width: that size's panel and map credit.
+    phoneQuery.addEventListener("change", function () {
+        setPanelSize(rememberedPanelSize(), { remember: false });
+        placeAttribution();
     });
 
     document.addEventListener("keydown", function (event) {
@@ -2134,6 +2526,11 @@
     });
 
     profileButton.addEventListener("click", function () {
+        // On a phone the account is on the Menu page, which is easier to tap than a dropdown.
+        if (phoneQuery.matches) {
+            switchSecurityView("menu", { history: "push" });
+            return;
+        }
         const willOpen = profileMenu.hidden;
         profileMenu.hidden = !willOpen;
         profileButton.setAttribute("aria-expanded", String(willOpen));
@@ -2144,19 +2541,54 @@
             profileButton.setAttribute("aria-expanded", "false");
         }
     });
-    document.getElementById("logoutBtn").addEventListener("click", function () {
+
+    async function signOut() {
+        if (!(await AppDialog.confirm({
+            title: "Sign out?",
+            message: "You'll need your password to sign in again.",
+            confirmLabel: "Sign out",
+        }))) {
+            return;
+        }
         PhoneTrackerAuth.logout().then(function () {
             window.location.href = "login.html";
         });
+    }
+    document.getElementById("logoutBtn").addEventListener("click", signOut);
+
+    /* Menu page */
+
+    document.getElementById("secMenuRegister").addEventListener("click", openGateRegister);
+    document.getElementById("secMenuRefresh").addEventListener("click", async function (event) {
+        const button = event.currentTarget;
+        button.disabled = true;
+        setText("secMenuUpdated", "Refreshing…");
+        try {
+            await Promise.all([loadSecurityDashboard(), loadLiveLocations(true)]);
+        } finally {
+            button.disabled = false;
+        }
     });
+    document.getElementById("secMenuLegend").addEventListener("click", function () {
+        switchSecurityView("monitoring", { history: "push" });
+        toggleLegend(true);
+    });
+    document.getElementById("secMenuSignOut").addEventListener("click", signOut);
 
     const role = PhoneTrackerAuth.getRole();
-    setText("securityProfileName", PhoneTrackerAuth.getDisplayName() || PhoneTrackerAuth.getUsername() || "Security Desk");
+    const displayName = PhoneTrackerAuth.getDisplayName() || PhoneTrackerAuth.getUsername() || "Security Desk";
+    setText("securityProfileName", displayName);
     setText("securityProfileUsername", PhoneTrackerAuth.getUsername() || "security");
     setText("securityRoleLabel", role === "admin" ? "Admin" : "Security");
+    setText("secMenuName", displayName);
+    setText("secMenuUsername", PhoneTrackerAuth.getUsername() || "security");
+    setText("secMenuInitials", displayName.split(/\s+/).filter(Boolean).slice(0, 2).map(function (word) {
+        return word.charAt(0).toUpperCase();
+    }).join("") || "S");
     document.getElementById("securityAdminLink").hidden = role !== "admin";
 
-    switchSecurityView(window.location.hash === "#monitoring" ? "monitoring" : "dashboard");
+    setPanelSize(rememberedPanelSize(), { remember: false });
+    switchSecurityView(viewFromHash(window.location.hash), { history: "replace" });
     loadSecurityDashboard();
     window.setInterval(function () {
         if (!document.hidden) {

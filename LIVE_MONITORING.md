@@ -73,9 +73,35 @@ The boundary is the polygon an administrator draws in **Campus map setup**.
   `phone_tracker/gps_filter.js`), so markers and walked paths no longer jump to places the
   visitor never was. Positions already stored, and uploads from older app versions, are
   shown as they were sent.
-- On phones the panel is a pull-up sheet.
+- **The visitor panel has three sizes** (since 2026-11-18): small (just the counts), normal
+  (the list) and big. On a phone it is a sheet at the bottom: drag its handle or tap the
+  ⌄ / ⌃ buttons. On a laptop the – button shrinks it to a card and ⤢ makes it wide. Each kind
+  of device remembers its last size in the browser.
+- **The map moves freely** (since 2026-11-18): it is no longer locked to the campus, so after
+  zooming in a guard can drag past the edge, out to the city around it (zoom 13). The campus
+  boundary is a bold dashed line with everything outside it shaded, so "outside" is clear at
+  any zoom. Buttons under the zoom buttons: show the whole campus, show every visitor, and
+  what the colours mean. **Back to campus** appears while no part of the campus is on screen.
+  The privacy rule is unchanged: positions outside the boundary are never shown or saved.
 
 The map pauses updates while the browser tab is in the background.
+
+## The Security pages on phones (2026-11-18)
+
+Guards mostly use a phone, so the Security pages (`dashboard.html`, `security_scan.html`)
+share one menu: **Home**, **Live map**, **Scan**, **Visitors** and **Menu**. It is a bar
+at the bottom on phones (Scan is the big round button in the middle), a strip of icons on
+tablets, and the blue side menu on laptops. Home shows a red number when visitors need
+attention.
+
+- **Home:** the two gate actions, the search, "Inside campus now", "Needs attention", today's
+  numbers and the first visitors inside (those needing attention first).
+- **Visitors:** Inside now, Expected, Left today and All records, with one search for all
+  of them. On a phone the search and the tabs stay on top while the list scrolls.
+- **Menu:** the account, Register at the gate, All records, Refresh now, the map colours,
+  and Sign out (which asks first).
+- Each page has its own address (`dashboard.html#map`, `#visitors`, `#menu`; the old
+  `#monitoring` still opens the map), so a phone's Back button returns to the page before.
 
 ## The staff maps (Security and Admin)
 

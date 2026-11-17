@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0755b5">
     <title>ISATU Security Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261116-1">
+    <link rel="stylesheet" href="style.css?v=20261118-1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
-<body class="admin-page security-page">
+<body class="admin-page security-page" data-security-current="dashboard">
     <header class="admin-topbar">
         <a class="admin-brand" href="dashboard.html" aria-label="ISATU Security Dashboard home">
             <span class="admin-brand-mark" aria-hidden="true">
@@ -38,20 +39,35 @@
     </header>
 
     <div class="admin-layout security-layout">
+        <!-- Tablets and laptops. Phones get the same items in the bar at the bottom (secTabbar). -->
         <aside class="admin-sidebar security-sidebar" aria-label="Security navigation">
             <nav>
                 <button class="admin-nav-item is-active" type="button" data-security-view="dashboard">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
-                    <span>Security Dashboard</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg>
+                    <span>Home</span>
+                    <b class="sec-badge" data-attention-badge hidden>0</b>
                 </button>
                 <button class="admin-nav-item" type="button" data-security-view="monitoring">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-4.5 7-12a7 7 0 1 0-14 0c0 7.5 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>
-                    <span>Visitor Monitoring</span>
+                    <span>Live map</span>
+                </button>
+                <a class="admin-nav-item sec-nav-scan" href="security_scan.html">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h3v3H8zM13 8h3v3h-3zM8 13h3v3H8zM14 14h2v2h-2z"/></svg>
+                    <span>Scan pass</span>
+                </a>
+                <button class="admin-nav-item" type="button" data-security-view="visitors">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/></svg>
+                    <span>Visitors</span>
+                </button>
+                <button class="admin-nav-item sec-nav-menu" type="button" data-security-view="menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    <span>Menu</span>
                 </button>
             </nav>
         </aside>
 
         <main class="admin-main security-main">
+            <!-- ===== Home ===== -->
             <section class="admin-view security-view" id="securityDashboardView" data-security-panel="dashboard">
                 <!-- What a guard does most comes first and biggest; information is smaller (GATE_REGISTRATION.md). -->
                 <div class="sd-page">
@@ -110,34 +126,56 @@
                     </section>
 
                     <section class="sd-today" aria-label="Today's numbers">
-                        <button class="sd-stat" type="button" data-sd-tab="inside">Walk-ins today <strong id="sdWalkIns">0</strong></button>
-                        <button class="sd-stat" type="button" data-sd-tab="inside">Appointments today <strong id="sdAppointments">0</strong></button>
-                        <button class="sd-stat" type="button" data-sd-tab="expected">Still expected <strong id="sdExpected">0</strong></button>
-                        <button class="sd-stat" type="button" data-sd-tab="left">Left today <strong id="sdLeft">0</strong></button>
+                        <button class="sd-stat" type="button" data-go-view="visitors" data-go-tab="inside">Walk-ins today <strong id="sdWalkIns">0</strong></button>
+                        <button class="sd-stat" type="button" data-go-view="visitors" data-go-tab="inside">Appointments today <strong id="sdAppointments">0</strong></button>
+                        <button class="sd-stat" type="button" data-go-view="visitors" data-go-tab="expected">Still expected <strong id="sdExpected">0</strong></button>
+                        <button class="sd-stat" type="button" data-go-view="visitors" data-go-tab="left">Left today <strong id="sdLeft">0</strong></button>
                     </section>
 
-                    <section class="sd-listcard" aria-label="Visitors">
-                        <div class="sd-tabs">
-                            <div class="sd-tablist" role="tablist" aria-label="Visitors">
-                                <button class="sd-tab" role="tab" type="button" id="sdTabInside" aria-selected="true" aria-controls="sdPanelInside" data-sd-tab="inside">Inside now <span id="sdTabInsideCount">0</span></button>
-                                <button class="sd-tab" role="tab" type="button" id="sdTabExpected" aria-selected="false" aria-controls="sdPanelExpected" data-sd-tab="expected" tabindex="-1">Expected today <span id="sdTabExpectedCount">0</span></button>
-                                <button class="sd-tab" role="tab" type="button" id="sdTabLeft" aria-selected="false" aria-controls="sdPanelLeft" data-sd-tab="left" tabindex="-1">Left today <span id="sdTabLeftCount">0</span></button>
-                                <button class="sd-tab" role="tab" type="button" id="sdTabAll" aria-selected="false" aria-controls="sdPanelAll" data-sd-tab="all" tabindex="-1">All records</button>
-                            </div>
+                    <section class="sd-home-inside" aria-labelledby="sdHomeInsideTitle">
+                        <div class="sd-section-head">
+                            <h2 id="sdHomeInsideTitle">Inside now</h2>
+                            <button class="sd-link" type="button" data-go-view="visitors" data-go-tab="inside">See all visitors →</button>
                         </div>
+                        <div class="sd-listcard">
+                            <div class="sd-panel" id="sdHomeInside"></div>
+                        </div>
+                    </section>
+                </div>
+            </section>
 
+            <!-- ===== Visitors: inside now, expected, left today, all records ===== -->
+            <section class="admin-view security-view" id="securityVisitorsView" data-security-panel="visitors" hidden>
+                <div class="sd-page">
+                    <header class="sd-head sd-head-compact">
+                        <div>
+                            <p class="sd-date">Today</p>
+                            <h1>Visitors</h1>
+                        </div>
+                    </header>
+
+                    <div class="sd-visitors-top">
+                        <label class="sd-filter" for="sdListSearch">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                            <span class="sr-only">Search the visitors</span>
+                            <input id="sdListSearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search name, office or reference">
+                        </label>
+                        <div class="sd-tablist" role="tablist" aria-label="Visitors">
+                            <button class="sd-tab" role="tab" type="button" id="sdTabInside" aria-selected="true" aria-controls="sdPanelInside" data-sd-tab="inside">Inside now <span id="sdTabInsideCount">0</span></button>
+                            <button class="sd-tab" role="tab" type="button" id="sdTabExpected" aria-selected="false" aria-controls="sdPanelExpected" data-sd-tab="expected" tabindex="-1">Expected <span id="sdTabExpectedCount">0</span></button>
+                            <button class="sd-tab" role="tab" type="button" id="sdTabLeft" aria-selected="false" aria-controls="sdPanelLeft" data-sd-tab="left" tabindex="-1">Left today <span id="sdTabLeftCount">0</span></button>
+                            <button class="sd-tab" role="tab" type="button" id="sdTabAll" aria-selected="false" aria-controls="sdPanelAll" data-sd-tab="all" tabindex="-1">All records</button>
+                        </div>
+                    </div>
+
+                    <section class="sd-listcard" aria-label="Visitors">
                         <div class="sd-panel" id="sdPanelInside" role="tabpanel" aria-labelledby="sdTabInside" data-sd-panel="inside"></div>
                         <div class="sd-panel" id="sdPanelExpected" role="tabpanel" aria-labelledby="sdTabExpected" data-sd-panel="expected" hidden></div>
                         <div class="sd-panel" id="sdPanelLeft" role="tabpanel" aria-labelledby="sdTabLeft" data-sd-panel="left" hidden></div>
 
                         <div class="sd-panel sd-panel-all" id="sdPanelAll" role="tabpanel" aria-labelledby="sdTabAll" data-sd-panel="all" hidden>
                             <div class="security-table-toolbar">
-                                <div>
-                                    <label class="admin-search security-search" for="securityVisitorSearch">
-                                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                                        <input id="securityVisitorSearch" type="search" placeholder="Search all records" autocomplete="off">
-                                    </label>
-                                </div>
+                                <p class="security-table-note">Every visit, newest first. The search above filters this list too.</p>
                                 <div class="security-filter-group">
                                     <label for="securityStatusFilter">Status</label>
                                     <select id="securityStatusFilter">
@@ -179,8 +217,8 @@
                             </div>
                             <div class="admin-empty-state security-empty" id="securityVisitorsEmpty" hidden>
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5M19.5 5.5v5"/></svg>
-                                <strong>No visitor records yet</strong>
-                                <span>Appointments will appear here when visitors submit them.</span>
+                                <strong>No visitor records</strong>
+                                <span>Nothing matches, or no visitor has booked yet.</span>
                             </div>
                             <div class="admin-pagination security-pagination">
                                 <p id="securityVisitorsShowing">Showing 0 visitors</p>
@@ -191,26 +229,50 @@
                 </div>
             </section>
 
+            <!-- ===== Live map ===== -->
             <section class="admin-view security-view security-monitoring-view" id="securityMonitoringView" data-security-panel="monitoring" hidden>
                 <div class="security-map-shell" id="monitorShell">
                     <div id="securityMap" aria-label="Live visitor monitoring map"></div>
 
-                    <aside class="monitor-panel" id="monitorPanel" aria-label="Visitor monitoring">
-                        <button class="monitor-sheet-toggle" id="monitorSheetToggle" type="button" aria-expanded="true" aria-controls="monitorPanelBody">
-                            <span aria-hidden="true"></span>
-                            <span class="sr-only">Show or hide the visitor panel</span>
-                        </button>
-                        <header class="monitor-panel-header">
-                            <div>
+                    <!-- Shown when the campus is out of view; the map moves freely (no lock to the campus). -->
+                    <button class="monitor-back-campus" id="mapBackCampus" type="button" hidden>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+                        Back to campus
+                    </button>
+
+                    <div class="monitor-legend-pop" id="mapLegend" role="dialog" aria-label="Map legend" hidden>
+                        <p><span class="legend-swatch is-live"></span>Live position</p>
+                        <p><span class="legend-swatch is-stale"></span>Stale (no new position for a while)</p>
+                        <p><span class="legend-swatch is-offline"></span>Signal lost (last position)</p>
+                        <p><span class="legend-swatch is-trail"></span>Walked path</p>
+                        <p><span class="legend-swatch is-boundary"></span>Campus boundary</p>
+                        <p><span class="legend-swatch is-shade"></span>Outside the campus</p>
+                        <small>Positions outside the boundary are never shown or saved. A visitor who steps out is listed as "Outside campus", and the visit ends after 5 minutes outside.</small>
+                    </div>
+
+                    <!-- The visitor panel: small, normal or big. A sheet you can drag on a phone, a card on a laptop. -->
+                    <aside class="monitor-panel" id="monitorPanel" data-size="half" aria-label="Visitor monitoring">
+                        <div class="monitor-grab" id="monitorGrab" title="Drag to resize" aria-hidden="true"><span></span></div>
+                        <header class="monitor-panel-header" id="monitorPanelHeader">
+                            <div class="monitor-title">
                                 <p class="admin-eyebrow">Live map</p>
                                 <h2>Visitor Monitoring</h2>
                             </div>
                             <span class="security-live-indicator" id="monitorLiveIndicator"><i></i><span>Live</span></span>
+                            <div class="monitor-size-btns">
+                                <button class="monitor-size-btn" id="monitorSmaller" type="button" title="Make the panel smaller" aria-label="Make the panel smaller" aria-controls="monitorPanel">
+                                    <svg class="is-phone" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                                    <svg class="is-wide" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+                                </button>
+                                <button class="monitor-size-btn" id="monitorBigger" type="button" title="Make the panel bigger" aria-label="Make the panel bigger" aria-controls="monitorPanel">
+                                    <svg class="is-phone" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg>
+                                    <svg class="is-wide" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>
+                                </button>
+                            </div>
                         </header>
+                        <div class="monitor-summary" id="monitorSummary" aria-live="polite"></div>
 
                         <div class="monitor-panel-body" id="monitorPanelBody">
-                            <div class="monitor-summary" id="monitorSummary" aria-live="polite"></div>
-
                             <div id="monitorListView">
                                 <div class="monitor-tabs" role="tablist" aria-label="Visitors">
                                     <button class="is-active" type="button" role="tab" id="monitorTabActive" aria-selected="true" data-monitor-tab="active">
@@ -242,9 +304,6 @@
                                     </div>
                                 </div>
                                 <div class="monitor-chips" id="monitorDetailChips"></div>
-                                <dl class="monitor-facts" id="monitorDetailFacts"></dl>
-                                <ol class="monitor-stops" id="monitorDetailStops" aria-label="Office stops" hidden></ol>
-                                <p class="monitor-trail-note" id="monitorTrailNote"></p>
                                 <div class="monitor-actions">
                                     <button class="monitor-action" id="monitorFollowBtn" type="button" aria-pressed="false">
                                         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
@@ -259,14 +318,11 @@
                                         <span>End visit</span>
                                     </button>
                                 </div>
+                                <dl class="monitor-facts" id="monitorDetailFacts"></dl>
+                                <ol class="monitor-stops" id="monitorDetailStops" aria-label="Office stops" hidden></ol>
+                                <p class="monitor-trail-note" id="monitorTrailNote"></p>
                             </div>
 
-                            <div class="security-location-legend" aria-label="Map legend">
-                                <span><i class="is-live"></i>Live</span>
-                                <span><i class="is-stale"></i>Stale</span>
-                                <span><i class="is-offline"></i>Offline</span>
-                                <span><i class="is-trail"></i>Walked path</span>
-                            </div>
                             <p class="security-map-help" id="monitorPrivacyNote">Only positions inside the campus boundary are shown. A visitor who steps outside disappears from the map, and their visit ends after 5 minutes outside.</p>
                         </div>
                     </aside>
@@ -274,8 +330,77 @@
                     <div class="security-map-error" id="securityMapError" role="alert" hidden></div>
                 </div>
             </section>
+
+            <!-- ===== Menu ===== -->
+            <section class="admin-view security-view" id="securityMenuView" data-security-panel="menu" hidden>
+                <div class="sd-page sec-menu-page">
+                    <div class="sec-account">
+                        <span class="sec-account-avatar" id="secMenuInitials" aria-hidden="true">SD</span>
+                        <div>
+                            <h1 id="secMenuName">Security Desk</h1>
+                            <p class="sd-sub">Signed in as <span id="secMenuUsername">security</span></p>
+                        </div>
+                    </div>
+                    <ul class="sec-menu-list">
+                        <li>
+                            <button class="sec-menu-item" type="button" id="secMenuRegister">
+                                <span class="sec-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 20v-1.5a4 4 0 0 0-4-4H6.5a4 4 0 0 0-4 4V20"/><circle cx="8.8" cy="7.5" r="3.6"/><path d="M19 8v6M16 11h6"/></svg></span>
+                                <span><strong>Register at the gate</strong><small>Visitor has no app or no QR</small></span>
+                                <svg class="sec-menu-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="sec-menu-item" type="button" data-go-view="visitors" data-go-tab="all">
+                                <span class="sec-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg></span>
+                                <span><strong>All records</strong><small>Every visit, with a status filter</small></span>
+                                <svg class="sec-menu-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="sec-menu-item" type="button" id="secMenuRefresh">
+                                <span class="sec-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6.1 8a7 7 0 0 1 11.8-2L20 8M4 16l2.1 2A7 7 0 0 0 18 16"/></svg></span>
+                                <span><strong>Refresh now</strong><small id="secMenuUpdated">The lists also refresh by themselves</small></span>
+                                <svg class="sec-menu-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                            </button>
+                        </li>
+                        <li>
+                            <button class="sec-menu-item" type="button" id="secMenuLegend">
+                                <span class="sec-menu-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></span>
+                                <span><strong>Map colours and privacy</strong><small>What each colour on the live map means</small></span>
+                                <svg class="sec-menu-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                            </button>
+                        </li>
+                    </ul>
+                    <button class="sec-signout" type="button" id="secMenuSignOut">Sign out</button>
+                </div>
+            </section>
         </main>
     </div>
+
+    <!-- Phones: the menu sits at the bottom, where the thumb reaches. Scan is the big button in the middle. -->
+    <nav class="sec-tabbar" aria-label="Security menu">
+        <button class="sec-tab is-active" type="button" data-security-view="dashboard">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v10h13V10"/></svg>
+            <span>Home</span>
+            <b class="sec-badge" data-attention-badge hidden>0</b>
+        </button>
+        <button class="sec-tab" type="button" data-security-view="monitoring">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-4.5 7-12a7 7 0 1 0-14 0c0 7.5 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            <span>Live map</span>
+        </button>
+        <a class="sec-tab sec-tab-scan" href="security_scan.html">
+            <span class="sec-scan-circle"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4M8 8h3v3H8zM13 8h3v3h-3zM8 13h3v3H8zM14 14h2v2h-2z"/></svg></span>
+            <span>Scan</span>
+        </a>
+        <button class="sec-tab" type="button" data-security-view="visitors">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/></svg>
+            <span>Visitors</span>
+        </button>
+        <button class="sec-tab" type="button" data-security-view="menu">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+            <span>Menu</span>
+        </button>
+    </nav>
 
     <!-- Check in without the QR code, outside the booked time: the same recorded exception as on the scan page. -->
     <dialog class="admin-dialog security-override-dialog" id="sdOverrideDialog" aria-labelledby="sdOverrideTitle">
@@ -311,6 +436,6 @@
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
     <script src="campus_map.js?v=20261005-2"></script>
-    <script src="dashboard.js?v=20261117-1"></script>
+    <script src="dashboard.js?v=20261118-1"></script>
 </body>
 </html>

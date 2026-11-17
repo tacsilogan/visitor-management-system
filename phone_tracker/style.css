@@ -12384,3 +12384,922 @@ html.has-expanded-map body {
     color: #0755b5;
     font-weight: 600;
 }
+
+/* ==========================================================================
+   Security pages on phones, tablets and laptops (2026-11-18)
+   One menu everywhere: the blue side menu on laptops, a strip of icons with small names on
+   tablets, and a bar at the bottom on phones with Scan as the big button in the middle. The live
+   map's visitor panel has three sizes: peek (just the counts), half (the list) and full. The map
+   moves freely; the campus boundary and the shaded outside show where the campus ends.
+   ========================================================================== */
+
+.security-sidebar .admin-nav-item {
+    position: relative;
+}
+
+.security-sidebar .admin-nav-item svg,
+.security-sidebar .admin-nav-item:first-child svg {
+    fill: none;
+    stroke: currentColor;
+}
+
+.security-sidebar .sec-nav-scan {
+    width: auto;
+    min-height: 54px;
+    margin: 6px 12px;
+    padding: 12px 14px;
+    border: 2px solid #ffd43b;
+    border-radius: 12px;
+}
+
+.security-sidebar .sec-nav-menu {
+    margin-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.sec-badge {
+    display: inline-grid;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    place-items: center;
+    border-radius: 10px;
+    background: #d92d20;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.sec-badge[hidden] {
+    display: none;
+}
+
+.security-sidebar .sec-badge {
+    margin-left: auto;
+}
+
+.sec-tabbar {
+    display: none;
+}
+
+/* Everything inside the map stays under the top bar's account menu. */
+.security-map-shell {
+    isolation: isolate;
+}
+
+/* ---------- Home and Visitors ---------- */
+
+.sd-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 10px;
+}
+
+.sd-section-head h2 {
+    margin: 0;
+    color: #142033;
+    font-size: 17px;
+}
+
+#sdHomeInside .sd-row {
+    grid-template-columns: minmax(170px, 2fr) minmax(150px, 1.7fr) minmax(110px, 1.1fr) minmax(140px, 1.25fr) minmax(150px, 1.4fr) 196px;
+}
+
+.sd-page .sd-more {
+    display: block;
+    width: 100%;
+    padding: 13px 18px;
+    border: 0;
+    border-top: 1px solid #edf0f5;
+    background: #f8fafc;
+    color: #0755b5;
+    font-size: 13.5px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+}
+
+.sd-page .sd-more:hover {
+    background: #e8f0fb;
+}
+
+.sd-head-compact h1 {
+    font-size: 26px;
+}
+
+/* The global input rule adds a bottom margin, which pushed the Home search text up. */
+.sd-page .sd-find input {
+    margin: 0;
+}
+
+.sd-visitors-top {
+    display: grid;
+    gap: 12px;
+}
+
+.sd-filter {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    margin: 0;
+    padding: 0 14px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.sd-filter:focus-within {
+    border-color: #0755b5;
+    box-shadow: 0 0 0 4px #e8f0fb;
+}
+
+.sd-filter svg {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    fill: none;
+    stroke: #667085;
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+
+.sd-page .sd-filter input {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    flex: 1;
+    margin: 0;
+    padding: 0;
+    font-weight: 400;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #142033;
+    font-size: 15px;
+}
+
+.sd-visitors-top .sd-tablist {
+    gap: 8px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+}
+
+.sd-visitors-top .sd-tablist::-webkit-scrollbar {
+    display: none;
+}
+
+.sd-page .sd-visitors-top .sd-tab {
+    min-height: 40px;
+    flex: none;
+    padding: 0 16px;
+    border: 1px solid #d6dde7;
+    border-radius: 999px;
+    background: #ffffff;
+}
+
+.sd-page .sd-visitors-top .sd-tab[aria-selected="true"] {
+    border-color: #0755b5;
+    background: #0755b5;
+    color: #ffffff;
+}
+
+.sd-visitors-top .sd-tab[aria-selected="true"] span {
+    background: rgba(255, 255, 255, 0.22);
+    color: #ffffff;
+}
+
+.security-table-note {
+    margin: 0;
+    color: #667085;
+    font-size: 13px;
+}
+
+/* ---------- Menu page ---------- */
+
+.sd-page.sec-menu-page {
+    max-width: 640px;
+}
+
+.sec-account {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid #e1e6ee;
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.sec-account h1 {
+    margin: 0;
+    color: #142033;
+    font-size: 18px;
+    line-height: 1.25;
+}
+
+.sec-account-avatar {
+    display: grid;
+    width: 52px;
+    height: 52px;
+    place-items: center;
+    border-radius: 50%;
+    background: #0755b5;
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.sec-menu-list {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid #e1e6ee;
+    border-radius: 16px;
+    background: #ffffff;
+    list-style: none;
+}
+
+.sec-menu-list li + li {
+    border-top: 1px solid #e1e6ee;
+}
+
+.sd-page .sec-menu-item {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-height: 66px;
+    padding: 10px 16px;
+    border: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.sd-page .sec-menu-item:hover {
+    background: #f6f8fb;
+}
+
+.sd-page .sec-menu-item:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.sec-menu-item strong {
+    display: block;
+    color: #142033;
+    font-size: 14.5px;
+}
+
+.sec-menu-item small {
+    display: block;
+    color: #667085;
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
+.sec-menu-icon {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 12px;
+    background: #e8f0fb;
+    color: #0755b5;
+}
+
+.sec-menu-icon svg,
+.sec-menu-chevron {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.sec-menu-chevron {
+    color: #98a2b3;
+}
+
+.sd-page .sec-signout {
+    min-height: 48px;
+    border: 1.5px solid #f1c3be;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #b42318;
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sd-page .sec-signout:hover {
+    background: #fdeceb;
+}
+
+/* ---------- Live map: the visitor panel's three sizes ---------- */
+
+.monitor-panel {
+    z-index: 1100;
+    transition: width 0.22s ease;
+}
+
+.monitor-grab {
+    display: none;
+}
+
+.monitor-panel-header {
+    align-items: center;
+}
+
+.monitor-panel-header .monitor-title {
+    min-width: 0;
+    flex: 1;
+}
+
+.monitor-size-btns {
+    display: flex;
+    flex: none;
+    gap: 6px;
+}
+
+.admin-page .monitor-size-btn {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    place-items: center;
+    border: 1px solid #d6dde7;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #172133;
+    cursor: pointer;
+}
+
+.admin-page .monitor-size-btn:hover:not(:disabled) {
+    border-color: #0755b5;
+    color: #0755b5;
+}
+
+.admin-page .monitor-size-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.monitor-size-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.monitor-size-btn .is-phone {
+    display: none;
+}
+
+.monitor-panel > .monitor-summary {
+    padding: 0 18px 12px;
+}
+
+.monitor-panel[data-size="peek"] {
+    bottom: auto;
+    width: min(380px, calc(100% - 32px));
+}
+
+.monitor-panel[data-size="peek"] .monitor-panel-body {
+    display: none;
+}
+
+.monitor-panel[data-size="peek"] .monitor-panel-header,
+.monitor-panel[data-size="peek"] > .monitor-summary {
+    cursor: pointer;
+}
+
+.monitor-panel[data-size="full"] {
+    width: min(660px, calc(100% - 120px));
+}
+
+.monitor-panel[data-size="full"] .monitor-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 12px;
+}
+
+/* ---------- Live map: tools, the legend, Back to campus ---------- */
+
+.leaflet-bar.monitor-map-tools a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.leaflet-bar.monitor-map-tools svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: #1b2b3d;
+    stroke-width: 2.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.leaflet-bar.monitor-map-tools a.is-active {
+    background: #0755b5;
+}
+
+.leaflet-bar.monitor-map-tools a.is-active svg {
+    stroke: #ffffff;
+}
+
+.monitor-legend-pop {
+    position: absolute;
+    top: 12px;
+    right: 58px;
+    z-index: 1150;
+    width: min(280px, calc(100% - 80px));
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 10px 26px rgba(17, 42, 71, 0.22);
+    color: #172133;
+    font-size: 12.5px;
+}
+
+.monitor-legend-pop[hidden] {
+    display: none;
+}
+
+.monitor-legend-pop p {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 7px;
+}
+
+.monitor-legend-pop small {
+    display: block;
+    margin-top: 8px;
+    color: #667085;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.legend-swatch {
+    width: 14px;
+    height: 14px;
+    flex: none;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+.legend-swatch.is-live { background: #0a9b55; }
+.legend-swatch.is-stale { background: #e08a12; }
+.legend-swatch.is-offline { background: #687382; }
+
+.legend-swatch.is-trail {
+    height: 4px;
+    border: 0;
+    border-radius: 2px;
+    background: #f0641c;
+    box-shadow: none;
+}
+
+.legend-swatch.is-boundary {
+    height: 0;
+    border: 0;
+    border-top: 3px dashed #0755b5;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.legend-swatch.is-shade {
+    border-radius: 3px;
+    background: rgba(13, 27, 42, 0.34);
+}
+
+.monitor-back-campus {
+    position: absolute;
+    top: 14px;
+    right: 70px;
+    z-index: 1050;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 999px;
+    background: #0755b5;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(7, 85, 181, 0.35);
+    font: 600 13.5px var(--font-ui);
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.monitor-back-campus[hidden] {
+    display: none;
+}
+
+.monitor-back-campus svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.monitor-boundary-label span {
+    display: block;
+    color: #0755b5;
+    font: 700 10.5px/16px var(--font-ui);
+    letter-spacing: 0.06em;
+    text-align: center;
+    text-shadow: 0 0 3px #ffffff, 0 0 3px #ffffff, 0 0 3px #ffffff;
+    text-transform: uppercase;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* ---------- Tablets: a strip of icons with small names ---------- */
+
+@media (min-width: 721px) and (max-width: 940px) {
+    .security-sidebar .admin-nav-item {
+        min-height: 64px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        padding: 10px 4px;
+        font-size: 10.5px;
+        text-align: center;
+    }
+
+    .security-sidebar .admin-nav-item span {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip: auto;
+    }
+
+    .security-sidebar .sec-nav-scan {
+        margin: 6px 7px;
+        padding: 8px 2px;
+    }
+
+    .security-sidebar .sec-badge {
+        position: absolute;
+        top: 6px;
+        right: 12px;
+        margin: 0;
+    }
+}
+
+@media (max-width: 980px) {
+    #sdHomeInside .sd-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px 12px;
+        padding: 14px 16px;
+    }
+}
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 720px) {
+    /* The menu at the bottom */
+    .sec-tabbar {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1300;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        height: calc(64px + env(safe-area-inset-bottom));
+        padding-bottom: env(safe-area-inset-bottom);
+        border-top: 1px solid #e1e6ee;
+        background: #ffffff;
+        box-shadow: 0 -6px 18px rgba(17, 42, 71, 0.08);
+    }
+
+    .admin-page .sec-tab {
+        position: relative;
+        display: flex;
+        height: 64px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        padding: 0;
+        border: 0;
+        background: none;
+        color: #667085;
+        font-size: 10.5px;
+        font-weight: 600;
+        line-height: 1.1;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .sec-tab svg {
+        width: 23px;
+        height: 23px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.9;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+    }
+
+    .admin-page .sec-tab.is-active {
+        color: #0755b5;
+    }
+
+    .sec-tab.is-active::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 26%;
+        left: 26%;
+        height: 3px;
+        border-radius: 0 0 3px 3px;
+        background: #0755b5;
+    }
+
+    .sec-tab .sec-badge {
+        position: absolute;
+        top: 6px;
+        left: calc(50% + 5px);
+        min-width: 18px;
+        height: 18px;
+        font-size: 10.5px;
+    }
+
+    .sec-scan-circle {
+        display: grid;
+        width: 60px;
+        height: 60px;
+        margin-top: -30px;
+        place-items: center;
+        border: 4px solid #ffffff;
+        border-radius: 50%;
+        background: #0755b5;
+        color: #ffffff;
+        box-shadow: 0 8px 18px rgba(7, 85, 181, 0.35);
+    }
+
+    .sec-scan-circle svg {
+        width: 27px;
+        height: 27px;
+    }
+
+    .sec-tab-scan.is-active::before {
+        display: none;
+    }
+
+    /* No side menu; room for the bottom bar under every page */
+    .security-page .security-sidebar {
+        display: none;
+    }
+
+    .security-page .security-layout {
+        display: block;
+        min-height: 0;
+    }
+
+    .security-page .admin-main {
+        padding-bottom: calc(92px + env(safe-area-inset-bottom));
+    }
+
+    /* A shorter top bar */
+    .security-page .admin-topbar {
+        min-height: 58px;
+        padding: 6px 12px;
+    }
+
+    .security-page .admin-brand {
+        font-size: 14px;
+    }
+
+    .security-page .admin-brand-mark {
+        width: 42px;
+        height: 42px;
+        flex-basis: 42px;
+    }
+
+    .security-page .admin-brand-mark img {
+        height: 40px;
+    }
+
+    .security-page .admin-brand > span:last-child {
+        max-width: 210px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Home: the two gate actions side by side, as big tiles */
+    .sd-page .sd-actions {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 10px;
+    }
+
+    .sd-page .sd-btn {
+        min-height: 104px;
+        grid-template-columns: minmax(0, 1fr);
+        align-content: space-between;
+        row-gap: 4px;
+        padding: 13px;
+    }
+
+    .sd-page .sd-btn svg {
+        grid-row: auto;
+        width: 28px;
+        height: 28px;
+        margin-bottom: 6px;
+    }
+
+    .sd-page .sd-btn strong {
+        font-size: 14.5px;
+    }
+
+    .sd-page .sd-btn small {
+        font-size: 11.5px;
+        line-height: 1.3;
+    }
+
+    .sd-head-compact h1 {
+        font-size: 22px;
+    }
+
+    /* Visitors: the search and the tabs stay on top while the list scrolls */
+    .sd-visitors-top {
+        position: sticky;
+        top: 58px;
+        z-index: 25;
+        margin: -6px -12px 0;
+        padding: 8px 12px 10px;
+        background: #f8f9fb;
+    }
+
+    /* The live map fills the screen between the top bar and the bottom bar */
+    .security-page[data-security-current="monitoring"] .admin-main {
+        padding: 0;
+    }
+
+    .security-page .security-monitoring-view {
+        margin: 0;
+    }
+
+    .security-page .security-map-shell {
+        height: calc(100vh - 122px);
+        height: calc(100dvh - 122px - env(safe-area-inset-bottom));
+        min-height: 0;
+    }
+
+    .security-monitoring-view .leaflet-bar a,
+    .security-monitoring-view .leaflet-touch .leaflet-bar a {
+        width: 40px;
+        height: 40px;
+        line-height: 40px;
+    }
+
+    .security-monitoring-view .leaflet-control-scale {
+        display: none;
+    }
+
+    .monitor-legend-pop {
+        right: 64px;
+        width: min(270px, calc(100% - 84px));
+    }
+
+    .monitor-back-campus {
+        top: 52px;
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    /* The panel is a sheet at the bottom: drag it, or use the arrow buttons */
+    .monitor-panel,
+    .monitor-panel[data-size="peek"],
+    .monitor-panel[data-size="full"] {
+        top: auto;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        width: auto;
+        max-height: none;
+        border-width: 1px 0 0;
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -10px 30px rgba(17, 42, 71, 0.2);
+        transition: height 0.24s ease;
+    }
+
+    .monitor-panel {
+        height: 52%;
+    }
+
+    .monitor-panel[data-size="peek"] {
+        height: auto;
+    }
+
+    .monitor-panel[data-size="full"] {
+        height: calc(100% - 56px);
+    }
+
+    .monitor-panel.is-dragging {
+        transition: none;
+    }
+
+    .monitor-grab {
+        display: grid;
+        height: 22px;
+        flex: none;
+        place-items: center;
+        touch-action: none;
+        cursor: grab;
+    }
+
+    .monitor-grab span {
+        width: 44px;
+        height: 5px;
+        border-radius: 3px;
+        background: #c4ccd6;
+    }
+
+    .monitor-panel-header {
+        padding: 0 12px 8px 16px;
+        touch-action: none;
+    }
+
+    .monitor-panel-header .admin-eyebrow {
+        display: none;
+    }
+
+    .admin-page .monitor-size-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 12px;
+    }
+
+    .monitor-size-btn .is-phone {
+        display: block;
+    }
+
+    .monitor-size-btn .is-wide {
+        display: none;
+    }
+
+    .monitor-panel > .monitor-summary {
+        padding: 0 16px 12px;
+    }
+
+    /* Room under the last line for the raised Scan button of the bottom bar */
+    .monitor-panel[data-size="peek"] > .monitor-summary {
+        padding-bottom: 26px;
+    }
+
+    .monitor-panel-body {
+        padding-bottom: 40px;
+    }
+
+    .monitor-panel[data-size="full"] .monitor-list {
+        display: flex;
+    }
+}
+
+@media (max-width: 380px) {
+    .sd-page .sd-btn small {
+        display: none;
+    }
+
+    .sd-page .sd-btn {
+        min-height: 84px;
+    }
+
+    .admin-page .sec-tab {
+        font-size: 9.5px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .monitor-panel {
+        transition: none;
+    }
+}
