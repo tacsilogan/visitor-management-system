@@ -192,9 +192,9 @@ try {
         ]);
         $conn->commit();
         $message = $conflicts
-            ? "Availability saved. " . (count($conflicts) === 1 ? "1 booked visit is" : count($conflicts) . " booked visits are")
-                . " outside the new schedule: open it from Appointments to suggest another time."
-            : "Availability settings saved";
+            ? "Hours saved. " . (count($conflicts) === 1 ? "1 booked visit is" : count($conflicts) . " booked visits are")
+                . " outside the new hours: open " . (count($conflicts) === 1 ? "it" : "them") . " from Visits to suggest another time."
+            : "Hours saved";
     } elseif ($action === "add_exception") {
         $startsRaw = trim((string) ($input["starts_at"] ?? ""));
         $endsRaw = trim((string) ($input["ends_at"] ?? ""));

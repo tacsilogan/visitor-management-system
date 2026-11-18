@@ -2,30 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <!-- Phone numbers stay plain text: this page has no call feature. -->
+    <meta name="format-detection" content="telephone=no">
     <title>ISATU Office Personnel Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261110-1">
+    <link rel="stylesheet" href="style.css?v=20261118-2">
 </head>
-<body class="admin-page office-page">
+<body class="admin-page office-page" data-office-current="today">
     <header class="admin-topbar">
-        <a class="admin-brand" href="#dashboard" aria-label="Office dashboard home">
+        <a class="admin-brand ofc-brand" href="#today" aria-label="Office dashboard: Today">
             <span class="admin-brand-mark"><img src="assets/images/isatu-logo.png" alt="ISATU"></span>
-            <span>ISATU Office Personnel Dashboard</span>
+            <span class="ofc-brand-copy">
+                <strong><span class="ofc-brand-long">ISATU Office Personnel · </span><span data-office-name>Your office</span></strong>
+                <small><i class="ofc-dot" aria-hidden="true"></i><span id="officeTopStatus">Loading…</span></small>
+            </span>
         </a>
         <div class="admin-topbar-actions">
-            <button class="admin-icon-button" id="officeNotificationBtn" type="button" aria-label="Notifications" aria-expanded="false">
+            <button class="admin-icon-button" id="officeNotificationBtn" type="button" aria-label="Notifications">
                 <img src="assets/icons/notification_icon.svg" alt="" aria-hidden="true">
                 <span class="admin-notification-count" id="officeNotificationCount" hidden>0</span>
             </button>
-            <section class="admin-notification-panel" id="officeNotificationPanel" aria-label="Office notifications" hidden>
-                <header class="admin-notification-header">
-                    <div><strong>Notifications</strong><span id="officeNotificationSummary">No unread updates</span></div>
-                    <button id="closeOfficeNotificationsBtn" type="button" aria-label="Close notifications">×</button>
-                </header>
-                <div class="admin-notification-list" id="officeNotificationList"></div>
-                <p class="admin-notification-empty" id="officeNotificationEmpty">You have no notifications.</p>
-                <button class="admin-notification-view" id="markOfficeNotificationsReadBtn" type="button" hidden>Mark all as read</button>
-            </section>
 
             <button class="admin-profile-button" id="officeProfileBtn" type="button" aria-expanded="false">
                 <span class="admin-avatar"><img id="officeProfileAvatar" src="assets/icons/profile_icon.svg" alt="" aria-hidden="true"></span>
@@ -46,261 +42,400 @@
     <div class="admin-layout office-layout">
         <aside class="admin-sidebar office-sidebar">
             <nav aria-label="Office dashboard sections">
-                <button class="admin-nav-item is-active" type="button" data-office-view="dashboard" aria-current="page">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>
-                    <span>Appointments</span>
+                <button class="admin-nav-item" type="button" data-office-view="today">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10"/></svg>
+                    <span>Today</span>
                 </button>
                 <button class="admin-nav-item" type="button" data-office-view="requests">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18H6zM9 8h6M9 12h6M9 16h4"/></svg>
-                    <span>Appointment Requests</span>
-                    <span class="office-nav-count" id="officeRequestNavCount" hidden>0</span>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5l1.5-3h5"/><path d="M5.5 5h13L21 13v6H3v-6z"/></svg>
+                    <span>Requests</span>
+                    <b class="ofc-badge" data-request-badge hidden>0</b>
                 </button>
-                <button class="admin-nav-item" type="button" data-office-view="availability">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM8 2v4M16 2v4M5 9h14M9 13h2M13 13h2M9 17h2"/></svg>
-                    <span>Availability</span>
+                <button class="admin-nav-item" type="button" data-office-view="visits">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/></svg>
+                    <span>Visits</span>
+                </button>
+                <button class="admin-nav-item" type="button" data-office-view="hours">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                    <span>Hours</span>
+                </button>
+                <button class="admin-nav-item ofc-nav-menu" type="button" data-office-view="menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    <span>Menu</span>
                 </button>
             </nav>
         </aside>
 
-        <main class="admin-main office-main">
-            <header class="admin-mobile-heading">
-                <p class="admin-eyebrow">Office Personnel</p>
-                <h1 id="officeMobileTitle">Appointments</h1>
-            </header>
+        <main class="admin-main office-main ofc-main">
             <p class="admin-message is-error" id="officePageError" role="alert" hidden></p>
-            <div class="office-help-alerts" id="officeHelpAlerts" role="alert" aria-label="Visitors who can't find your office" hidden></div>
+            <!-- A visitor who tapped "I can't find it" is waiting, so this shows on every page. -->
+            <div class="ofc-help-list" id="officeHelpAlerts" aria-label="Visitors who can't find your office" hidden></div>
 
-            <section class="admin-view" id="officeDashboardView" data-office-panel="dashboard">
-                <div class="office-stat-grid" aria-label="Appointment summary">
-                    <button class="admin-stat-card" type="button" data-summary-view="requests" data-summary-status="pending_approval">
-                        <strong class="is-yellow" id="officePendingCount">0</strong>
-                        <span>Pending Approvals</span><small>Needs your response</small>
-                    </button>
-                    <button class="admin-stat-card" type="button" data-summary-view="dashboard" data-summary-status="approved">
-                        <strong class="is-green" id="officeApprovedCount">0</strong>
-                        <span>Approved</span><small>Upcoming approved visits</small>
-                    </button>
-                    <button class="admin-stat-card" type="button" data-summary-view="dashboard" data-summary-status="rejected">
-                        <strong class="is-red" id="officeRejectedCount">0</strong>
-                        <span>Declined</span><small>Requests declined</small>
-                    </button>
-                    <button class="admin-stat-card" type="button" data-summary-view="dashboard" data-summary-status="today">
-                        <strong class="is-blue" id="officeTodayCount">0</strong>
-                        <span>Today's Appointments</span><small>Scheduled for today</small>
-                    </button>
-                </div>
-
-                <section class="admin-content-card office-table-card">
-                    <header class="admin-section-header">
-                        <div><h2>All Appointments</h2><p id="officeDashboardDate">Search and filter every appointment for your office.</p><p id="officeDashboardScope">Showing your assigned office only.</p></div>
-                        <div class="admin-table-tools">
-                            <label class="admin-select-label" for="officeRecentStatus"><span>Filter</span>
-                                <select id="officeRecentStatus">
-                                    <option value="">All statuses</option>
-                                    <option value="today">Today's appointments</option>
-                                    <option value="pending_approval">Pending approval</option>
-                                    <option value="reschedule_proposed">Waiting for visitor</option>
-                                    <option value="approved">Approved</option>
-                                    <option value="rejected">Declined</option>
-                                    <option value="checked_in">Checked in</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                    <option value="window_closed">Appointment done</option>
-                                </select>
-                            </label>
-                            <label class="admin-search" for="officeRecentSearch">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                                <input id="officeRecentSearch" type="search" placeholder="Search visitor or purpose" autocomplete="off">
-                            </label>
-                        </div>
-                    </header>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table office-table">
-                            <thead><tr><th>Visitor</th><th>Purpose</th><th>Schedule</th><th>Status</th><th class="admin-row-actions">Action</th></tr></thead>
-                            <tbody id="officeRecentBody"><tr><td colspan="5" class="office-loading-cell">Loading appointments…</td></tr></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state is-compact" id="officeRecentEmpty" hidden><strong>No matching appointments</strong><span>New appointment activity will appear here.</span></div>
-                    <div class="admin-pagination" id="officeAppointmentsPagination"></div>
-                </section>
-            </section>
-
-            <section class="admin-view" id="officeRequestsView" data-office-panel="requests" hidden>
-                <div class="office-focus-stat">
-                    <strong id="officeRequestsCount">0</strong><span>Pending Approvals</span><small>Oldest requests are shown first so visitors receive a timely response.</small>
-                </div>
-                <section class="admin-content-card office-table-card">
-                    <header class="admin-section-header">
-                        <div><h2>Appointment Requests</h2><p>Approve, decline with a reason, or offer another available schedule.</p><p id="officeRequestScope">Only requests addressed to your assigned office appear here.</p></div>
-                        <label class="admin-search" for="officeRequestSearch">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                            <input id="officeRequestSearch" type="search" placeholder="Search pending requests" autocomplete="off">
-                        </label>
-                    </header>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table office-table">
-                            <thead><tr><th>Visitor</th><th>Purpose</th><th>Requested Schedule</th><th>Submitted</th><th>Status</th><th class="admin-row-actions">Action</th></tr></thead>
-                            <tbody id="officeRequestsBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state" id="officeRequestsEmpty" hidden>
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5zM8 9h8M8 13h8M8 17h5"/></svg>
-                        <strong>No pending requests</strong><span>Your office has responded to every appointment request.</span>
-                    </div>
-                </section>
-            </section>
-
-            <section class="admin-view" id="officeAvailabilityView" data-office-panel="availability" hidden>
-                <header class="office-view-heading">
-                    <div><p class="admin-eyebrow">Appointment Controls</p><h1>Availability</h1><p>Publish when your office can receive visitors so they only request workable schedules.</p></div>
-                    <div class="office-status-group">
-                        <span class="office-availability-chip" id="officeAvailabilityChip" role="status">Loading…</span>
-                        <button class="office-secondary-button" id="officePauseBtn" type="button" hidden>Pause visits</button>
-                    </div>
-                </header>
-
-                <form id="officeAvailabilityForm">
-                    <section class="office-settings-card">
-                        <div class="office-settings-heading">
-                            <div><h2>Accepting visitors</h2><p>Turn this off for office-wide closures or periods when no appointments can be accepted.</p></div>
-                            <label class="office-switch"><input id="officeAcceptingVisitors" type="checkbox"><span aria-hidden="true"></span><span class="sr-only">Accepting visitors</span></label>
-                        </div>
-                        <div class="office-closure-fields" id="officeClosureFields" hidden>
-                            <label><span>Reason shown to visitors</span><textarea id="officeUnavailableReason" rows="2" maxlength="500" placeholder="Example: Office-wide training"></textarea></label>
-                            <label><span>Available again (optional)</span><input id="officeAvailableAgain" type="datetime-local"></label>
-                        </div>
+            <!-- ================= TODAY ================= -->
+            <section class="admin-view ofc-page" id="officeTodayView" data-office-panel="today">
+                <div class="ofc-head-row">
+                    <div><p class="admin-eyebrow" id="officeTodayDate">Today</p><h1 class="ofc-title">Today</h1></div>
+                    <section class="ofc-status" data-status-card aria-live="polite">
+                        <span class="ofc-status-dot" aria-hidden="true"></span>
+                        <span class="ofc-status-copy"><strong data-status-title>Loading…</strong><small data-status-sub></small></span>
+                        <button class="ofc-btn is-small" type="button" data-pause-toggle hidden>Pause</button>
                     </section>
+                </div>
 
-                    <section class="office-settings-card">
-                        <header class="office-settings-heading">
-                            <div><h2>Weekly visitor hours</h2><p>Set when visitors may come each day, with breaks such as lunch. Requests outside these hours or during a break are blocked automatically.</p></div>
-                            <div class="office-compact-fields">
-                                <label><span>Slot length</span><select id="officeSlotDuration"><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option><option value="90">90 min</option><option value="120">120 min</option></select></label>
-                                <label><span>Visitors per slot</span><input id="officeSlotCapacity" type="number" min="1" max="50" value="1"></label>
-                            </div>
-                        </header>
-                        <div class="office-schedule-toolbar">
-                            <button class="office-secondary-button" id="officeAddLunchBtn" type="button">Add a 12–1 PM lunch break to every open day</button>
-                            <p>Breaks repeat every week. For a one-time change, such as a holiday, use Temporary schedule changes below.</p>
+                <div class="ofc-glance" aria-label="Today at a glance">
+                    <button class="is-amber" type="button" data-office-view="requests"><strong data-count="answer">0</strong><span>To answer</span></button>
+                    <button class="is-green" type="button" data-jump="here"><strong data-count="here">0</strong><span>Here now</span></button>
+                    <button class="is-blue" type="button" data-jump="campus"><strong data-count="campus">0</strong><span>On campus</span></button>
+                    <button type="button" data-jump="later"><strong data-count="later">0</strong><span>Later today</span></button>
+                </div>
+
+                <div class="ofc-today-cols">
+                    <section class="ofc-sec" aria-labelledby="officeHomeRequestsTitle">
+                        <div class="ofc-sec-head">
+                            <h2 id="officeHomeRequestsTitle">Needs your answer <span class="ofc-count is-amber" data-count="answer">0</span></h2>
+                            <button class="ofc-link" type="button" data-office-view="requests">See all<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
                         </div>
-                        <div class="office-weekly-schedule" id="officeWeeklySchedule"></div>
-                        <datalist id="officeBreakNames">
-                            <option value="Lunch break"></option>
-                            <option value="Flag ceremony"></option>
-                            <option value="Staff meeting"></option>
-                            <option value="Snack break"></option>
-                        </datalist>
-                        <section class="office-slot-preview" aria-labelledby="officeSlotPreviewTitle">
-                            <header>
-                                <div><h3 id="officeSlotPreviewTitle">What visitors can book</h3><p id="officeSlotPreviewSummary"></p></div>
-                                <div class="office-preview-days" id="officePreviewDays" role="group" aria-label="Day to preview"></div>
-                            </header>
-                            <div class="office-preview-slots" id="officeSlotPreview"></div>
+                        <ul class="ofc-rlist" id="officeHomeRequests"><li class="ofc-empty">Loading…</li></ul>
+                    </section>
+                    <section class="ofc-sec" aria-labelledby="officeTodayVisitorsTitle">
+                        <div class="ofc-sec-head">
+                            <h2 id="officeTodayVisitorsTitle">Today's visitors <span class="ofc-count" data-count="today">0</span></h2>
+                            <button class="ofc-link" type="button" data-office-view="visits" data-visits-tab="today">See all<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+                        </div>
+                        <div class="ofc-tgroups" id="officeTodayGroups"><p class="ofc-empty">Loading…</p></div>
+                    </section>
+                </div>
+            </section>
+
+            <!-- ================= REQUESTS ================= -->
+            <section class="admin-view ofc-page" id="officeRequestsView" data-office-panel="requests" hidden>
+                <div class="ofc-sticky">
+                    <label class="ofc-find">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                        <span class="sr-only">Search requests</span>
+                        <input id="officeRequestSearch" type="search" placeholder="Search name, purpose or V-2026-…" autocomplete="off">
+                    </label>
+                    <div class="ofc-seg" role="tablist" aria-label="Requests">
+                        <button type="button" role="tab" data-request-tab="answer" aria-selected="true">Needs your answer <span data-count="answer">0</span></button>
+                        <button type="button" role="tab" data-request-tab="waiting" aria-selected="false">Waiting for visitor <span data-count="waiting">0</span></button>
+                    </div>
+                </div>
+                <p class="ofc-note" id="officeRequestNote">Soonest visit first. A request nobody answers expires when its time passes.</p>
+                <ul class="ofc-rlist is-grid" id="officeRequestList"></ul>
+            </section>
+
+            <!-- ================= VISITS ================= -->
+            <section class="admin-view ofc-page" id="officeVisitsView" data-office-panel="visits" hidden>
+                <div class="ofc-sticky">
+                    <label class="ofc-find">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                        <span class="sr-only">Search visits</span>
+                        <input id="officeVisitSearch" type="search" placeholder="Search name, purpose or V-2026-…" autocomplete="off">
+                    </label>
+                    <div class="ofc-seg" role="tablist" aria-label="Visits">
+                        <button type="button" role="tab" data-visits-tab="today" aria-selected="true">Today <span data-count="v-today">0</span></button>
+                        <button type="button" role="tab" data-visits-tab="upcoming" aria-selected="false">Upcoming <span data-count="v-upcoming">0</span></button>
+                        <button type="button" role="tab" data-visits-tab="past" aria-selected="false">Past <span data-count="v-past">0</span></button>
+                        <button type="button" role="tab" data-visits-tab="all" aria-selected="false">All <span data-count="v-all">0</span></button>
+                    </div>
+                    <div class="ofc-fchips" id="officeStatusChips" role="group" aria-label="Status" hidden>
+                        <button type="button" data-visits-status="" aria-pressed="true">Every status</button>
+                        <button type="button" data-visits-status="completed" aria-pressed="false">Completed</button>
+                        <button type="button" data-visits-status="rejected" aria-pressed="false">Declined</button>
+                        <button type="button" data-visits-status="cancelled" aria-pressed="false">Cancelled</button>
+                        <button type="button" data-visits-status="unanswered" aria-pressed="false">No office response</button>
+                        <button type="button" data-visits-status="window_closed" aria-pressed="false">Didn't come</button>
+                    </div>
+                </div>
+                <div class="ofc-vtable" id="officeVisitTable"></div>
+                <button class="ofc-more-btn" id="officeVisitMore" type="button" hidden>Show more</button>
+            </section>
+
+            <!-- ================= HOURS ================= -->
+            <section class="admin-view ofc-page" id="officeHoursView" data-office-panel="hours" hidden>
+                <div><p class="admin-eyebrow" data-office-name>Your office</p><h1 class="ofc-title">Hours</h1></div>
+                <div class="ofc-hours-cols">
+                    <div>
+                        <section class="ofc-status is-big" data-status-card aria-live="polite">
+                            <span class="ofc-status-dot" aria-hidden="true"></span>
+                            <span class="ofc-status-copy"><strong data-status-title>Loading…</strong><small data-status-sub></small></span>
+                            <button class="ofc-btn" type="button" data-pause-toggle hidden>Pause new visits</button>
                         </section>
-                        <p class="admin-message is-error" id="officeAvailabilityError" role="alert" hidden></p>
-                        <div class="office-settings-actions">
-                            <span class="office-unsaved-note" id="officeUnsavedNote" hidden>Unsaved changes</span>
-                            <button class="admin-primary-button" id="saveOfficeAvailabilityBtn" type="submit">Save availability</button>
-                        </div>
-                    </section>
-                </form>
+                        <section class="ofc-card" aria-labelledby="officeWeekTitle">
+                            <div class="ofc-sec-head">
+                                <h2 id="officeWeekTitle">Every week</h2>
+                                <button class="ofc-link" id="officeAddLunchBtn" type="button">+ Lunch on every open day</button>
+                            </div>
+                            <div class="ofc-week" id="officeWeekRows"><p class="ofc-empty">Loading…</p></div>
+                            <div class="ofc-legend"><span><i class="is-open"></i>Visitors can book</span><span><i class="is-break"></i>Break</span><span>Tap a day to change it</span></div>
+                        </section>
+                        <section class="ofc-card" aria-labelledby="officeBookingTitle">
+                            <h2 id="officeBookingTitle">Each booking</h2>
+                            <div class="ofc-setting">
+                                <span><strong>Length</strong><small>How long one visit lasts</small></span>
+                                <select class="ofc-select" id="officeSlotDuration" aria-label="Length of one visit">
+                                    <option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option>
+                                    <option value="60">1 hour</option><option value="90">90 min</option><option value="120">2 hours</option>
+                                </select>
+                            </div>
+                            <div class="ofc-setting">
+                                <span><strong>Visitors at the same time</strong><small>How many can book each time</small></span>
+                                <span class="ofc-stepper">
+                                    <button type="button" data-capacity-step="-1" aria-label="Fewer visitors">−</button>
+                                    <input id="officeSlotCapacity" type="number" min="1" max="50" value="1" inputmode="numeric" aria-label="Visitors at the same time">
+                                    <button type="button" data-capacity-step="1" aria-label="More visitors">+</button>
+                                </span>
+                            </div>
+                        </section>
+                    </div>
+                    <div>
+                        <section class="ofc-card" aria-labelledby="officeChangesTitle">
+                            <div class="ofc-sec-head">
+                                <h2 id="officeChangesTitle">Temporary changes</h2>
+                                <button class="ofc-btn is-small" id="addOfficeExceptionBtn" type="button">+ Add</button>
+                            </div>
+                            <p class="ofc-note">Holidays, meetings or extra hours. The weekly hours stay as they are.</p>
+                            <ul class="ofc-changes" id="officeExceptionList"></ul>
+                            <p class="ofc-empty" id="officeExceptionEmpty" hidden>No temporary changes coming up.</p>
+                            <details class="ofc-past-changes" id="officeExceptionPast" hidden></details>
+                        </section>
+                        <section class="ofc-card">
+                            <div class="ofc-setting">
+                                <span><strong>Accepting visitors</strong><small>Turn off only for a long closure. For a short time away, use Pause.</small></span>
+                                <label class="office-switch"><input id="officeAcceptingVisitors" type="checkbox"><span aria-hidden="true"></span><span class="sr-only">Accepting visitors</span></label>
+                            </div>
+                            <div class="ofc-closure" id="officeClosureFields" hidden>
+                                <label class="ofc-field"><span>Reason visitors see</span><textarea id="officeUnavailableReason" rows="2" maxlength="500" placeholder="Example: Semester break"></textarea></label>
+                                <label class="ofc-field"><span>Open again on (optional)</span><input id="officeAvailableAgain" type="datetime-local"></label>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <p class="admin-message is-error" id="officeAvailabilityError" role="alert" hidden></p>
+            </section>
 
-                <section class="office-settings-card">
-                    <header class="office-settings-heading">
-                        <div><h2>Temporary schedule changes</h2><p>Add holidays, closures, meetings, or extra visitor hours without changing the weekly schedule.</p></div>
-                        <button class="admin-primary-button" id="addOfficeExceptionBtn" type="button">Add schedule change</button>
-                    </header>
-                    <div class="office-exception-list" id="officeExceptionList"></div>
-                    <div class="admin-empty-state is-compact" id="officeExceptionEmpty" hidden><strong>No temporary changes</strong><span>Your regular weekly schedule is currently in effect.</span></div>
-                </section>
+            <!-- ================= MENU ================= -->
+            <section class="admin-view ofc-page is-narrow" id="officeMenuView" data-office-panel="menu" hidden>
+                <div class="ofc-card ofc-account">
+                    <span class="ofc-avatar" id="officeMenuAvatar" aria-hidden="true">OP</span>
+                    <div>
+                        <h2 id="officeMenuName">Office Personnel</h2>
+                        <p class="ofc-note" id="officeMenuRole">Your office</p>
+                        <p class="ofc-note">Signed in as <span id="officeMenuUsername">office</span></p>
+                    </div>
+                </div>
+                <ul class="ofc-menu-list">
+                    <li><button class="ofc-menu-item" id="officeMenuProfile" type="button">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>
+                        <span><strong>Edit profile</strong><small>Your photo</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" id="officeMenuSecurity" type="button">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+                        <span><strong>Account security</strong><small>Password, two-step sign-in, signed-in devices</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" id="officeMenuNotes" type="button">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2H4.4z"/><path d="M10 21h4"/></svg></span>
+                        <span><strong>Notifications <b class="ofc-badge" data-unread-badge hidden>0</b></strong><small>Requests, arrivals, visitors who need help</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" id="officeMenuRefresh" type="button">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 8a7 7 0 0 1 11.8-2L20 8M4 16l2.1 2A7 7 0 0 0 18 16"/></svg></span>
+                        <span><strong>Refresh now</strong><small id="officeMenuUpdated">Not updated yet</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                </ul>
+                <button class="ofc-btn is-decline is-full" id="officeMenuSignOut" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sign out
+                </button>
             </section>
         </main>
     </div>
 
-    <dialog class="admin-dialog office-appointment-dialog" id="officeAppointmentDialog">
-        <div class="office-dialog-body">
-            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Appointment Details</p><h2 id="officeAppointmentTitle">Visitor request</h2></div><button class="admin-dialog-close" id="closeOfficeAppointmentBtn" type="button" aria-label="Close">×</button></header>
-            <div class="office-dialog-status-row"><span class="admin-status" id="officeAppointmentStatus">Pending approval</span><span id="officeAppointmentCode">—</span></div>
-            <dl class="office-detail-grid" id="officeAppointmentDetails"></dl>
-            <section class="office-proposal-summary" id="officeProposalSummary" hidden></section>
-            <details class="office-history-details"><summary>Appointment activity</summary><div class="office-history-timeline" id="officeAppointmentHistory"></div></details>
-            <p class="admin-message is-error" id="officeAppointmentError" role="alert" hidden></p>
-            <footer class="office-dialog-actions" id="officeAppointmentActions">
-                <button class="office-danger-button" id="openDeclineAppointmentBtn" type="button">Decline</button>
-                <button class="office-secondary-button" id="openRescheduleAppointmentBtn" type="button">Suggest another time</button>
-                <button class="office-success-button" id="approveOfficeAppointmentBtn" type="button">Approve appointment</button>
-                <button class="office-success-button" id="completeOfficeStopBtn" type="button" hidden>Mark meeting done</button>
+    <nav class="ofc-tabbar" aria-label="Office menu">
+        <button class="ofc-tab" type="button" data-office-view="today"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10"/></svg>Today</button>
+        <button class="ofc-tab" type="button" data-office-view="requests"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13h5l1.5 3h5l1.5-3h5"/><path d="M5.5 5h13L21 13v6H3v-6z"/></svg>Requests<b class="ofc-badge" data-request-badge hidden>0</b></button>
+        <button class="ofc-tab" type="button" data-office-view="visits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/></svg>Visits</button>
+        <button class="ofc-tab" type="button" data-office-view="hours"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Hours</button>
+        <button class="ofc-tab" type="button" data-office-view="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Menu</button>
+    </nav>
+
+    <div class="ofc-savebar" id="officeSaveBar" role="region" aria-label="Unsaved changes to your hours" hidden>
+        <strong>Unsaved changes</strong>
+        <button class="ofc-btn is-ghost" id="officeDiscardBtn" type="button">Discard</button>
+        <button class="ofc-btn is-save" id="saveOfficeAvailabilityBtn" type="button">Save</button>
+    </div>
+
+    <!-- ================= SHEETS (from the bottom on phones) ================= -->
+    <dialog class="ofc-sheet is-drawer" id="officeAppointmentDialog" aria-labelledby="officeAppointmentTitle">
+        <header class="ofc-sheet-head">
+            <div>
+                <h2 id="officeAppointmentTitle">Visitor</h2>
+                <div class="ofc-dstatus"><span class="ofc-chip" id="officeAppointmentStatus">…</span><span class="ofc-ref" id="officeAppointmentCode"></span></div>
+            </div>
+            <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </header>
+        <div class="ofc-sheet-body" id="officeAppointmentBody"></div>
+        <p class="admin-message is-error ofc-sheet-error" id="officeAppointmentError" role="alert" hidden></p>
+        <footer class="ofc-sheet-foot" id="officeAppointmentActions" hidden>
+            <button class="ofc-btn is-decline" id="openDeclineAppointmentBtn" type="button">Decline</button>
+            <button class="ofc-btn" id="openRescheduleAppointmentBtn" type="button">Other time</button>
+            <button class="ofc-btn is-approve" id="approveOfficeAppointmentBtn" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Approve</button>
+            <button class="ofc-btn is-approve" id="completeOfficeStopBtn" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Mark meeting done</button>
+            <button class="ofc-btn is-primary" id="officeGoingBtn" type="button" hidden>Someone is going</button>
+        </footer>
+    </dialog>
+
+    <dialog class="ofc-sheet" id="officeDeclineDialog" aria-labelledby="officeDeclineTitle">
+        <form id="officeDeclineForm" class="ofc-sheet-form">
+            <header class="ofc-sheet-head">
+                <div><h2 id="officeDeclineTitle">Decline</h2><p class="ofc-note">The visitor sees your reason. If another time would work, use Other time instead.</p></div>
+                <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            </header>
+            <div class="ofc-sheet-body">
+                <div class="ofc-field"><span>Quick reasons</span>
+                    <div class="ofc-qchips is-red" id="officeDeclineReasons">
+                        <button type="button" data-reason="No staff available at that time.">No staff available at that time</button>
+                        <button type="button" data-reason="This concern is handled by another office.">Wrong office for this concern</button>
+                        <button type="button" data-reason="The office is fully booked that day.">Fully booked that day</button>
+                        <button type="button" data-reason="Please prepare the requirements first, then request again.">Bring the requirements first</button>
+                    </div>
+                </div>
+                <label class="ofc-field"><span>Reason</span><textarea id="officeDeclineReason" rows="3" maxlength="500" required placeholder="Tap a quick reason or write your own"></textarea></label>
+                <p class="admin-message is-error" id="officeDeclineError" role="alert" hidden></p>
+            </div>
+            <footer class="ofc-sheet-foot is-two">
+                <button class="ofc-btn is-quiet" type="button" data-close-sheet>Go back</button>
+                <button class="ofc-btn is-danger" id="confirmOfficeDeclineBtn" type="submit">Decline and tell visitor</button>
             </footer>
+        </form>
+    </dialog>
+
+    <dialog class="ofc-sheet is-drawer" id="officeRescheduleDialog" aria-labelledby="officeRescheduleTitle">
+        <form id="officeRescheduleForm" class="ofc-sheet-form">
+            <header class="ofc-sheet-head">
+                <div><h2 id="officeRescheduleTitle">Suggest other times</h2><p class="ofc-note" id="officeRescheduleFor">Pick up to 3. The visitor chooses one or declines them all.</p></div>
+                <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            </header>
+            <div class="ofc-sheet-body">
+                <div class="ofc-field"><span>Why the change?</span>
+                    <div class="ofc-qchips" id="officeRescheduleReasons">
+                        <button type="button" data-reason="Personnel unavailable at the requested time">Personnel unavailable then</button>
+                        <button type="button" data-reason="The requested time is fully booked">Fully booked then</button>
+                        <button type="button" data-reason="An office event is scheduled at that time">Office event at that time</button>
+                    </div>
+                    <input id="officeRescheduleReason" maxlength="255" required placeholder="Or write the reason" aria-label="Reason for changing the schedule">
+                </div>
+                <p class="ofc-banner is-blue" id="officeRescheduleVisitHint" hidden></p>
+                <p class="ofc-label">Free times in your hours</p>
+                <div class="ofc-free" id="officeFreeTimes"><p class="ofc-empty">Loading free times…</p></div>
+                <div class="ofc-other-days" id="officeOtherDays" hidden>
+                    <label class="ofc-field"><span>Another day and time</span><input class="office-proposed-slot" type="datetime-local"></label>
+                </div>
+                <button class="ofc-link" id="officePickAnotherDay" type="button">+ Pick another day</button>
+                <p class="ofc-picked" id="officePickedLine">None picked yet</p>
+                <label class="ofc-field"><span>Note to the visitor (optional)</span><textarea id="officeRescheduleMessage" rows="2" maxlength="1000" placeholder="Example: Bring your ID"></textarea></label>
+                <p class="admin-message is-error" id="officeRescheduleError" role="alert" hidden></p>
+            </div>
+            <footer class="ofc-sheet-foot is-two">
+                <button class="ofc-btn is-quiet" type="button" data-close-sheet>Cancel</button>
+                <button class="ofc-btn is-primary" id="confirmOfficeRescheduleBtn" type="submit" disabled>Send times</button>
+            </footer>
+        </form>
+    </dialog>
+
+    <dialog class="ofc-sheet is-drawer" id="officeNotesDialog" aria-labelledby="officeNotesTitle">
+        <header class="ofc-sheet-head">
+            <div><h2 id="officeNotesTitle">Notifications</h2><p class="ofc-note" id="officeNotificationSummary">No unread updates</p></div>
+            <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </header>
+        <div class="ofc-sheet-body">
+            <ul class="ofc-notes" id="officeNotificationList"></ul>
+            <p class="ofc-empty" id="officeNotificationEmpty">You have no notifications.</p>
         </div>
+        <footer class="ofc-sheet-foot" id="officeNotesFoot">
+            <button class="ofc-btn is-quiet is-full" id="markOfficeNotificationsReadBtn" type="button" hidden>Mark all as read</button>
+        </footer>
     </dialog>
 
-    <dialog class="admin-dialog office-small-dialog" id="officeDeclineDialog">
-        <form id="officeDeclineForm">
-            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Visitor notification</p><h2>Decline appointment</h2></div><button class="admin-dialog-close" id="closeOfficeDeclineBtn" type="button" aria-label="Close">×</button></header>
-            <p class="office-dialog-help">Give the visitor a useful explanation. If another time would work, use “Suggest another time” instead.</p>
-            <label class="office-field"><span>Reason for declining</span><textarea id="officeDeclineReason" rows="4" maxlength="500" required placeholder="Explain why this appointment cannot be accommodated"></textarea></label>
-            <p class="admin-message is-error" id="officeDeclineError" role="alert" hidden></p>
-            <div class="admin-dialog-actions"><button class="admin-cancel-button" id="cancelOfficeDeclineBtn" type="button">Go back</button><button class="office-danger-button" id="confirmOfficeDeclineBtn" type="submit">Decline and notify visitor</button></div>
-        </form>
+    <dialog class="ofc-sheet is-drawer" id="officeDayDialog" aria-labelledby="officeDayTitle">
+        <header class="ofc-sheet-head">
+            <div><h2 id="officeDayTitle">Day</h2><p class="ofc-note" id="officeDaySub">Every week, until you change it.</p></div>
+            <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </header>
+        <div class="ofc-sheet-body" id="officeDayBody"></div>
+        <footer class="ofc-sheet-foot">
+            <button class="ofc-btn is-primary is-full" id="officeDayDoneBtn" type="button">Done</button>
+        </footer>
     </dialog>
+    <datalist id="officeBreakNames">
+        <option value="Lunch break"></option>
+        <option value="Flag ceremony"></option>
+        <option value="Staff meeting"></option>
+        <option value="Snack break"></option>
+    </datalist>
 
-    <dialog class="admin-dialog office-reschedule-dialog" id="officeRescheduleDialog">
-        <form id="officeRescheduleForm">
-            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Reduce repeat requests</p><h2>Suggest another schedule</h2></div><button class="admin-dialog-close" id="closeOfficeRescheduleBtn" type="button" aria-label="Close">×</button></header>
-            <p class="office-dialog-help">Offer up to three times the office can actually accommodate. The visitor can choose one or decline all of them.</p>
-            <p class="office-dialog-help" id="officeRescheduleVisitHint" hidden></p>
-            <div class="office-form-grid">
-                <label class="office-field office-full-field"><span>Reason for changing the schedule</span><input id="officeRescheduleReason" maxlength="255" required placeholder="Example: Personnel unavailable at the requested time"></label>
-                <label class="office-field office-full-field"><span>Optional note to the visitor</span><textarea id="officeRescheduleMessage" rows="2" maxlength="1000" placeholder="Add instructions or helpful context"></textarea></label>
-                <label class="office-field"><span>First option</span><input class="office-proposed-slot" type="datetime-local" required></label>
-                <label class="office-field"><span>Second option (optional)</span><input class="office-proposed-slot" type="datetime-local"></label>
-                <label class="office-field"><span>Third option (optional)</span><input class="office-proposed-slot" type="datetime-local"></label>
+    <dialog class="ofc-sheet" id="officePauseDialog" aria-labelledby="officePauseTitle">
+        <form id="officePauseForm" class="ofc-sheet-form">
+            <header class="ofc-sheet-head">
+                <div><h2 id="officePauseTitle">Pause new visits</h2><p class="ofc-note">Visitors can't book or walk in until it ends. Booked visits stay.</p></div>
+                <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            </header>
+            <div class="ofc-sheet-body">
+                <fieldset class="ofc-lengths">
+                    <legend>For how long?</legend>
+                    <label><input type="radio" name="officePauseLength" value="15"><span>15 min</span></label>
+                    <label><input type="radio" name="officePauseLength" value="30" checked><span>30 min</span></label>
+                    <label><input type="radio" name="officePauseLength" value="60"><span>1 hour</span></label>
+                    <label><input type="radio" name="officePauseLength" value="120"><span>2 hours</span></label>
+                    <label><input type="radio" name="officePauseLength" value="end_of_day"><span>Rest of today</span></label>
+                </fieldset>
+                <label class="ofc-field"><span>Reason visitors see (optional)</span><input id="officePauseReason" maxlength="120" placeholder="Example: Staff meeting"></label>
+                <p class="admin-message is-error" id="officePauseError" role="alert" hidden></p>
             </div>
-            <p class="admin-message is-error" id="officeRescheduleError" role="alert" hidden></p>
-            <div class="admin-dialog-actions"><button class="admin-cancel-button" id="cancelOfficeRescheduleBtn" type="button">Cancel</button><button class="admin-primary-button" id="confirmOfficeRescheduleBtn" type="submit">Send schedule options</button></div>
+            <footer class="ofc-sheet-foot is-two">
+                <button class="ofc-btn is-quiet" type="button" data-close-sheet>Cancel</button>
+                <button class="ofc-btn is-primary" id="confirmOfficePauseBtn" type="submit">Pause visits</button>
+            </footer>
         </form>
     </dialog>
 
-    <dialog class="admin-dialog office-small-dialog" id="officeExceptionDialog">
-        <form id="officeExceptionForm">
-            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Temporary change</p><h2>Add schedule change</h2></div><button class="admin-dialog-close" id="closeOfficeExceptionBtn" type="button" aria-label="Close">×</button></header>
-            <div class="office-form-grid">
-                <label class="office-field office-full-field"><span>Change type</span><select id="officeExceptionType"><option value="closed">Office unavailable</option><option value="available">Extra visitor hours</option></select></label>
-                <label class="office-field"><span>Starts</span><input id="officeExceptionStart" type="datetime-local" required></label>
-                <label class="office-field"><span>Ends</span><input id="officeExceptionEnd" type="datetime-local" required></label>
-                <label class="office-field office-full-field"><span>Reason</span><input id="officeExceptionReason" maxlength="500" required placeholder="Holiday, meeting, special office hours…"></label>
-                <label class="office-field office-full-field" id="officeExceptionCapacityField" hidden><span>Capacity during extra hours (optional)</span><input id="officeExceptionCapacity" type="number" min="1" max="50" placeholder="Use normal capacity"></label>
+    <dialog class="ofc-sheet" id="officeExceptionDialog" aria-labelledby="officeExceptionTitle">
+        <form id="officeExceptionForm" class="ofc-sheet-form">
+            <header class="ofc-sheet-head">
+                <div><h2 id="officeExceptionTitle">Add a temporary change</h2><p class="ofc-note">For one-time changes. The weekly hours stay as they are.</p></div>
+                <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            </header>
+            <div class="ofc-sheet-body">
+                <fieldset class="ofc-lengths is-two">
+                    <legend>What changes?</legend>
+                    <label><input type="radio" name="officeExceptionType" value="closed" checked><span>Office closed</span></label>
+                    <label><input type="radio" name="officeExceptionType" value="available"><span>Extra hours</span></label>
+                </fieldset>
+                <label class="ofc-field"><span>Starts</span><input id="officeExceptionStart" type="datetime-local" required></label>
+                <label class="ofc-field"><span>Ends</span><input id="officeExceptionEnd" type="datetime-local" required></label>
+                <label class="ofc-field"><span>Reason visitors see</span><input id="officeExceptionReason" maxlength="500" required placeholder="Holiday, meeting, special hours…"></label>
+                <label class="ofc-field" id="officeExceptionCapacityField" hidden><span>Visitors at the same time (optional)</span><input id="officeExceptionCapacity" type="number" min="1" max="50" placeholder="Same as usual"></label>
+                <p class="admin-message is-error" id="officeExceptionError" role="alert" hidden></p>
             </div>
-            <p class="admin-message is-error" id="officeExceptionError" role="alert" hidden></p>
-            <div class="admin-dialog-actions"><button class="admin-cancel-button" id="cancelOfficeExceptionBtn" type="button">Cancel</button><button class="admin-primary-button" id="saveOfficeExceptionBtn" type="submit">Add schedule change</button></div>
+            <footer class="ofc-sheet-foot is-two">
+                <button class="ofc-btn is-quiet" type="button" data-close-sheet>Cancel</button>
+                <button class="ofc-btn is-primary" id="saveOfficeExceptionBtn" type="submit">Add change</button>
+            </footer>
         </form>
     </dialog>
 
-    <dialog class="admin-dialog office-small-dialog" id="officeConflictDialog" aria-labelledby="officeConflictTitle">
-        <form id="officeConflictForm">
-            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Before you save</p><h2 id="officeConflictTitle">Booked visits fall outside the new schedule</h2></div><button class="admin-dialog-close" id="closeOfficeConflictBtn" type="button" aria-label="Close">×</button></header>
-            <p class="office-dialog-help">These visits stay booked if you save. Open one to suggest another time, or go back and change the schedule.</p>
-            <ul class="office-conflict-list" id="officeConflictList"></ul>
-            <div class="admin-dialog-actions"><button class="admin-cancel-button" id="cancelOfficeConflictBtn" type="button">Go back</button><button class="admin-primary-button" id="confirmOfficeConflictBtn" type="button">Save anyway</button></div>
-        </form>
-    </dialog>
-
-    <dialog class="admin-dialog office-small-dialog" id="officePauseDialog" aria-labelledby="officePauseTitle">
-        <form id="officePauseForm">
-            <header class="admin-dialog-header"><div><p class="admin-eyebrow">Unplanned break</p><h2 id="officePauseTitle">Pause new visits</h2></div><button class="admin-dialog-close" id="closeOfficePauseBtn" type="button" aria-label="Close">×</button></header>
-            <p class="office-dialog-help">Until the pause ends, visitors can't book your office or create walk-in passes for it. Visits already booked stay booked.</p>
-            <fieldset class="office-pause-lengths">
-                <legend>Pause for</legend>
-                <label><input type="radio" name="officePauseLength" value="15"><span>15 min</span></label>
-                <label><input type="radio" name="officePauseLength" value="30" checked><span>30 min</span></label>
-                <label><input type="radio" name="officePauseLength" value="60"><span>1 hour</span></label>
-                <label><input type="radio" name="officePauseLength" value="120"><span>2 hours</span></label>
-                <label><input type="radio" name="officePauseLength" value="end_of_day"><span>Rest of today</span></label>
-            </fieldset>
-            <label class="office-field office-full-field"><span>Reason shown to visitors (optional)</span><input id="officePauseReason" maxlength="120" placeholder="Example: Staff stepped out for a meeting"></label>
-            <p class="admin-message is-error" id="officePauseError" role="alert" hidden></p>
-            <div class="admin-dialog-actions"><button class="admin-cancel-button" id="cancelOfficePauseBtn" type="button">Cancel</button><button class="admin-primary-button" id="confirmOfficePauseBtn" type="submit">Pause visits</button></div>
-        </form>
+    <dialog class="ofc-sheet" id="officeConflictDialog" aria-labelledby="officeConflictTitle">
+        <header class="ofc-sheet-head">
+            <div><h2 id="officeConflictTitle">Booked visits fall outside the new schedule</h2><p class="ofc-note">These visits stay booked if you save. Open one to suggest another time, or go back and change the schedule.</p></div>
+            <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </header>
+        <div class="ofc-sheet-body"><ul class="office-conflict-list" id="officeConflictList"></ul></div>
+        <footer class="ofc-sheet-foot is-two">
+            <button class="ofc-btn is-quiet" type="button" data-close-sheet>Go back</button>
+            <button class="ofc-btn is-primary" id="confirmOfficeConflictBtn" type="button">Save anyway</button>
+        </footer>
     </dialog>
 
     <dialog class="admin-dialog office-small-dialog office-profile-dialog" id="officeProfileDialog">
@@ -337,6 +472,6 @@
     <script src="dialogs.js?v=20261107-3"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
-    <script src="offices.js?v=20261116-1"></script>
+    <script src="offices.js?v=20261118-2"></script>
 </body>
 </html>

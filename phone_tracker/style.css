@@ -13303,3 +13303,2524 @@ html.has-expanded-map body {
         transition: none;
     }
 }
+
+/* ==========================================================================
+   Office Personnel pages on phones, tablets and laptops (2026-11-18)
+   One menu everywhere (Today, Requests, Visits, Hours, Menu): the blue side menu on laptops, a
+   strip of icons with small names on tablets, and a bar at the bottom on phones. Details and
+   forms open as sheets: from the bottom on phones, from the right (or the middle) on laptops.
+   The shared form rules (input, label, button) are reset here for the new parts.
+   ========================================================================== */
+
+.office-page {
+    --ofc-blue: #0755b5;
+    --ofc-blue-soft: #e8f0fb;
+    --ofc-blue-dark: #054391;
+    --ofc-gold: #ffd43b;
+    --ofc-ink: #142033;
+    --ofc-text: #2b3646;
+    --ofc-muted: #667085;
+    --ofc-line: #e1e6ee;
+    --ofc-bg: #f3f5f9;
+    --ofc-green: #0a8a4c;
+    --ofc-green-bg: #e7f6ee;
+    --ofc-green-line: #bfe5cf;
+    --ofc-amber: #a85600;
+    --ofc-amber-bg: #fff4e5;
+    --ofc-amber-line: #f5d6a6;
+    --ofc-gray: #5f6b7a;
+    --ofc-gray-bg: #eef1f5;
+    --ofc-red: #b42318;
+    --ofc-red-bg: #fdeceb;
+    --ofc-red-line: #f3c9c4;
+    background: var(--ofc-bg);
+}
+
+.office-page [hidden] {
+    display: none !important;
+}
+
+/* As light as the shared rules (one element), so each part's own rules below still win. */
+:where(.office-page) :where(.ofc-main, .ofc-tabbar, .ofc-savebar, .ofc-sheet) button,
+:where(.office-page) :where(.ofc-main, .ofc-tabbar, .ofc-savebar, .ofc-sheet) input,
+:where(.office-page) :where(.ofc-main, .ofc-tabbar, .ofc-savebar, .ofc-sheet) select,
+:where(.office-page) :where(.ofc-main, .ofc-tabbar, .ofc-savebar, .ofc-sheet) textarea {
+    margin: 0;
+}
+
+.office-page .ofc-main label,
+.office-page .ofc-sheet label {
+    margin: 0;
+    font-weight: inherit;
+}
+
+.ofc-main svg,
+.ofc-sheet svg,
+.ofc-tabbar svg,
+.ofc-savebar svg {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ---------- Top bar and menu ---------- */
+
+.ofc-brand-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    line-height: 1.2;
+}
+
+.ofc-brand-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ofc-brand-copy small {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.ofc-brand-copy small span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ofc-dot {
+    width: 8px;
+    height: 8px;
+    flex: none;
+    border-radius: 50%;
+    background: #16a34a;
+    box-shadow: 0 0 0 3px #d9f2e4;
+}
+
+body[data-office-state="is-paused"] .ofc-dot,
+body[data-office-state="is-break"] .ofc-dot {
+    background: #e08a00;
+    box-shadow: 0 0 0 3px #ffe7c2;
+}
+
+body[data-office-state="is-off"] .ofc-dot,
+body[data-office-state="is-stopped"] .ofc-dot {
+    background: #8a94a3;
+    box-shadow: 0 0 0 3px #e7eaee;
+}
+
+.office-sidebar .admin-nav-item svg,
+.office-sidebar .admin-nav-item:first-child svg {
+    fill: none;
+    stroke: currentColor;
+}
+
+.office-sidebar .ofc-nav-menu {
+    margin-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.ofc-badge {
+    display: inline-grid;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    place-items: center;
+    border-radius: 10px;
+    background: #d92d20;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    font-style: normal;
+    line-height: 1;
+}
+
+.office-sidebar .ofc-badge {
+    margin-left: auto;
+}
+
+.ofc-tabbar {
+    display: none;
+}
+
+/* ---------- Pages ---------- */
+
+.office-page .ofc-main {
+    padding: 24px clamp(20px, 3vw, 40px) 48px;
+}
+
+.office-page .ofc-page:not([hidden]) {
+    display: grid;
+    max-width: 1180px;
+    margin: 0 auto;
+    gap: 16px;
+}
+
+.office-page .ofc-page.is-narrow:not([hidden]) {
+    max-width: 680px;
+}
+
+.ofc-title {
+    margin: 2px 0 0;
+    color: var(--ofc-ink);
+    font-size: 26px;
+    line-height: 1.2;
+}
+
+.ofc-main h2,
+.ofc-sheet h2 {
+    margin: 0;
+    color: var(--ofc-ink);
+    font-size: 16px;
+    line-height: 1.3;
+}
+
+.ofc-note {
+    margin: 0;
+    color: var(--ofc-muted);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.ofc-empty {
+    margin: 0;
+    padding: 22px 16px;
+    border: 1px dashed #c9d2de;
+    border-radius: 16px;
+    background: #ffffff;
+    color: var(--ofc-muted);
+    font-size: 13px;
+    list-style: none;
+    text-align: center;
+}
+
+.ofc-card {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.ofc-sec {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 10px;
+}
+
+.ofc-sec-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px 10px;
+}
+
+.ofc-sec-head h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ofc-count {
+    display: inline-grid;
+    min-width: 24px;
+    height: 22px;
+    padding: 0 7px;
+    place-items: center;
+    border-radius: 11px;
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ofc-count.is-amber {
+    background: var(--ofc-amber-bg);
+    color: var(--ofc-amber);
+}
+
+.office-page .ofc-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--ofc-blue);
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.ofc-link svg {
+    width: 16px;
+    height: 16px;
+}
+
+.office-page .ofc-link:disabled {
+    background: none;
+    color: #98a2b3;
+}
+
+.office-page .ofc-btn {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 12px;
+    border: 1.5px solid var(--ofc-blue);
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--ofc-blue);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-decoration: none;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.office-page .ofc-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.office-page .ofc-btn.is-primary {
+    background: var(--ofc-blue);
+    color: #ffffff;
+}
+
+.office-page .ofc-btn.is-approve {
+    border-color: var(--ofc-green);
+    background: var(--ofc-green);
+    color: #ffffff;
+}
+
+.office-page .ofc-btn.is-decline {
+    border-color: var(--ofc-red-line);
+    color: var(--ofc-red);
+}
+
+.office-page .ofc-btn.is-danger {
+    border-color: var(--ofc-red);
+    background: var(--ofc-red);
+    color: #ffffff;
+}
+
+.office-page .ofc-btn.is-quiet {
+    border-color: var(--ofc-line);
+    color: var(--ofc-ink);
+}
+
+.office-page .ofc-btn.is-full {
+    width: 100%;
+}
+
+.office-page .ofc-btn.is-small {
+    min-height: 38px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 12.5px;
+}
+
+.office-page .ofc-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.ofc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: var(--ofc-gray-bg);
+    color: var(--ofc-gray);
+    font-size: 11.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.ofc-chip.is-green {
+    background: var(--ofc-green-bg);
+    color: var(--ofc-green);
+}
+
+.ofc-chip.is-amber {
+    background: var(--ofc-amber-bg);
+    color: var(--ofc-amber);
+}
+
+.ofc-chip.is-red {
+    background: var(--ofc-red-bg);
+    color: var(--ofc-red);
+}
+
+.ofc-chip.is-blue {
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+}
+
+.ofc-ref {
+    color: var(--ofc-muted);
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11.5px;
+}
+
+/* ---------- The office's status, with Pause ---------- */
+
+.ofc-head-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ofc-head-row > div:first-child {
+    min-width: 0;
+}
+
+.ofc-head-row .ofc-status {
+    flex: 1 1 100%;
+}
+
+.ofc-status {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 12px 12px 16px;
+    border: 1px solid var(--ofc-green-line);
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.ofc-status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--ofc-green);
+    box-shadow: 0 0 0 5px var(--ofc-green-bg);
+}
+
+.ofc-status-copy strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 14.5px;
+    line-height: 1.3;
+}
+
+.ofc-status-copy small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.ofc-status[data-tone="is-paused"],
+.ofc-status[data-tone="is-break"] {
+    border-color: var(--ofc-amber-line);
+    background: var(--ofc-amber-bg);
+}
+
+.ofc-status[data-tone="is-paused"] .ofc-status-dot,
+.ofc-status[data-tone="is-break"] .ofc-status-dot {
+    background: #e08a00;
+    box-shadow: 0 0 0 5px #ffe2b8;
+}
+
+.office-page .ofc-status[data-tone="is-paused"] .ofc-btn {
+    border-color: var(--ofc-amber);
+    background: var(--ofc-amber);
+    color: #ffffff;
+}
+
+.ofc-status[data-tone="is-off"],
+.ofc-status[data-tone="is-stopped"] {
+    border-color: var(--ofc-line);
+    background: #fafbfc;
+}
+
+.ofc-status[data-tone="is-off"] .ofc-status-dot,
+.ofc-status[data-tone="is-stopped"] .ofc-status-dot {
+    background: #8a94a3;
+    box-shadow: 0 0 0 5px var(--ofc-gray-bg);
+}
+
+.ofc-status.is-big {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 16px;
+}
+
+.ofc-status.is-big .ofc-status-copy strong {
+    font-size: 16px;
+}
+
+.office-page .ofc-status.is-big .ofc-btn {
+    grid-column: 1 / -1;
+    width: 100%;
+    min-height: 46px;
+}
+
+/* ---------- A visitor who can't find the office ---------- */
+
+.ofc-help-list:not([hidden]) {
+    display: grid;
+    max-width: 1180px;
+    margin: 0 auto 16px;
+    gap: 10px;
+}
+
+.ofc-help {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border: 1px solid var(--ofc-red-line);
+    border-left: 5px solid var(--ofc-red);
+    border-radius: 16px;
+    background: var(--ofc-red-bg);
+}
+
+.ofc-help-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 0;
+    color: #8f1d14;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.ofc-help p {
+    margin: 0;
+    color: #5b2620;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.ofc-help small {
+    color: #8a4b45;
+    font-size: 12px;
+}
+
+/* ---------- Today at a glance ---------- */
+
+.ofc-glance {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.office-page .ofc-glance button {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .ofc-glance button + button {
+    border-left: 1px solid var(--ofc-line);
+}
+
+.office-page .ofc-glance button:hover {
+    background: #f8fafc;
+}
+
+.ofc-glance strong {
+    color: var(--ofc-ink);
+    font-size: 26px;
+    line-height: 1.1;
+}
+
+.ofc-glance span {
+    color: var(--ofc-muted);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.ofc-glance .is-amber strong {
+    color: var(--ofc-amber);
+}
+
+.ofc-glance .is-green strong {
+    color: var(--ofc-green);
+}
+
+.ofc-glance .is-blue strong {
+    color: var(--ofc-blue);
+}
+
+.ofc-today-cols,
+.ofc-hours-cols {
+    display: grid;
+    align-items: start;
+    gap: 18px;
+}
+
+.ofc-hours-cols > div {
+    display: grid;
+    align-content: start;
+    gap: 16px;
+}
+
+/* ---------- Request cards ---------- */
+
+.ofc-rlist {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ofc-rcard {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.ofc-rcard.is-soon {
+    border-color: var(--ofc-amber-line);
+    box-shadow: inset 4px 0 0 #e08a00;
+}
+
+.office-page .ofc-rmain {
+    display: grid;
+    width: 100%;
+    gap: 3px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ofc-rtop {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.ofc-rtop strong {
+    color: var(--ofc-ink);
+    font-size: 15px;
+    line-height: 1.3;
+}
+
+.ofc-rtop svg {
+    width: 18px;
+    height: 18px;
+    color: #98a2b3;
+}
+
+.ofc-rwhy {
+    color: var(--ofc-text);
+    font-size: 13px;
+}
+
+.ofc-rwhen {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.ofc-rwhen svg {
+    width: 16px;
+    height: 16px;
+    color: var(--ofc-muted);
+}
+
+.ofc-rwhen .is-soon {
+    color: var(--ofc-amber);
+}
+
+.ofc-rmulti {
+    margin: 0;
+    color: var(--ofc-blue);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.ofc-rmeta {
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.ofc-rmeta.is-warn {
+    color: var(--ofc-amber);
+    font-weight: 600;
+}
+
+.ofc-ractions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1.25fr;
+    gap: 8px;
+}
+
+.office-page .ofc-ractions .ofc-btn {
+    min-height: 42px;
+    padding: 0 8px;
+    font-size: 13px;
+}
+
+.ofc-offered {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.office-page .ofc-more-btn {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px dashed #c9d2de;
+    border-radius: 14px;
+    background: #ffffff;
+    color: var(--ofc-blue);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+/* ---------- Today's visitors ---------- */
+
+.ofc-tgroups {
+    display: grid;
+    gap: 14px;
+}
+
+.ofc-tgroup {
+    display: grid;
+    gap: 8px;
+}
+
+.ofc-tg-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.ofc-tg-title i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.ofc-tg-title.is-green {
+    color: var(--ofc-green);
+}
+
+.ofc-tg-title.is-blue {
+    color: var(--ofc-blue);
+}
+
+.ofc-tlist {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ofc-titem {
+    display: grid;
+    grid-template-columns: 50px minmax(0, 1fr);
+    align-items: start;
+    gap: 2px 10px;
+    padding: 12px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.ofc-titem.is-here {
+    border-color: var(--ofc-green-line);
+    box-shadow: inset 4px 0 0 var(--ofc-green);
+}
+
+.ofc-titem.is-help {
+    border-color: var(--ofc-red-line);
+    box-shadow: inset 4px 0 0 var(--ofc-red);
+}
+
+.ofc-titem.is-done {
+    background: #fafbfc;
+}
+
+.ofc-titem.is-done .ofc-tbody strong,
+.ofc-titem.is-done .ofc-ttime b {
+    color: var(--ofc-muted);
+}
+
+.ofc-ttime {
+    display: flex;
+    flex-direction: column;
+    padding-top: 1px;
+    color: var(--ofc-ink);
+    line-height: 1.15;
+}
+
+.ofc-ttime b {
+    font-size: 15px;
+}
+
+.ofc-ttime small {
+    color: var(--ofc-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.office-page .ofc-tbody {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ofc-tbody strong {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    color: var(--ofc-ink);
+    font-size: 14.5px;
+    line-height: 1.3;
+}
+
+.ofc-tbody > span {
+    color: var(--ofc-text);
+    font-size: 12.5px;
+}
+
+.ofc-tbody > .ofc-tnote {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.ofc-tnote svg {
+    width: 15px;
+    height: 15px;
+}
+
+.ofc-tbody > .ofc-tnote.is-green {
+    color: var(--ofc-green);
+    font-weight: 600;
+}
+
+.ofc-tbody > .ofc-tnote.is-red {
+    color: var(--ofc-red);
+    font-weight: 600;
+}
+
+.office-page .ofc-titem > .ofc-btn {
+    grid-column: 2;
+    justify-self: start;
+    margin-top: 8px;
+}
+
+/* ---------- Search and tabs that stay on top while the list scrolls ---------- */
+
+.ofc-sticky {
+    position: sticky;
+    top: 80px;
+    z-index: 20;
+    display: grid;
+    gap: 10px;
+    margin: -8px calc(-1 * clamp(20px, 3vw, 40px)) 0;
+    padding: 8px clamp(20px, 3vw, 40px) 10px;
+    background: var(--ofc-bg);
+}
+
+.office-page .ofc-find {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 46px;
+    padding: 0 14px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 14px;
+    background: #ffffff;
+    cursor: text;
+}
+
+.ofc-find:focus-within {
+    border-color: var(--ofc-blue);
+    box-shadow: 0 0 0 4px var(--ofc-blue-soft);
+}
+
+.ofc-find svg {
+    color: var(--ofc-muted);
+}
+
+.office-page .ofc-find input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 14.5px;
+    font-weight: 400;
+}
+
+.ofc-seg,
+.ofc-fchips {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.ofc-seg::-webkit-scrollbar,
+.ofc-fchips::-webkit-scrollbar {
+    display: none;
+}
+
+.office-page .ofc-seg button {
+    display: inline-flex;
+    height: 38px;
+    flex: none;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--ofc-text);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ofc-seg button span {
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.office-page .ofc-seg button.is-active {
+    border-color: var(--ofc-blue);
+    background: var(--ofc-blue);
+    color: #ffffff;
+}
+
+.ofc-seg button.is-active span {
+    color: #dbe8fb;
+}
+
+.office-page .ofc-fchips button {
+    height: 32px;
+    flex: none;
+    padding: 0 12px;
+    border: 1px dashed #b8c3d1;
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--ofc-text);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.office-page .ofc-fchips button.is-active {
+    border-style: solid;
+    border-color: var(--ofc-ink);
+    background: var(--ofc-ink);
+    color: #ffffff;
+}
+
+/* ---------- Visits: cards on phones, a table on laptops ---------- */
+
+.ofc-vtable {
+    display: grid;
+    gap: 8px;
+}
+
+.office-page .ofc-vrow {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "who status" "why why" "when when";
+    gap: 3px 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 14px;
+    background: #ffffff;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .ofc-vrow.is-head {
+    display: none;
+}
+
+.ofc-v-who {
+    grid-area: who;
+    min-width: 0;
+}
+
+.ofc-v-why {
+    grid-area: why;
+}
+
+.ofc-v-when {
+    grid-area: when;
+}
+
+.ofc-v-status {
+    grid-area: status;
+}
+
+.ofc-v-go {
+    display: none;
+}
+
+.ofc-v-who strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 14.5px;
+}
+
+.ofc-v-who small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+}
+
+.ofc-v-why strong,
+.ofc-v-why small,
+.ofc-v-when strong,
+.ofc-v-when small {
+    display: inline;
+    color: var(--ofc-text);
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.ofc-v-why small::before,
+.ofc-v-when small::before {
+    content: " · ";
+}
+
+.ofc-v-when strong {
+    color: var(--ofc-ink);
+    font-weight: 600;
+}
+
+/* ---------- Hours ---------- */
+
+.ofc-week {
+    display: grid;
+}
+
+.office-page .ofc-dayrow {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-areas: "name text go" "name bar go";
+    align-items: center;
+    gap: 5px 12px;
+    padding: 11px 4px 11px 2px;
+    border: 0;
+    border-top: 1px solid var(--ofc-line);
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .ofc-dayrow:first-child {
+    border-top: 0;
+}
+
+.office-page .ofc-dayrow:hover {
+    background: #f8fafc;
+}
+
+.ofc-dname {
+    grid-area: name;
+    align-self: start;
+    padding-top: 1px;
+    color: var(--ofc-ink);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.ofc-dtext {
+    grid-area: text;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.ofc-dtext small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.ofc-dtext small.is-problem {
+    color: var(--ofc-red);
+    font-weight: 600;
+}
+
+.ofc-dayrow > svg {
+    grid-area: go;
+    color: #98a2b3;
+}
+
+.ofc-dayrow.is-closed .ofc-dtext,
+.ofc-dayrow.is-closed .ofc-dname {
+    color: var(--ofc-muted);
+}
+
+.ofc-bar,
+.ofc-bigbar {
+    position: relative;
+    overflow: hidden;
+    background: var(--ofc-gray-bg);
+}
+
+.ofc-bar {
+    grid-area: bar;
+    height: 8px;
+    border-radius: 4px;
+}
+
+.ofc-bigbar {
+    height: 16px;
+    border-radius: 8px;
+}
+
+.ofc-bar i,
+.ofc-bigbar i {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+}
+
+.ofc-bar .is-open,
+.ofc-bigbar .is-open,
+.ofc-legend i.is-open {
+    background: #22a565;
+}
+
+.ofc-bar .is-break,
+.ofc-bigbar .is-break,
+.ofc-legend i.is-break {
+    background: repeating-linear-gradient(45deg, #f2b705 0 4px, #ffd85e 4px 8px);
+}
+
+.ofc-bigbar .is-tick {
+    width: 1px;
+    background: rgba(255, 255, 255, 0.75);
+}
+
+.ofc-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+}
+
+.ofc-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ofc-legend i {
+    width: 18px;
+    height: 8px;
+    border-radius: 4px;
+}
+
+.ofc-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ofc-setting + .ofc-setting {
+    padding-top: 12px;
+    border-top: 1px solid var(--ofc-line);
+}
+
+.ofc-setting strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 14px;
+}
+
+.ofc-setting small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.office-page .ofc-select {
+    width: auto;
+    height: 42px;
+    padding: 0 10px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 12px;
+    background: #ffffff;
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.ofc-stepper {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    overflow: hidden;
+    border: 1.5px solid #c9d2de;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.office-page .ofc-stepper button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: #ffffff;
+    color: var(--ofc-blue);
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.office-page .ofc-stepper input {
+    width: 38px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ofc-ink);
+    font-weight: 700;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+.ofc-stepper input::-webkit-outer-spin-button,
+.ofc-stepper input::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+
+.ofc-changes {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ofc-change {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px 10px 12px;
+    border-radius: 12px;
+    background: var(--ofc-bg);
+}
+
+.ofc-mk {
+    width: 6px;
+    height: 38px;
+    border-radius: 3px;
+    background: var(--ofc-red);
+}
+
+.ofc-mk.is-extra {
+    background: var(--ofc-green);
+}
+
+.ofc-change strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+}
+
+.ofc-change small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.ofc-past-changes summary {
+    padding: 4px 0;
+    color: var(--ofc-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ofc-past-changes .ofc-changes {
+    margin-top: 8px;
+}
+
+.ofc-past-changes .ofc-change {
+    opacity: 0.75;
+}
+
+.office-page .ofc-icon-btn {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    place-items: center;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--ofc-red);
+    cursor: pointer;
+}
+
+.ofc-closure:not([hidden]) {
+    display: grid;
+    gap: 10px;
+}
+
+.office-page .ofc-savebar {
+    position: fixed;
+    right: 24px;
+    bottom: 20px;
+    left: calc(245px + 24px);
+    z-index: 60;
+    display: flex;
+    max-width: 760px;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 8px 8px 16px;
+    border-radius: 16px;
+    background: var(--ofc-ink);
+    color: #ffffff;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.office-page .ofc-savebar[hidden] {
+    display: none;
+}
+
+.ofc-savebar strong {
+    flex: 1;
+    font-size: 13.5px;
+}
+
+.office-page .ofc-savebar .ofc-btn {
+    min-height: 40px;
+}
+
+.office-page .ofc-savebar .ofc-btn.is-ghost {
+    border-color: transparent;
+    background: transparent;
+    color: #dbe3ee;
+}
+
+.office-page .ofc-savebar .ofc-btn.is-save {
+    border-color: var(--ofc-gold);
+    background: var(--ofc-gold);
+    color: var(--ofc-ink);
+}
+
+.office-page .ofc-savebar .ofc-btn:disabled {
+    opacity: 0.6;
+}
+
+body.ofc-has-savebar .ofc-main {
+    padding-bottom: 110px;
+}
+
+/* ---------- Menu ---------- */
+
+.ofc-account {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 14px;
+}
+
+.ofc-account h2 {
+    font-size: 17px;
+}
+
+.ofc-avatar {
+    display: grid;
+    width: 54px;
+    height: 54px;
+    overflow: hidden;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ofc-blue);
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.ofc-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.ofc-menu-list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+    list-style: none;
+}
+
+.ofc-menu-list li + li {
+    border-top: 1px solid var(--ofc-line);
+}
+
+.office-page .ofc-menu-item {
+    display: grid;
+    width: 100%;
+    min-height: 64px;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .ofc-menu-item:hover {
+    background: #f8fafc;
+}
+
+.ofc-menu-ico {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+}
+
+.ofc-menu-item strong {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--ofc-ink);
+    font-size: 14px;
+}
+
+.ofc-menu-item small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.ofc-chev {
+    color: #98a2b3;
+}
+
+/* ---------- Sheets ---------- */
+
+.office-page dialog.ofc-sheet {
+    width: min(520px, calc(100vw - 32px));
+    max-width: none;
+    max-height: min(88vh, 860px);
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 18px;
+    background: #ffffff;
+    color: var(--ofc-text);
+    box-shadow: 0 24px 70px rgba(0, 25, 60, 0.28);
+}
+
+.office-page dialog.ofc-sheet[open] {
+    display: flex;
+    flex-direction: column;
+    animation: ofc-sheet-in 0.2s ease-out;
+}
+
+.office-page dialog.ofc-sheet::backdrop {
+    background: rgba(11, 30, 53, 0.5);
+}
+
+@keyframes ofc-sheet-in {
+    from {
+        opacity: 0.4;
+        transform: translateY(24px);
+    }
+}
+
+@keyframes ofc-drawer-in {
+    from {
+        opacity: 0.6;
+        transform: translateX(40px);
+    }
+}
+
+.ofc-sheet-form {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+}
+
+.ofc-sheet-head {
+    display: flex;
+    flex: none;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px 14px 12px 18px;
+    border-bottom: 1px solid var(--ofc-line);
+}
+
+.ofc-sheet-head h2 {
+    font-size: 18px;
+    line-height: 1.25;
+}
+
+.ofc-sheet-head .ofc-note {
+    margin-top: 3px;
+}
+
+.office-page .ofc-x {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    border-radius: 12px;
+    background: var(--ofc-bg);
+    color: var(--ofc-ink);
+    cursor: pointer;
+}
+
+.ofc-sheet-body {
+    display: grid;
+    min-height: 0;
+    flex: 1;
+    align-content: start;
+    gap: 14px;
+    overflow-y: auto;
+    padding: 16px 18px 20px;
+    overscroll-behavior: contain;
+}
+
+.ofc-sheet-foot {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    padding: 12px 18px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--ofc-line);
+    background: #ffffff;
+}
+
+.office-page .ofc-sheet-foot .ofc-btn {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 0 8px;
+}
+
+.office-page .ofc-sheet-foot .ofc-btn.is-approve,
+.office-page .ofc-sheet-foot.is-two .ofc-btn:last-child {
+    flex-grow: 1.4;
+}
+
+.ofc-sheet-error {
+    margin: 0 18px 10px;
+}
+
+.ofc-dstatus {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-top: 6px;
+}
+
+.ofc-banner {
+    display: flex;
+    gap: 10px;
+    margin: 0;
+    padding: 11px 12px;
+    border-radius: 12px;
+    background: var(--ofc-amber-bg);
+    color: #6f3a00;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.ofc-banner svg {
+    width: 18px;
+    height: 18px;
+    margin-top: 1px;
+}
+
+.ofc-banner.is-green {
+    background: var(--ofc-green-bg);
+    color: #0b5e36;
+}
+
+.ofc-banner.is-blue {
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue-dark);
+}
+
+.ofc-banner.is-red {
+    background: var(--ofc-red-bg);
+    color: #7a1a12;
+}
+
+.ofc-banner.is-gray {
+    background: var(--ofc-gray-bg);
+    color: var(--ofc-gray);
+}
+
+.ofc-when {
+    display: grid;
+    gap: 2px;
+    padding: 14px;
+    border-radius: 14px;
+    background: var(--ofc-blue-soft);
+}
+
+.ofc-when small {
+    color: var(--ofc-blue);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.ofc-when strong {
+    color: var(--ofc-ink);
+    font-size: 19px;
+    line-height: 1.25;
+}
+
+.ofc-when span {
+    color: var(--ofc-text);
+    font-size: 13px;
+}
+
+.ofc-label {
+    margin: 0 0 -6px;
+    color: var(--ofc-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.ofc-facts {
+    display: grid;
+    margin: 0;
+}
+
+.ofc-facts div {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    gap: 10px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--ofc-line);
+}
+
+.ofc-facts div:last-child {
+    border-bottom: 0;
+}
+
+.ofc-facts dt {
+    color: var(--ofc-muted);
+    font-size: 12.5px;
+}
+
+.ofc-facts dd {
+    margin: 0;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+    font-weight: 500;
+    word-break: break-word;
+}
+
+.ofc-quote {
+    margin: 0;
+    padding: 10px 12px;
+    border-left: 3px solid #c9d2de;
+    border-radius: 0 10px 10px 0;
+    background: #f8fafc;
+    color: var(--ofc-text);
+    font-size: 13px;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.office-page .ofc-mail {
+    justify-self: start;
+}
+
+.ofc-activity summary {
+    padding: 4px 0;
+    color: var(--ofc-blue);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.ofc-tl {
+    display: grid;
+    gap: 10px;
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ofc-tl li {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr);
+    gap: 10px;
+    font-size: 12.5px;
+}
+
+.ofc-tl li i {
+    width: 10px;
+    height: 10px;
+    margin-top: 5px;
+    border-radius: 50%;
+    background: var(--ofc-blue);
+}
+
+.ofc-tl strong {
+    display: block;
+    color: var(--ofc-ink);
+}
+
+.ofc-tl em {
+    display: block;
+    color: var(--ofc-text);
+    font-style: normal;
+}
+
+.ofc-tl small {
+    color: var(--ofc-muted);
+}
+
+.office-page .ofc-field {
+    display: grid;
+    gap: 6px;
+}
+
+.ofc-field > span {
+    color: var(--ofc-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.office-page .ofc-field textarea,
+.office-page .ofc-field input,
+.office-page .ofc-field select,
+.office-page #officeRescheduleReason {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 12px;
+    background: #ffffff;
+    font-size: 14px;
+}
+
+.ofc-field textarea {
+    resize: vertical;
+}
+
+.ofc-qchips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.office-page .ofc-qchips button {
+    padding: 8px 12px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--ofc-text);
+    font-size: 12.5px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .ofc-qchips button.is-on {
+    border-color: var(--ofc-blue);
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+}
+
+.office-page .ofc-qchips.is-red button.is-on {
+    border-color: var(--ofc-red);
+    background: var(--ofc-red-bg);
+    color: var(--ofc-red);
+}
+
+.ofc-free {
+    display: grid;
+    gap: 12px;
+}
+
+.ofc-slots-day {
+    display: grid;
+    gap: 8px;
+}
+
+.ofc-slots-day > strong {
+    color: var(--ofc-ink);
+    font-size: 13px;
+}
+
+.ofc-slots {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.office-page .ofc-slot {
+    min-width: 0;
+    height: 40px;
+    padding: 0 4px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--ofc-ink);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.office-page .ofc-slot.is-on {
+    border-color: var(--ofc-blue);
+    background: var(--ofc-blue);
+    color: #ffffff;
+}
+
+.office-page .ofc-slot:disabled {
+    background: #ffffff;
+    opacity: 0.35;
+    cursor: default;
+}
+
+.ofc-picked {
+    margin: 0;
+    color: var(--ofc-blue);
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.ofc-other-days:not([hidden]) {
+    display: grid;
+    gap: 8px;
+}
+
+.ofc-lengths {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.ofc-lengths.is-two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.ofc-lengths legend {
+    margin-bottom: 8px;
+    padding: 0;
+    color: var(--ofc-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.office-page .ofc-lengths label {
+    position: relative;
+    display: block;
+}
+
+.office-page .ofc-lengths input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.ofc-lengths span {
+    display: grid;
+    min-height: 46px;
+    padding: 4px;
+    place-items: center;
+    border: 1.5px solid #c9d2de;
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+}
+
+.ofc-lengths input:checked + span {
+    border-color: var(--ofc-blue);
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+    box-shadow: inset 0 0 0 1px var(--ofc-blue);
+}
+
+.ofc-lengths input:focus-visible + span {
+    outline: 3px solid #9ec2f5;
+    outline-offset: 2px;
+}
+
+.ofc-times {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+}
+
+.office-page .ofc-times input {
+    width: 100%;
+    height: 44px;
+    padding: 0 10px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 12px;
+    background: #ffffff;
+    font-size: 14px;
+}
+
+.ofc-times span {
+    color: var(--ofc-muted);
+    font-size: 12.5px;
+}
+
+.ofc-brks {
+    display: grid;
+    gap: 8px;
+}
+
+.ofc-brk {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid var(--ofc-amber-line);
+    border-radius: 12px;
+    background: #fffaf2;
+}
+
+.office-page .ofc-brk-name {
+    width: 100%;
+    height: 40px;
+    padding: 0 10px;
+    border: 1.5px solid #e6cfa5;
+    border-radius: 10px;
+    background: #ffffff;
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+.ofc-brk .ofc-times {
+    grid-column: 1 / -1;
+}
+
+.office-page .ofc-brk .ofc-icon-btn {
+    border-color: var(--ofc-red-line);
+}
+
+.ofc-scale {
+    position: relative;
+    height: 14px;
+    margin-top: 4px;
+    color: var(--ofc-muted);
+    font-size: 10.5px;
+}
+
+.ofc-scale span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+
+.ofc-scale span:first-child {
+    transform: none;
+}
+
+.ofc-scale span:last-child {
+    transform: translateX(-100%);
+}
+
+.ofc-pslots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 2px;
+}
+
+.ofc-pslots span {
+    padding: 5px 8px;
+    border-radius: 8px;
+    background: var(--ofc-green-bg);
+    color: var(--ofc-green);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+.ofc-pslots span.is-break {
+    background: var(--ofc-amber-bg);
+    color: var(--ofc-amber);
+}
+
+.ofc-day-problem {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--ofc-red-bg);
+    color: var(--ofc-red);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.ofc-notes {
+    display: grid;
+    margin: -6px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.office-page .ofc-note-item {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 10px minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px 2px;
+    border: 0;
+    border-bottom: 1px solid var(--ofc-line);
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.ofc-note-item > i {
+    width: 8px;
+    height: 8px;
+    margin-top: 6px;
+    border-radius: 50%;
+}
+
+.ofc-note-item.is-unread > i {
+    background: var(--ofc-blue);
+}
+
+.ofc-note-item.is-help > i {
+    background: var(--ofc-red);
+}
+
+.ofc-note-item strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+}
+
+.ofc-note-item.is-help strong {
+    color: var(--ofc-red);
+}
+
+.ofc-note-item span span {
+    display: block;
+    color: var(--ofc-text);
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
+.ofc-note-item time {
+    display: block;
+    margin-top: 2px;
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+}
+
+.office-page .office-conflict-list {
+    margin: 0;
+}
+
+/* The toast can show above an open sheet (it is a popover there). */
+.office-page .office-toast[popover] {
+    inset: auto 24px 24px auto;
+    margin: 0;
+    border: 0;
+    overflow: visible;
+}
+
+/* ---------- Laptops ---------- */
+
+@media (min-width: 1025px) {
+    .ofc-today-cols {
+        grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+        gap: 22px;
+    }
+
+    .ofc-head-row .ofc-status {
+        flex: 0 1 470px;
+    }
+
+    .ofc-hours-cols {
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .ofc-rlist.is-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+
+    .ofc-help {
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+    }
+
+    /* Visits: one table with a header row */
+    .ofc-vtable {
+        gap: 0;
+        overflow: hidden;
+        border: 1px solid var(--ofc-line);
+        border-radius: 16px;
+        background: #ffffff;
+    }
+
+    .office-page .ofc-vrow {
+        grid-template-columns: 1.25fr 1.5fr 1.1fr 1.05fr 20px;
+        grid-template-areas: "who why when status go";
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border: 0;
+        border-top: 1px solid var(--ofc-line);
+        border-radius: 0;
+    }
+
+    .office-page .ofc-vrow:hover {
+        background: #f8fafc;
+    }
+
+    .office-page .ofc-vrow.is-head {
+        display: grid;
+        border-top: 0;
+        background: #f8fafc;
+        color: var(--ofc-muted);
+        font-size: 11.5px;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        cursor: default;
+    }
+
+    .ofc-v-go {
+        display: block;
+        color: #98a2b3;
+    }
+
+    .ofc-v-why strong,
+    .ofc-v-when strong {
+        display: block;
+        color: var(--ofc-ink);
+        font-size: 13.5px;
+        font-weight: 600;
+    }
+
+    .ofc-v-why small,
+    .ofc-v-when small {
+        display: block;
+        color: var(--ofc-muted);
+        font-size: 12px;
+    }
+
+    .ofc-v-why small::before,
+    .ofc-v-when small::before {
+        content: none;
+    }
+}
+
+@media (min-width: 721px) {
+    .office-page dialog.ofc-sheet.is-drawer {
+        position: fixed;
+        inset: 0 0 0 auto;
+        width: min(460px, 100vw);
+        height: 100vh;
+        height: 100dvh;
+        max-height: none;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: -12px 0 34px rgba(17, 42, 71, 0.2);
+    }
+
+    .office-page dialog.ofc-sheet.is-drawer[open] {
+        animation-name: ofc-drawer-in;
+    }
+
+    .office-page .ofc-sheet.is-drawer .ofc-sheet-head {
+        padding-top: 18px;
+    }
+}
+
+@media (max-width: 1100px) {
+    .office-page .ofc-savebar {
+        left: calc(200px + 24px);
+    }
+}
+
+/* ---------- Tablets: the menu is a strip of icons with small names ---------- */
+
+@media (min-width: 721px) and (max-width: 940px) {
+    .office-layout {
+        grid-template-columns: 84px minmax(0, 1fr);
+    }
+
+    .office-sidebar .admin-nav-item {
+        min-height: 64px;
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        padding: 10px 4px;
+        font-size: 10.5px;
+        text-align: center;
+    }
+
+    .office-sidebar .admin-nav-item > span {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip: auto;
+    }
+
+    .office-sidebar .ofc-badge {
+        position: absolute;
+        top: 6px;
+        right: 12px;
+        margin: 0;
+    }
+
+    .office-page .ofc-savebar {
+        left: calc(84px + 20px);
+        right: 20px;
+    }
+
+    .ofc-rlist.is-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+}
+
+@media (max-width: 940px) {
+    .ofc-help {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 720px) {
+    /* The menu at the bottom */
+    .ofc-tabbar {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1300;
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        height: calc(64px + env(safe-area-inset-bottom));
+        padding-bottom: env(safe-area-inset-bottom);
+        border-top: 1px solid var(--ofc-line);
+        background: #ffffff;
+        box-shadow: 0 -6px 18px rgba(17, 42, 71, 0.08);
+    }
+
+    .office-page .ofc-tab {
+        position: relative;
+        display: flex;
+        height: 64px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 3px;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: none;
+        color: var(--ofc-muted);
+        font-size: 10.5px;
+        font-weight: 600;
+        line-height: 1.1;
+        cursor: pointer;
+    }
+
+    .ofc-tab svg {
+        width: 23px;
+        height: 23px;
+    }
+
+    .office-page .ofc-tab.is-active {
+        color: var(--ofc-blue);
+    }
+
+    .ofc-tab.is-active::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        right: 26%;
+        left: 26%;
+        height: 3px;
+        border-radius: 0 0 3px 3px;
+        background: var(--ofc-blue);
+    }
+
+    .ofc-tab .ofc-badge {
+        position: absolute;
+        top: 6px;
+        left: calc(50% + 5px);
+        min-width: 18px;
+        height: 18px;
+        font-size: 10.5px;
+    }
+
+    /* No side menu; room for the bottom bar under every page */
+    .office-page .office-sidebar {
+        display: none;
+    }
+
+    .office-page .office-layout {
+        display: block;
+        min-height: 0;
+    }
+
+    .office-page .ofc-main {
+        padding: 16px 16px calc(92px + env(safe-area-inset-bottom));
+    }
+
+    body.ofc-has-savebar .ofc-main {
+        padding-bottom: calc(160px + env(safe-area-inset-bottom));
+    }
+
+    /* A shorter top bar */
+    .office-page .admin-topbar {
+        min-height: 58px;
+        padding: 6px 10px 6px 12px;
+    }
+
+    .office-page .admin-brand {
+        min-width: 0;
+        font-size: 14px;
+    }
+
+    .office-page .admin-brand-mark {
+        width: 42px;
+        height: 42px;
+        flex-basis: 42px;
+    }
+
+    .office-page .admin-brand-mark img {
+        height: 40px;
+    }
+
+    .ofc-brand-long {
+        display: none;
+    }
+
+    .ofc-brand-copy small {
+        font-size: 11.5px;
+    }
+
+    .ofc-title {
+        font-size: 22px;
+    }
+
+    .ofc-sticky {
+        top: 58px;
+        margin: -6px -16px 0;
+        padding: 6px 16px 10px;
+    }
+
+    .ofc-help-list:not([hidden]) {
+        margin-bottom: 14px;
+    }
+
+    .office-page .ofc-glance button {
+        align-items: center;
+        padding: 10px 2px;
+        text-align: center;
+    }
+
+    .ofc-glance strong {
+        font-size: 22px;
+    }
+
+    .ofc-glance span {
+        font-size: 11px;
+    }
+
+    .office-page .ofc-savebar {
+        right: 12px;
+        bottom: calc(74px + env(safe-area-inset-bottom));
+        left: 12px;
+    }
+
+    /* Sheets come up from the bottom */
+    .office-page dialog.ofc-sheet {
+        position: fixed;
+        inset: auto 0 0 0;
+        width: 100%;
+        max-width: 100%;
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        margin: 0;
+        border-radius: 22px 22px 0 0;
+        box-shadow: 0 -12px 34px rgba(17, 42, 71, 0.25);
+    }
+
+    .office-page dialog.ofc-sheet::before {
+        content: "";
+        flex: none;
+        align-self: center;
+        width: 44px;
+        height: 5px;
+        margin-top: 8px;
+        border-radius: 3px;
+        background: #c4ccd6;
+    }
+
+    .ofc-sheet-head {
+        padding: 8px 12px 12px 16px;
+    }
+
+    .ofc-sheet-body {
+        padding: 14px 16px 18px;
+    }
+
+    .ofc-sheet-foot {
+        padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    }
+
+    .office-page .office-toast,
+    .office-page .office-toast[popover] {
+        inset: auto 16px calc(80px + env(safe-area-inset-bottom)) 16px;
+        width: auto;
+        max-width: none;
+        text-align: center;
+    }
+
+    body.ofc-has-savebar .office-toast,
+    body.ofc-has-savebar .office-toast[popover] {
+        bottom: calc(140px + env(safe-area-inset-bottom));
+    }
+}
+
+@media (max-width: 380px) {
+    .ofc-glance span {
+        font-size: 10px;
+    }
+
+    .office-page .ofc-ractions .ofc-btn {
+        font-size: 12px;
+    }
+
+    .ofc-slots {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .office-page dialog.ofc-sheet[open] {
+        animation: none;
+    }
+}

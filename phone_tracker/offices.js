@@ -1,3 +1,16 @@
+/*
+ * Office Personnel dashboard (OFFICE_MOBILE.md). Five pages share one menu: a bar at the bottom on
+ * phones, a strip of icons on tablets and the blue side menu on laptops.
+ *   Today     the office's status with Pause, visitors who can't find the office, the requests
+ *             waiting for an answer and today's visitors in groups.
+ *   Requests  needs your answer (soonest visit first) and waiting for the visitor.
+ *   Visits    every record: Today, Upcoming, Past, All, with search and a status filter.
+ *   Hours     the weekly hours one day at a time, each booking's length and capacity,
+ *             temporary changes and "Accepting visitors". A Save bar appears after a change.
+ *   Menu      the account, profile, notifications, refresh and sign out.
+ * Details and forms open as sheets (from the bottom on phones, from the right on laptops), and
+ * the phone's Back button closes an open sheet before it leaves the page.
+ */
 (function () {
     "use strict";
 
@@ -6,6 +19,13 @@
     }
 
     const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+    const VIEWS = ["today", "requests", "visits", "hours", "menu"];
+    // Addresses from the old page (bookmarks, the visitor emails' links) still open the right place.
+    const OLD_VIEWS = { dashboard: "today", history: "visits", availability: "hours" };
+    const VISITS_PAGE = 30;
+    const CLOSED_STATUSES = ["completed", "rejected", "cancelled", "unanswered", "window_closed"];
+    const phoneQuery = window.matchMedia("(max-width: 720px)");
+
     const state = {
         summary: {},
         appointments: [],
@@ -15,24 +35,44 @@
         profile: null,
         profileImageVersion: 0,
         profilePreviewUrl: "",
-        selectedAppointmentId: 0,
-        selectedVisit: null,
-        recentQuery: "",
-        recentStatus: "",
-        recentPage: 1,
-        recentPageSize: 10,
+        loaded: false,
+        updatedAt: null,
+        view: "",
+        requestTab: "answer",
         requestQuery: "",
+        visitsTab: "today",
+        visitsStatus: "",
+        visitsQuery: "",
+        visitsShown: VISITS_PAGE,
+        selectedAppointmentId: 0,
+        selectedAppointment: null,
+        selectedVisit: null,
+        picked: [],
         availabilityLoaded: false,
         // The weekly hours being edited: {day, enabled, start, end, breaks: [{key, start, end, label}]}.
         week: [],
         weekDirty: false,
         breakSeq: 0,
-        // The day "What visitors can book" shows, 1 = Monday; today to start with.
-        previewDay: ((new Date().getDay() + 6) % 7) + 1,
+        dayIndex: -1,
+        dayDraft: null,
         status: null,
-        statusTimer: null,
         toastTimer: null,
     };
+
+    const ICON = {
+        clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+        check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+        chev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
+        alert: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 20h20zM12 10v4M12 17v.5"/></svg>',
+        info: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>',
+        pin: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22s7-4.5 7-12a7 7 0 1 0-14 0c0 7.5 7 12 7 12Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+        x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>',
+        mail: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>',
+        trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
+        plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+    };
+
+    // ---------- Small helpers ----------
 
     function byId(id) {
         return document.getElementById(id);
@@ -45,6 +85,18 @@
         }
     }
 
+    function setAll(selector, value) {
+        document.querySelectorAll(selector).forEach(function (element) {
+            element.textContent = value == null ? "" : String(value);
+        });
+    }
+
+    function esc(value) {
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function (character) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[character];
+        });
+    }
+
     function showError(id, message) {
         const element = byId(id);
         if (!element) {
@@ -54,64 +106,38 @@
         element.hidden = !message;
     }
 
-    function profileImageSource(url, bustCache) {
-        if (!url) {
-            return "assets/icons/profile_icon.svg";
+    /**
+     * A short message at the bottom. Shown as a popover where the browser has them, so it also
+     * shows above an open sheet (sheets sit in the browser's top layer).
+     */
+    function toast(message, stateName) {
+        const element = byId("officeToast");
+        const popover = typeof element.showPopover === "function";
+        element.textContent = message;
+        element.dataset.state = stateName || "success";
+        element.hidden = false;
+        if (popover) {
+            element.setAttribute("popover", "manual");
+            try {
+                element.hidePopover();
+            } catch (error) {
+                // It wasn't showing.
+            }
+            element.showPopover();
         }
-        if (!bustCache) {
-            return url;
+        if (state.toastTimer) {
+            window.clearTimeout(state.toastTimer);
         }
-        return url + (url.indexOf("?") === -1 ? "?" : "&") + "v=" + String(bustCache);
-    }
-
-    function setProfileImage(id, url, bustCache) {
-        const image = byId(id);
-        if (!image) {
-            return;
-        }
-        const fallback = "assets/icons/profile_icon.svg";
-        image.onerror = function () {
-            image.onerror = null;
-            image.src = fallback;
-        };
-        image.src = profileImageSource(url, bustCache);
-    }
-
-    function renderProfile() {
-        const profile = state.profile || {};
-        const displayName = profile.display_name || PhoneTrackerAuth.getDisplayName() || PhoneTrackerAuth.getUsername() || "Office Personnel";
-        const username = profile.username || PhoneTrackerAuth.getUsername() || "office";
-        setText("officeProfileName", displayName);
-        setText("officeProfileUsername", username);
-        setProfileImage("officeProfileAvatar", profile.profile_image_url || "", state.profileImageVersion);
-    }
-
-    function clearProfilePreviewUrl() {
-        if (state.profilePreviewUrl) {
-            URL.revokeObjectURL(state.profilePreviewUrl);
-            state.profilePreviewUrl = "";
-        }
-    }
-
-    function openProfileEditor() {
-        clearProfilePreviewUrl();
-        const profile = state.profile || {};
-        byId("officeProfileDisplayName").value = profile.display_name || PhoneTrackerAuth.getDisplayName() || "";
-        byId("officeProfilePosition").value = profile.position || "";
-        byId("officeProfileUsernameReadonly").value = profile.username || PhoneTrackerAuth.getUsername() || "";
-        byId("officeProfileImage").value = "";
-        byId("officeRemoveProfileImage").checked = false;
-        byId("officeRemoveProfileRow").hidden = !profile.profile_image_url;
-        setProfileImage("officeProfilePreview", profile.profile_image_url || "", state.profileImageVersion);
-        showError("officeProfileError", "");
-        byId("officeProfileMenu").hidden = true;
-        byId("officeProfileBtn").setAttribute("aria-expanded", "false");
-        byId("officeProfileDialog").showModal();
-    }
-
-    function closeProfileEditor() {
-        clearProfilePreviewUrl();
-        byId("officeProfileDialog").close();
+        state.toastTimer = window.setTimeout(function () {
+            if (popover) {
+                try {
+                    element.hidePopover();
+                } catch (error) {
+                    // Already hidden.
+                }
+            }
+            element.hidden = true;
+        }, 4200);
     }
 
     async function fetchJson(url, options) {
@@ -140,328 +166,459 @@
         });
     }
 
-    function toast(message, stateName) {
-        const element = byId("officeToast");
-        element.textContent = message;
-        element.dataset.state = stateName || "success";
-        element.hidden = false;
-        if (state.toastTimer) {
-            window.clearTimeout(state.toastTimer);
-        }
-        state.toastTimer = window.setTimeout(function () {
-            element.hidden = true;
-        }, 4200);
-    }
+    // ---------- Dates and times ----------
+
+    const clockFormat = new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" });
+    const shortDayFormat = new Intl.DateTimeFormat("en-PH", { weekday: "short", month: "short", day: "numeric" });
+    const shortDayYearFormat = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric" });
+    const longDayFormat = new Intl.DateTimeFormat("en-PH", { weekday: "long", month: "long", day: "numeric" });
+    const monthDayFormat = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" });
 
     function parseServerDate(value) {
         if (!value) {
             return null;
         }
-        const date = new Date(String(value).replace(" ", "T"));
+        const date = value instanceof Date ? value : new Date(String(value).replace(" ", "T"));
         return isNaN(date.getTime()) ? null : date;
     }
 
-    function formatDateTime(value, includeYear) {
+    function clock(value) {
+        const date = parseServerDate(value);
+        return date ? clockFormat.format(date) : "";
+    }
+
+    function daysFromToday(value) {
         const date = parseServerDate(value);
         if (!date) {
-            return "—";
+            return null;
         }
-        return new Intl.DateTimeFormat("en-PH", {
-            month: "short",
-            day: "numeric",
-            year: includeYear === false ? undefined : "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-        }).format(date);
+        const today = new Date();
+        const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        return Math.round((day.getTime() - start.getTime()) / 86400000);
     }
 
-    function formatSchedule(row) {
-        const start = parseServerDate(row.scheduled_start_at || row.appointment_at);
-        const end = parseServerDate(row.scheduled_end_at);
+    function isToday(value) {
+        return daysFromToday(value) === 0;
+    }
+
+    /** "Today", "Tomorrow", "Yesterday", "Fri, Nov 20", or "Nov 20, 2025" in another year. */
+    function dayWord(value) {
+        const date = parseServerDate(value);
+        if (!date) {
+            return "";
+        }
+        const days = daysFromToday(date);
+        if (days === 0) {
+            return "Today";
+        }
+        if (days === 1) {
+            return "Tomorrow";
+        }
+        if (days === -1) {
+            return "Yesterday";
+        }
+        return date.getFullYear() === new Date().getFullYear() ? shortDayFormat.format(date) : shortDayYearFormat.format(date);
+    }
+
+    /** "1:30 – 2:00 PM", or "11:30 AM – 12:00 PM" across noon. */
+    function timeRange(startValue, endValue) {
+        const start = clock(startValue);
+        const end = clock(endValue);
         if (!start) {
-            return { date: "Schedule unavailable", time: "" };
+            return "";
         }
-        const date = new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", year: "numeric" }).format(start);
-        const startTime = new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(start);
-        const endTime = end ? new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(end) : "";
-        return { date: date, time: endTime ? startTime + "–" + endTime : startTime };
-    }
-
-    function statusMeta(status, appointment) {
-        // A checked-in visitor whose phone confirmed they reached this office.
-        if (status === "checked_in" && appointment && appointment.arrived_at) {
-            return { label: "Arrived", className: "is-active" };
+        if (!end) {
+            return start;
         }
-        const map = {
-            pending_approval: { label: "Pending approval", className: "is-pending" },
-            reschedule_proposed: { label: "Waiting for visitor", className: "is-pending" },
-            approved: { label: "Approved", className: "is-active" },
-            rejected: { label: "Declined", className: "is-cancelled" },
-            checked_in: { label: "Checked in", className: "is-active" },
-            completed: { label: "Completed", className: "is-completed" },
-            cancelled: { label: "Cancelled", className: "is-cancelled" },
-            unanswered: { label: "No office response", className: "is-cancelled" },
-            window_closed: { label: "Appointment done", className: "is-completed" },
-        };
-        return map[status] || { label: status || "Unknown", className: "is-completed" };
+        const startMark = start.slice(-2);
+        if (/[AP]M$/i.test(start) && startMark === end.slice(-2)) {
+            return start.slice(0, -3).trim() + " – " + end;
+        }
+        return start + " – " + end;
     }
 
-    function purposeLabel(row) {
-        return row.purpose || row.subject || "Purpose not provided";
+    /** "just now", "12 min ago", "3 h ago", "yesterday, 3:14 PM", "Nov 15, 3:14 PM". */
+    function agoText(value) {
+        const date = parseServerDate(value);
+        if (!date) {
+            return "";
+        }
+        const minutes = Math.round((Date.now() - date.getTime()) / 60000);
+        const days = daysFromToday(date);
+        if (minutes < 1) {
+            return "just now";
+        }
+        if (minutes < 60) {
+            return minutes + " min ago";
+        }
+        if (days === 0) {
+            return Math.floor(minutes / 60) + " h ago";
+        }
+        if (days === -1) {
+            return "yesterday, " + clock(date);
+        }
+        return monthDayFormat.format(date) + ", " + clock(date);
     }
 
-    function matchesQuery(row, query) {
+    /** "2:00 PM today", "9:30 AM tomorrow", "2:30 PM on Fri, Nov 20". */
+    function deadlineText(value) {
+        const date = parseServerDate(value);
+        if (!date) {
+            return "";
+        }
+        const days = daysFromToday(date);
+        if (days === 0) {
+            return clock(date) + " today";
+        }
+        if (days === 1) {
+            return clock(date) + " tomorrow";
+        }
+        return clock(date) + " on " + dayWord(date);
+    }
+
+    function fullDate(value) {
+        const date = parseServerDate(value);
+        return date ? shortDayYearFormat.format(date) + ", " + clock(date) : "—";
+    }
+
+    function purposeLine(row) {
+        const purpose = row.purpose || "Purpose not given";
+        return row.subject && row.subject !== row.purpose ? purpose + " · " + row.subject : purpose;
+    }
+
+    function initialsOf(name) {
+        const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+        if (!parts.length) {
+            return "OP";
+        }
+        return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
+    }
+
+    function isGate(row) {
+        return row.registration_source === "gate";
+    }
+
+    function stopLabel(row) {
+        return row.visit_id && row.stop_number && row.visit_stop_count ? "Stop " + row.stop_number + " of " + row.visit_stop_count : "";
+    }
+
+    /** "At your office since 9:28 AM · GPS ±4 m", from the visitor's phone. */
+    function arrivalText(row) {
+        const how = row.arrival_method === "gps"
+            ? "GPS" + (row.arrival_accuracy_meters != null ? " ±" + Math.round(Number(row.arrival_accuracy_meters)) + " m" : "")
+            : "they tapped I'm here";
+        return "At your office since " + clock(row.arrived_at) + " · " + how;
+    }
+
+    function arrivalSentence(row) {
+        const how = row.arrival_method === "gps"
+            ? "confirmed by GPS" + (row.arrival_accuracy_meters != null ? " (±" + Math.round(Number(row.arrival_accuracy_meters)) + " m)" : "")
+            : "confirmed by the visitor";
+        return "since " + clock(row.arrived_at) + ", " + how + ".";
+    }
+
+    /** How a finished visit ended, for the Done group and the details. */
+    function endedText(row) {
+        if (row.status === "window_closed") {
+            return "Didn't check in before " + clock(row.scheduled_end_at);
+        }
+        const at = row.completed_at ? clock(row.completed_at) : "";
+        if (row.visit_id) {
+            return "Meeting done" + (at ? ", " + at : "");
+        }
+        switch (row.checkout_method) {
+        case "scan":
+            return "Checked out at the gate" + (at ? ", " + at : "");
+        case "guard":
+            return "Visit ended by the guard" + (at ? ", " + at : "");
+        case "left_campus":
+            return "Left the campus" + (at ? ", " + at : "");
+        case "end_of_day":
+            return "Ended at the end of the day";
+        default:
+            return "Completed" + (at ? ", " + at : "");
+        }
+    }
+
+    function statusMeta(row) {
+        switch (row.status) {
+        case "pending_approval":
+            return { label: "Needs your answer", className: "is-amber" };
+        case "reschedule_proposed":
+            return { label: "Waiting for visitor", className: "is-blue" };
+        case "approved":
+            return { label: "Approved", className: "is-green" };
+        case "checked_in":
+            return row.arrived_at ? { label: "At your office", className: "is-green" } : { label: "On campus", className: "is-blue" };
+        case "completed":
+            return { label: "Completed", className: "" };
+        case "rejected":
+            return { label: "Declined", className: "is-red" };
+        case "cancelled":
+            return { label: "Cancelled", className: "" };
+        case "unanswered":
+            return { label: "No office response", className: "is-red" };
+        case "window_closed":
+            return { label: "Didn't come", className: "" };
+        default:
+            return { label: row.status || "Unknown", className: "" };
+        }
+    }
+
+    const HISTORY_LABELS = {
+        pending_approval: "Request sent",
+        reschedule_proposed: "Other times offered",
+        approved: "Approved",
+        rejected: "Declined",
+        checked_in: "Checked in",
+        completed: "Completed",
+        cancelled: "Cancelled",
+        unanswered: "No office response",
+        window_closed: "Didn't come",
+    };
+
+    function byStart(left, right) {
+        return String(left.scheduled_start_at || "").localeCompare(String(right.scheduled_start_at || ""));
+    }
+
+    function matches(row, query) {
         if (!query) {
             return true;
         }
-        const haystack = [
-            row.visitor_full_name,
-            row.visitor_email,
-            row.registration_code,
-            row.purpose,
-            row.subject,
-            row.destination,
-            row.contact_number,
-        ].join(" ").toLowerCase();
-        return haystack.indexOf(query.toLowerCase()) !== -1;
+        return [row.visitor_full_name, row.visitor_email, row.registration_code, row.purpose, row.subject, row.destination]
+            .join(" ").toLowerCase().indexOf(query.toLowerCase()) !== -1;
     }
 
-    function appendTextCell(row, primary, secondary, className) {
-        const cell = document.createElement("td");
-        if (className) {
-            cell.className = className;
-        }
-        const strong = document.createElement("strong");
-        strong.className = "office-cell-primary";
-        strong.textContent = primary || "—";
-        cell.appendChild(strong);
-        if (secondary) {
-            const small = document.createElement("small");
-            small.className = "office-cell-secondary";
-            small.textContent = secondary;
-            cell.appendChild(small);
-        }
-        row.appendChild(cell);
-        return cell;
+    function findRow(id) {
+        return state.appointments.find(function (row) { return Number(row.id) === Number(id); }) || null;
     }
 
-    /** "Arrived 2:03 PM, confirmed by GPS (±4 m)" for a visitor at this office. */
-    function arrivalText(appointment) {
-        const how = appointment.arrival_method === "gps"
-            ? "confirmed by GPS" + (appointment.arrival_accuracy_meters != null
-                ? " (±" + Math.round(Number(appointment.arrival_accuracy_meters)) + " m)" : "")
-            : "confirmed by the visitor";
-        return formatDateTime(appointment.arrived_at, false) + ", " + how;
-    }
-
-    function appendStatusCell(row, status, appointment) {
-        const cell = document.createElement("td");
-        const meta = statusMeta(status, appointment);
-        const badge = document.createElement("span");
-        badge.className = "admin-status " + meta.className;
-        badge.textContent = meta.label;
-        if (appointment && appointment.arrived_at) {
-            badge.title = "Arrived " + arrivalText(appointment);
-        }
-        cell.appendChild(badge);
-        row.appendChild(cell);
-    }
-
-    function appendViewButton(row, appointmentId) {
-        const cell = document.createElement("td");
-        cell.className = "admin-row-actions";
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "office-view-button";
-        button.dataset.appointmentId = String(appointmentId);
-        button.textContent = "View";
-        cell.appendChild(button);
-        row.appendChild(cell);
-    }
-
-    function visitStopLabel(item) {
-        return item.visit_id && item.stop_number && item.visit_stop_count
-            ? "Stop " + item.stop_number + " of " + item.visit_stop_count
-            : "";
-    }
-
-    function formatTimeOnly(value) {
-        const date = parseServerDate(value);
-        return date ? new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(date) : "—";
-    }
-
-    function otherStopTimesText(visit) {
-        return (visit.other_stop_times || []).map(function (stop) {
-            return formatTimeOnly(stop.scheduled_start_at) + "–" + formatTimeOnly(stop.scheduled_end_at);
-        }).join(", ");
-    }
-
-    function makeAppointmentRow(item, kind) {
-        const row = document.createElement("tr");
-        const schedule = formatSchedule(item);
-        const reference = item.registration_code || item.visitor_email || "";
-        const stopLabel = visitStopLabel(item);
-        appendTextCell(row, item.visitor_full_name, stopLabel ? reference + " · " + stopLabel : reference);
-        appendTextCell(row, purposeLabel(item), item.subject && item.subject !== item.purpose ? item.subject : (item.destination || ""));
-        appendTextCell(row, schedule.date, schedule.time);
-        if (kind === "requests") {
-            appendTextCell(row, formatDateTime(item.created_at, false), "");
-        }
-        appendStatusCell(row, item.status, item);
-        if (kind === "history") {
-            appendTextCell(row, item.processed_by || (item.status === "unanswered" || item.status === "window_closed" ? "System" : "—"), "");
-            appendTextCell(row, formatDateTime(item.processed_at || item.status_updated_at, false), "");
-        }
-        appendViewButton(row, item.id);
-        return row;
-    }
-
-    function renderRecent() {
-        const body = byId("officeRecentBody");
-        body.replaceChildren();
-        const todayDate = new Date();
-        const today = todayDate.getFullYear() + "-" + String(todayDate.getMonth() + 1).padStart(2, "0") + "-" + String(todayDate.getDate()).padStart(2, "0");
-        const rows = state.appointments
-            .filter(function (item) {
-                const statusMatch = !state.recentStatus ||
-                    (state.recentStatus === "today" ? String(item.scheduled_start_at || "").slice(0, 10) === today : item.status === state.recentStatus);
-                return statusMatch && matchesQuery(item, state.recentQuery);
-            })
-            .sort(function (left, right) {
-                return String(right.scheduled_start_at || right.created_at || "").localeCompare(String(left.scheduled_start_at || left.created_at || ""));
-            });
-        const totalPages = Math.max(1, Math.ceil(rows.length / state.recentPageSize));
-        state.recentPage = Math.min(state.recentPage, totalPages);
-        const start = (state.recentPage - 1) * state.recentPageSize;
-        rows.slice(start, start + state.recentPageSize).forEach(function (item) {
-            body.appendChild(makeAppointmentRow(item, "recent"));
-        });
-        byId("officeRecentEmpty").hidden = rows.length !== 0;
-        body.parentElement.hidden = rows.length === 0;
-        renderRecentPagination(rows.length, totalPages);
-    }
-
-    function renderRequests() {
-        const body = byId("officeRequestsBody");
-        body.replaceChildren();
-        const rows = state.appointments
-            .filter(function (item) { return item.status === "pending_approval" && matchesQuery(item, state.requestQuery); })
-            .sort(function (left, right) { return String(left.created_at).localeCompare(String(right.created_at)); });
-        rows.forEach(function (item) { body.appendChild(makeAppointmentRow(item, "requests")); });
-        byId("officeRequestsEmpty").hidden = rows.length !== 0;
-        body.parentElement.hidden = rows.length === 0;
-        setText("officeRequestsCount", rows.length);
-    }
-
-    function renderRecentPagination(totalRows, totalPages) {
-        const wrap = byId("officeAppointmentsPagination");
-        wrap.replaceChildren();
-        if (totalRows === 0 || totalPages <= 1) {
-            return;
-        }
-        const summary = document.createElement("p");
-        const start = (state.recentPage - 1) * state.recentPageSize + 1;
-        const end = Math.min(totalRows, state.recentPage * state.recentPageSize);
-        summary.textContent = "Showing " + start + "–" + end + " of " + totalRows;
-        const controls = document.createElement("div");
-        controls.className = "admin-page-buttons";
-        for (let page = 1; page <= totalPages; page += 1) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.textContent = String(page);
-            button.classList.toggle("is-active", page === state.recentPage);
-            button.addEventListener("click", function () {
-                state.recentPage = page;
-                renderRecent();
-            });
-            controls.appendChild(button);
-        }
-        wrap.append(summary, controls);
-    }
-
-    function renderNotifications() {
-        const count = byId("officeNotificationCount");
-        count.textContent = state.unread > 99 ? "99+" : String(state.unread);
-        count.hidden = state.unread === 0;
-        setText("officeNotificationSummary", state.unread ? state.unread + " unread update" + (state.unread === 1 ? "" : "s") : "No unread updates");
-        const list = byId("officeNotificationList");
-        list.replaceChildren();
-        state.notifications.forEach(function (notification) {
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "office-notification-item" + (notification.read_at ? "" : " is-unread");
-            button.dataset.notificationId = String(notification.id);
-            if (notification.appointment_id) {
-                button.dataset.appointmentId = String(notification.appointment_id);
-            }
-            const marker = document.createElement("span");
-            marker.className = "admin-notification-marker";
-            const copy = document.createElement("span");
-            const title = document.createElement("strong");
-            title.textContent = notification.title || "Appointment update";
-            const message = document.createElement("span");
-            message.textContent = notification.message || "";
-            const time = document.createElement("time");
-            time.textContent = formatDateTime(notification.created_at, false);
-            copy.append(title, message, time);
-            button.append(marker, copy);
-            list.appendChild(button);
-        });
-        byId("officeNotificationEmpty").hidden = state.notifications.length !== 0;
-        byId("markOfficeNotificationsReadBtn").hidden = state.unread === 0;
-        renderHelpAlerts();
-    }
-
-    /**
-     * A visitor who tapped "I can't find it" is standing somewhere waiting, so the request stays
-     * at the top of every view until someone takes it, not only in the bell's list.
-     */
-    function renderHelpAlerts() {
-        const host = byId("officeHelpAlerts");
-        const waiting = state.notifications.filter(function (notification) {
+    /** Unread "can't find your office" alerts, by appointment. */
+    function helpAlerts() {
+        return state.notifications.filter(function (notification) {
             return notification.notification_type === "visitor_needs_help" && !notification.read_at;
         });
-        host.replaceChildren();
-        host.hidden = waiting.length === 0;
-        waiting.forEach(function (notification) {
-            const alert = document.createElement("div");
-            alert.className = "office-help-alert";
-            const copy = document.createElement("div");
-            const title = document.createElement("strong");
-            title.textContent = notification.title || "A visitor can't find your office";
-            const message = document.createElement("span");
-            message.textContent = notification.message || "";
-            const time = document.createElement("time");
-            time.textContent = formatDateTime(notification.created_at, false);
-            copy.append(title, message, time);
-            const button = document.createElement("button");
-            button.type = "button";
-            button.className = "admin-primary-button";
-            button.textContent = "Someone is going";
-            button.dataset.helpNotificationId = String(notification.id);
-            alert.append(copy, button);
-            host.appendChild(alert);
-        });
     }
 
-    function renderDashboardData() {
-        setText("officePendingCount", state.summary.pending_approvals || 0);
-        setText("officeApprovedCount", state.summary.approved || 0);
-        setText("officeRejectedCount", state.summary.rejected || 0);
-        setText("officeTodayCount", state.summary.todays_appointments || 0);
-        const navCount = byId("officeRequestNavCount");
-        navCount.textContent = String(state.summary.pending_approvals || 0);
-        navCount.hidden = Number(state.summary.pending_approvals || 0) === 0;
-        setText("officeProfileOffice", state.office ? state.office.label : "Assigned office");
-        const officeScope = state.office ? state.office.label : "your assigned office";
-        setText("officeDashboardScope", "Showing " + officeScope + " records only.");
-        setText("officeRequestScope", "Only requests addressed to " + officeScope + " appear here.");
-        renderProfile();
-        setText("officeDashboardDate", "Search and filter every appointment for " + officeScope + ".");
-        renderRecent();
-        renderRequests();
-        renderNotifications();
+    function helpFor(appointmentId) {
+        return helpAlerts().find(function (notification) {
+            return Number(notification.appointment_id) === Number(appointmentId);
+        }) || null;
     }
+
+    // ---------- Sheets: the phone's Back button closes them first ----------
+
+    const sheets = [];
+    let ignorePops = 0;
+
+    function openSheet(dialog) {
+        if (dialog.open) {
+            return;
+        }
+        dialog.showModal();
+        sheets.push(dialog);
+        window.history.pushState({ officeSheet: dialog.id }, "", window.location.href);
+    }
+
+    function closeSheet(dialog) {
+        if (dialog && dialog.open) {
+            dialog.close();
+        }
+    }
+
+    /** After an action: closes several sheets with one step back in the history. */
+    function closeSheets(dialogs) {
+        const open = dialogs.filter(function (dialog) { return dialog && dialog.open && sheets.indexOf(dialog) !== -1; });
+        open.forEach(function (dialog) {
+            dialog.dataset.quiet = "1";
+            dialog.close();
+        });
+        if (open.length) {
+            ignorePops += 1;
+            window.history.go(-open.length);
+        }
+    }
+
+    document.querySelectorAll("dialog.ofc-sheet").forEach(function (dialog) {
+        dialog.addEventListener("close", function () {
+            const index = sheets.indexOf(dialog);
+            if (index !== -1) {
+                sheets.splice(index, 1);
+            }
+            const quiet = dialog.dataset.quiet === "1" || dialog.dataset.fromPop === "1";
+            delete dialog.dataset.quiet;
+            delete dialog.dataset.fromPop;
+            if (!quiet && index !== -1) {
+                ignorePops += 1;
+                window.history.back();
+            }
+        });
+        dialog.addEventListener("click", function (event) {
+            if (event.target === dialog || event.target.closest("[data-close-sheet]")) {
+                dialog.close();
+            }
+        });
+    });
+
+    // ---------- Pages ----------
+
+    function viewFromHash() {
+        const hash = window.location.hash.replace("#", "");
+        if (VIEWS.indexOf(hash) !== -1) {
+            return hash;
+        }
+        return OLD_VIEWS[hash] || "today";
+    }
+
+    function urlFor(view) {
+        return window.location.pathname + window.location.search + (view === "today" ? "" : "#" + view);
+    }
+
+    function switchView(view, options) {
+        const settings = options || {};
+        if (VIEWS.indexOf(view) === -1) {
+            view = OLD_VIEWS[view] || "today";
+        }
+        const changed = view !== state.view;
+        state.view = view;
+        document.body.dataset.officeCurrent = view;
+        document.querySelectorAll("[data-office-panel]").forEach(function (panel) {
+            panel.hidden = panel.dataset.officePanel !== view;
+        });
+        document.querySelectorAll(".office-sidebar [data-office-view], .ofc-tabbar [data-office-view]").forEach(function (button) {
+            const active = button.dataset.officeView === view;
+            button.classList.toggle("is-active", active);
+            if (active) {
+                button.setAttribute("aria-current", "page");
+            } else {
+                button.removeAttribute("aria-current");
+            }
+        });
+        if (settings.history === "push" && changed) {
+            window.history.pushState({ officeView: view }, "", urlFor(view));
+        } else if (settings.history === "replace") {
+            window.history.replaceState({ officeView: view }, "", urlFor(view));
+        }
+        if (view === "hours" && !state.availabilityLoaded) {
+            loadAvailability();
+        }
+        updateSaveBar();
+        if (changed) {
+            window.scrollTo(0, 0);
+        }
+    }
+
+    window.addEventListener("popstate", function () {
+        if (ignorePops > 0) {
+            ignorePops -= 1;
+            return;
+        }
+        const top = sheets[sheets.length - 1];
+        if (top) {
+            top.dataset.fromPop = "1";
+            top.close();
+            return;
+        }
+        switchView(viewFromHash());
+    });
+
+    // ---------- Profile and menu ----------
+
+    function profileImageSource(url, bustCache) {
+        if (!url) {
+            return "assets/icons/profile_icon.svg";
+        }
+        if (!bustCache) {
+            return url;
+        }
+        return url + (url.indexOf("?") === -1 ? "?" : "&") + "v=" + String(bustCache);
+    }
+
+    function setProfileImage(id, url, bustCache) {
+        const image = byId(id);
+        if (!image) {
+            return;
+        }
+        image.onerror = function () {
+            image.onerror = null;
+            image.src = "assets/icons/profile_icon.svg";
+        };
+        image.src = profileImageSource(url, bustCache);
+    }
+
+    function renderProfile() {
+        const profile = state.profile || {};
+        const displayName = profile.display_name || PhoneTrackerAuth.getDisplayName() || PhoneTrackerAuth.getUsername() || "Office Personnel";
+        const username = profile.username || PhoneTrackerAuth.getUsername() || "office";
+        const officeName = state.office ? state.office.label : "Your office";
+        setText("officeProfileName", displayName);
+        setText("officeProfileUsername", username);
+        setText("officeProfileOffice", officeName);
+        setProfileImage("officeProfileAvatar", profile.profile_image_url || "", state.profileImageVersion);
+        setText("officeMenuName", displayName);
+        setText("officeMenuUsername", username);
+        setText("officeMenuRole", (profile.position ? profile.position + " · " : "") + officeName);
+        const avatar = byId("officeMenuAvatar");
+        avatar.replaceChildren();
+        if (profile.profile_image_url) {
+            const image = document.createElement("img");
+            image.alt = "";
+            image.src = profileImageSource(profile.profile_image_url, state.profileImageVersion);
+            image.onerror = function () {
+                avatar.textContent = initialsOf(displayName);
+            };
+            avatar.appendChild(image);
+        } else {
+            avatar.textContent = initialsOf(displayName);
+        }
+        setAll("[data-office-name]", officeName);
+    }
+
+    function clearProfilePreviewUrl() {
+        if (state.profilePreviewUrl) {
+            URL.revokeObjectURL(state.profilePreviewUrl);
+            state.profilePreviewUrl = "";
+        }
+    }
+
+    function openProfileEditor() {
+        clearProfilePreviewUrl();
+        const profile = state.profile || {};
+        byId("officeProfileDisplayName").value = profile.display_name || PhoneTrackerAuth.getDisplayName() || "";
+        byId("officeProfilePosition").value = profile.position || "";
+        byId("officeProfileUsernameReadonly").value = profile.username || PhoneTrackerAuth.getUsername() || "";
+        byId("officeProfileImage").value = "";
+        byId("officeRemoveProfileImage").checked = false;
+        byId("officeRemoveProfileRow").hidden = !profile.profile_image_url;
+        setProfileImage("officeProfilePreview", profile.profile_image_url || "", state.profileImageVersion);
+        showError("officeProfileError", "");
+        closeProfileMenu();
+        byId("officeProfileDialog").showModal();
+    }
+
+    function closeProfileEditor() {
+        clearProfilePreviewUrl();
+        byId("officeProfileDialog").close();
+    }
+
+    function closeProfileMenu() {
+        byId("officeProfileMenu").hidden = true;
+        byId("officeProfileBtn").setAttribute("aria-expanded", "false");
+    }
+
+    async function signOut() {
+        closeProfileMenu();
+        if (await AppDialog.confirm({
+            title: "Sign out?",
+            message: "You'll need your password to sign in again.",
+            confirmLabel: "Sign out",
+        })) {
+            PhoneTrackerAuth.logout().then(function () { window.location.href = "login.html"; });
+        }
+    }
+
+    // ---------- Loading ----------
 
     async function loadOfficeData(silent) {
         if (!silent) {
@@ -486,179 +643,451 @@
             state.office = dashboard.office || null;
             state.profile = dashboard.profile || state.profile;
             state.appointments = Array.isArray(appointments.data) ? appointments.data : [];
-            renderDashboardData();
+            state.loaded = true;
+            state.updatedAt = new Date();
+            showError("officePageError", "");
+            renderAll();
+            return true;
         } catch (error) {
             if (error.message !== "Not authenticated") {
                 showError("officePageError", error.message || "Could not reach the server.");
             }
+            return false;
         }
     }
 
-    function switchView(view) {
-        if (view === "history") {
-            view = "dashboard";
+    function renderAll() {
+        renderProfile();
+        renderHelpAlerts();
+        renderToday();
+        renderRequests();
+        renderVisits();
+        renderNotifications();
+        setText("officeMenuUpdated", state.updatedAt ? "Updated " + clock(state.updatedAt) : "Not updated yet");
+    }
+
+    // ---------- A visitor who can't find the office ----------
+
+    function renderHelpAlerts() {
+        const host = byId("officeHelpAlerts");
+        const waiting = helpAlerts();
+        host.hidden = waiting.length === 0;
+        host.innerHTML = waiting.map(function (notification) {
+            return '<section class="ofc-help" role="alert"><div>' +
+                '<p class="ofc-help-title">' + ICON.alert + esc(notification.title || "A visitor can't find your office") + "</p>" +
+                "<p>" + esc(notification.message || "") + "</p>" +
+                "<small>" + esc(agoText(notification.created_at)) + "</small></div>" +
+                '<button class="ofc-btn is-primary" type="button" data-help-going="' + Number(notification.id) + '">Someone is going</button></section>';
+        }).join("");
+    }
+
+    async function someoneIsGoing(notificationId, button) {
+        if (button) {
+            button.disabled = true;
         }
-        const valid = ["dashboard", "requests", "availability"];
-        if (valid.indexOf(view) === -1) {
-            view = "dashboard";
+        const data = await postJson("office_notifications.php", { action: "mark_read", notification_id: Number(notificationId) });
+        if (data && data.success) {
+            closeSheets([byId("officeAppointmentDialog")]);
+            toast("Thanks. The alert is cleared.");
+        } else {
+            toast((data && data.message) || "Could not clear the alert.", "error");
         }
-        document.querySelectorAll("[data-office-panel]").forEach(function (panel) {
-            panel.hidden = panel.dataset.officePanel !== view;
+        if (button) {
+            button.disabled = false;
+        }
+        loadOfficeData(true);
+    }
+
+    // ---------- Today ----------
+
+    function todayGroups() {
+        const rows = state.appointments.filter(function (row) { return isToday(row.scheduled_start_at); }).sort(byStart);
+        return {
+            here: rows.filter(function (row) { return row.status === "checked_in" && row.arrived_at; }),
+            campus: rows.filter(function (row) { return row.status === "checked_in" && !row.arrived_at; }),
+            later: rows.filter(function (row) { return row.status === "approved"; }),
+            done: rows.filter(function (row) { return row.status === "completed" || row.status === "window_closed"; }),
+        };
+    }
+
+    function todayItem(row, group) {
+        const help = helpFor(row.id);
+        const start = parseServerDate(row.scheduled_start_at);
+        const time = start ? clock(start) : "";
+        const notes = [];
+        if (help) {
+            notes.push('<span class="ofc-tnote is-red">' + ICON.alert + "Can't find your office · " + esc(agoText(help.created_at)) + "</span>");
+        }
+        if (group === "here") {
+            notes.push('<span class="ofc-tnote is-green">' + ICON.pin + esc(arrivalText(row)) + "</span>");
+        } else if (group === "campus") {
+            notes.push('<span class="ofc-tnote">' + esc(isGate(row)
+                ? "Registered at the gate, " + clock(row.checked_in_at) + " · no app"
+                : "Checked in at the gate, " + clock(row.checked_in_at)) + "</span>");
+        } else if (group === "done") {
+            notes.push('<span class="ofc-tnote">' + esc(endedText(row)) + "</span>");
+        }
+        const stop = stopLabel(row);
+        if (stop && group !== "done") {
+            notes.push('<span class="ofc-tnote">' + esc(stop) + "</span>");
+        }
+        const canFinish = row.status === "checked_in" && row.visit_id;
+        const classes = ["ofc-titem"];
+        if (group === "here") {
+            classes.push("is-here");
+        }
+        if (help) {
+            classes.push("is-help");
+        }
+        if (group === "done") {
+            classes.push("is-done");
+        }
+        return '<li class="' + classes.join(" ") + '">' +
+            '<span class="ofc-ttime"><b>' + esc(time.replace(/\s?[AP]M$/i, "")) + "</b><small>" + esc((time.match(/[AP]M$/i) || [""])[0]) + "</small></span>" +
+            '<button class="ofc-tbody" type="button" data-open-appointment="' + Number(row.id) + '">' +
+            "<strong>" + esc(row.visitor_full_name) + (row.visit_type === "walk_in" ? '<span class="ofc-chip">Walk-in</span>' : "") + "</strong>" +
+            "<span>" + esc(purposeLine(row)) + "</span>" + notes.join("") + "</button>" +
+            (canFinish ? '<button class="ofc-btn is-small" type="button" data-meeting-done="' + Number(row.id) + '">' + ICON.check + "Meeting done</button>" : "") +
+            "</li>";
+    }
+
+    function renderToday() {
+        setText("officeTodayDate", longDayFormat.format(new Date()));
+        const groups = todayGroups();
+        const pending = state.appointments.filter(function (row) { return row.status === "pending_approval"; }).sort(byStart);
+        const total = groups.here.length + groups.campus.length + groups.later.length + groups.done.length;
+        setAll('[data-count="answer"]', pending.length);
+        setAll('[data-count="here"]', groups.here.length);
+        setAll('[data-count="campus"]', groups.campus.length);
+        setAll('[data-count="later"]', groups.later.length);
+        setAll('[data-count="today"]', total);
+        document.querySelectorAll("[data-request-badge]").forEach(function (badge) {
+            badge.textContent = pending.length > 99 ? "99+" : String(pending.length);
+            badge.hidden = pending.length === 0;
         });
-        document.querySelectorAll("[data-office-view]").forEach(function (button) {
-            const active = button.dataset.officeView === view;
-            button.classList.toggle("is-active", active);
-            if (active) {
-                button.setAttribute("aria-current", "page");
-            } else {
-                button.removeAttribute("aria-current");
+
+        const home = byId("officeHomeRequests");
+        if (!state.loaded) {
+            home.innerHTML = '<li class="ofc-empty">Loading…</li>';
+            byId("officeTodayGroups").innerHTML = '<p class="ofc-empty">Loading…</p>';
+            return;
+        }
+        if (!pending.length) {
+            home.innerHTML = '<li class="ofc-empty">Every request has an answer.</li>';
+        } else {
+            const more = pending.length - 2;
+            home.innerHTML = pending.slice(0, 2).map(requestCard).join("") + (more > 0
+                ? '<li><button class="ofc-more-btn" type="button" data-office-view="requests">+ ' + more + " more request" + (more === 1 ? "" : "s") + "</button></li>"
+                : "");
+        }
+
+        const labels = [["here", "Here now", "is-green"], ["campus", "On campus", "is-blue"], ["later", "Later today", ""], ["done", "Done", ""]];
+        const html = labels.map(function (entry) {
+            const rows = groups[entry[0]];
+            if (!rows.length) {
+                return "";
             }
-        });
-        const labels = { dashboard: "Appointments", requests: "Appointment Requests", availability: "Availability" };
-        setText("officeMobileTitle", labels[view]);
-        window.history.replaceState(null, "", window.location.pathname + "#" + view);
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        if (view === "availability" && !state.availabilityLoaded) {
-            loadAvailability();
-        } else if (view === "availability") {
-            refreshStatus();
-        }
-        // The "Open now / On lunch break" chip stays current while Availability is open.
-        setStatusRefresh(view === "availability");
+            return '<div class="ofc-tgroup" id="officeGroup-' + entry[0] + '"><p class="ofc-tg-title ' + entry[2] + '"><i></i>' +
+                entry[1] + " · " + rows.length + '</p><ul class="ofc-tlist">' +
+                rows.map(function (row) { return todayItem(row, entry[0]); }).join("") + "</ul></div>";
+        }).join("");
+        byId("officeTodayGroups").innerHTML = html || '<p class="ofc-empty">No visitors today yet.</p>';
     }
 
-    function detailPair(label, value, full) {
-        const group = document.createElement("div");
-        if (full) {
-            group.className = "office-detail-full";
-        }
-        const term = document.createElement("dt");
-        term.textContent = label;
-        const definition = document.createElement("dd");
-        definition.textContent = value || "Not provided";
-        group.append(term, definition);
-        return group;
+    // ---------- Requests ----------
+
+    function requestCard(row) {
+        const start = parseServerDate(row.scheduled_start_at);
+        const days = start ? daysFromToday(start) : null;
+        const soon = days !== null && days <= 1;
+        const word = start ? dayWord(start) : "No date";
+        const when = (days === 0 || days === 1 ? '<b class="is-soon">' + esc(word) + "</b>" : "<b>" + esc(word) + "</b>") +
+            " · " + esc(timeRange(row.scheduled_start_at, row.scheduled_end_at));
+        const stop = stopLabel(row);
+        const meta = "Asked " + agoText(row.created_at) + (soon ? " · expires " + deadlineText(row.scheduled_end_at) : "");
+        return '<li class="ofc-rcard' + (soon ? " is-soon" : "") + '">' +
+            '<button class="ofc-rmain" type="button" data-open-appointment="' + Number(row.id) + '">' +
+            '<span class="ofc-rtop"><strong>' + esc(row.visitor_full_name) + "</strong>" + ICON.chev + "</span>" +
+            '<span class="ofc-rwhy">' + esc(purposeLine(row)) + "</span>" +
+            '<span class="ofc-rwhen">' + ICON.clock + "<span>" + when + "</span></span>" +
+            (stop ? '<span class="ofc-rmulti">' + esc(stop) + "</span>" : "") +
+            '<span class="ofc-rmeta' + (soon ? " is-warn" : "") + '">' + esc(meta) + "</span></button>" +
+            '<div class="ofc-ractions">' +
+            '<button class="ofc-btn is-decline" type="button" data-decline="' + Number(row.id) + '">Decline</button>' +
+            '<button class="ofc-btn" type="button" data-other-time="' + Number(row.id) + '">Other time</button>' +
+            '<button class="ofc-btn is-approve" type="button" data-approve="' + Number(row.id) + '">' + ICON.check + "Approve</button>" +
+            "</div></li>";
     }
 
-    function renderProposal(proposal) {
-        const wrap = byId("officeProposalSummary");
-        wrap.replaceChildren();
-        if (!proposal) {
-            wrap.hidden = true;
-            return;
-        }
-        const heading = document.createElement("strong");
-        heading.textContent = "Proposed schedule — " + proposal.status;
-        const reason = document.createElement("p");
-        reason.textContent = proposal.reason || "No reason provided";
-        const list = document.createElement("ul");
-        (proposal.slots || []).forEach(function (slot) {
-            const item = document.createElement("li");
-            item.textContent = formatDateTime(slot.scheduled_start_at) + (Number(slot.is_selected) ? " — selected" : "");
-            list.appendChild(item);
-        });
-        wrap.append(heading, reason, list);
-        wrap.hidden = false;
+    function waitingCard(row) {
+        const offer = row.offer || null;
+        const times = offer ? offer.times.map(function (value) {
+            return '<span class="ofc-chip">' + esc(dayWord(value) + " · " + clock(value)) + "</span>";
+        }).join("") : "";
+        return '<li class="ofc-rcard">' +
+            '<button class="ofc-rmain" type="button" data-open-appointment="' + Number(row.id) + '">' +
+            '<span class="ofc-rtop"><strong>' + esc(row.visitor_full_name) + '</strong><span class="ofc-chip is-blue">Waiting for visitor</span></span>' +
+            '<span class="ofc-rwhy">' + esc(purposeLine(row)) + "</span>" +
+            '<span class="ofc-rmeta">Asked for ' + esc(dayWord(row.scheduled_start_at) + " · " + timeRange(row.scheduled_start_at, row.scheduled_end_at)) + "</span>" +
+            (offer ? '<span class="ofc-rmeta">You offered ' + esc(agoText(offer.sent_at)) +
+                (offer.response_deadline ? " · they can choose until " + esc(deadlineText(offer.response_deadline)) : "") + ":</span>" +
+                '<span class="ofc-offered">' + times + "</span>" : "") +
+            "</button></li>";
     }
 
-    function renderAppointmentHistory(history) {
-        const wrap = byId("officeAppointmentHistory");
-        wrap.replaceChildren();
-        if (!history || history.length === 0) {
-            const empty = document.createElement("p");
-            empty.textContent = "No recorded activity.";
-            wrap.appendChild(empty);
-            return;
-        }
-        history.forEach(function (event) {
-            const item = document.createElement("article");
-            const meta = statusMeta(event.to_status);
-            const marker = document.createElement("span");
-            marker.className = "office-timeline-marker " + meta.className;
-            const copy = document.createElement("div");
-            const title = document.createElement("strong");
-            title.textContent = meta.label;
-            const note = document.createElement("p");
-            note.textContent = event.note || "Status updated";
-            const time = document.createElement("small");
-            time.textContent = formatDateTime(event.changed_at) + " · " + (event.changed_by || "System");
-            copy.append(title, note, time);
-            item.append(marker, copy);
-            wrap.appendChild(item);
+    function renderRequests() {
+        const pending = state.appointments.filter(function (row) { return row.status === "pending_approval"; }).sort(byStart);
+        const waiting = state.appointments.filter(function (row) { return row.status === "reschedule_proposed"; }).sort(byStart);
+        setAll('[data-count="waiting"]', waiting.length);
+        document.querySelectorAll("[data-request-tab]").forEach(function (button) {
+            const active = button.dataset.requestTab === state.requestTab;
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-selected", String(active));
         });
+        const rows = (state.requestTab === "waiting" ? waiting : pending).filter(function (row) { return matches(row, state.requestQuery); });
+        const list = byId("officeRequestList");
+        if (!state.loaded) {
+            list.innerHTML = '<li class="ofc-empty">Loading…</li>';
+        } else if (rows.length) {
+            list.innerHTML = rows.map(state.requestTab === "waiting" ? waitingCard : requestCard).join("");
+        } else {
+            list.innerHTML = '<li class="ofc-empty">' + (state.requestQuery ? "No request matches your search."
+                : state.requestTab === "waiting" ? "No offers are waiting for a visitor." : "Every request has an answer.") + "</li>";
+        }
+        setText("officeRequestNote", state.requestTab === "waiting"
+            ? "You suggested other times. The visitor picks one or declines them all."
+            : "Soonest visit first. A request nobody answers expires when its time passes.");
+    }
+
+    // ---------- Visits ----------
+
+    const VISIT_TABS = {
+        today: function (row) {
+            return isToday(row.scheduled_start_at) && ["approved", "checked_in", "completed", "window_closed"].indexOf(row.status) !== -1;
+        },
+        upcoming: function (row) {
+            const days = daysFromToday(row.scheduled_start_at);
+            return row.status === "approved" && days !== null && days > 0;
+        },
+        past: function (row) {
+            return CLOSED_STATUSES.indexOf(row.status) !== -1;
+        },
+        all: function () {
+            return true;
+        },
+    };
+
+    function visitRow(row) {
+        const meta = statusMeta(row);
+        const start = parseServerDate(row.scheduled_start_at);
+        const when = isGate(row) || row.visit_type === "walk_in"
+            ? "Walk-in, " + clock(start)
+            : timeRange(row.scheduled_start_at, row.scheduled_end_at);
+        const reference = [row.registration_code, row.visit_type === "walk_in" ? "Walk-in" : "", stopLabel(row)].filter(Boolean).join(" · ");
+        return '<button class="ofc-vrow" type="button" data-open-appointment="' + Number(row.id) + '">' +
+            '<span class="ofc-v-who"><strong>' + esc(row.visitor_full_name) + "</strong><small>" + esc(reference) + "</small></span>" +
+            '<span class="ofc-v-why"><strong>' + esc(row.purpose || "Purpose not given") + "</strong>" +
+            (row.subject && row.subject !== row.purpose ? "<small>" + esc(row.subject) + "</small>" : "") + "</span>" +
+            '<span class="ofc-v-when"><strong>' + esc(start ? dayWord(start) : "—") + "</strong><small>" + esc(when) + "</small></span>" +
+            '<span class="ofc-v-status"><span class="ofc-chip ' + meta.className + '">' + esc(meta.label) + "</span></span>" +
+            '<span class="ofc-v-go">' + ICON.chev + "</span></button>";
+    }
+
+    function renderVisits() {
+        Object.keys(VISIT_TABS).forEach(function (tab) {
+            setAll('[data-count="v-' + tab + '"]', state.appointments.filter(VISIT_TABS[tab]).length);
+        });
+        document.querySelectorAll("[data-visits-tab]").forEach(function (button) {
+            if (!button.closest(".ofc-seg")) {
+                return;
+            }
+            const active = button.dataset.visitsTab === state.visitsTab;
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-selected", String(active));
+        });
+        const showStatus = state.visitsTab === "past" || state.visitsTab === "all";
+        byId("officeStatusChips").hidden = !showStatus;
+        document.querySelectorAll("[data-visits-status]").forEach(function (button) {
+            const active = button.dataset.visitsStatus === state.visitsStatus;
+            button.classList.toggle("is-active", active);
+            button.setAttribute("aria-pressed", String(active));
+        });
+        let rows = state.appointments.filter(VISIT_TABS[state.visitsTab]).filter(function (row) { return matches(row, state.visitsQuery); });
+        if (showStatus && state.visitsStatus) {
+            rows = rows.filter(function (row) { return row.status === state.visitsStatus; });
+        }
+        rows.sort(state.visitsTab === "today" || state.visitsTab === "upcoming" ? byStart : function (left, right) { return byStart(right, left); });
+        const shown = rows.slice(0, state.visitsShown);
+        const head = '<div class="ofc-vrow is-head" aria-hidden="true"><span>Visitor</span><span>Purpose</span><span>When</span><span>Status</span><span></span></div>';
+        byId("officeVisitTable").innerHTML = !state.loaded ? '<p class="ofc-empty">Loading…</p>'
+            : rows.length ? head + shown.map(visitRow).join("")
+                : '<p class="ofc-empty">' + (state.visitsQuery || state.visitsStatus ? "No visit matches." : state.visitsTab === "today" ? "No visitors today yet." : "Nothing here yet.") + "</p>";
+        const more = byId("officeVisitMore");
+        more.hidden = rows.length <= shown.length;
+        more.textContent = "Show more (" + (rows.length - shown.length) + " left)";
+    }
+
+    // ---------- One visit or request ----------
+
+    function banner(kind, icon, html) {
+        return '<p class="ofc-banner ' + kind + '">' + icon + "<span>" + html + "</span></p>";
+    }
+
+    function fact(label, value) {
+        return value ? "<div><dt>" + esc(label) + "</dt><dd>" + esc(value) + "</dd></div>" : "";
+    }
+
+    function renderAppointmentBody(appointment, data) {
+        const parts = [];
+        const help = helpFor(appointment.id);
+        const atGate = isGate(appointment);
+        switch (appointment.status) {
+        case "pending_approval":
+            parts.push(banner("is-amber", ICON.clock, "Answer before <b>" + esc(deadlineText(appointment.scheduled_end_at)) +
+                "</b>. After that the request expires and the visitor is told nobody answered."));
+            break;
+        case "reschedule_proposed": {
+            const proposal = data.reschedule_proposal;
+            parts.push(banner("is-blue", ICON.info, "You offered other times " + esc(proposal ? agoText(proposal.created_at) : "") +
+                ". The visitor picks one or declines them all." + (proposal && proposal.response_deadline
+                ? " They can choose until " + esc(deadlineText(proposal.response_deadline)) + "." : "")));
+            if (proposal && proposal.slots && proposal.slots.length) {
+                parts.push('<div class="ofc-offered">' + proposal.slots.map(function (slot) {
+                    return '<span class="ofc-chip is-blue">' + esc(dayWord(slot.scheduled_start_at) + " · " + clock(slot.scheduled_start_at)) + "</span>";
+                }).join("") + "</div>");
+            }
+            break;
+        }
+        case "approved":
+            parts.push(banner("is-green", ICON.check, appointment.visit_type === "walk_in"
+                ? "Walk-in pass issued. Not checked in at the gate yet."
+                : "Approved. The visitor's QR pass is ready."));
+            break;
+        case "checked_in":
+            if (help) {
+                parts.push(banner("is-red", ICON.alert, "<b>Can't find your office</b> (" + esc(agoText(help.created_at)) + "). " + esc(help.message || "")));
+            }
+            if (appointment.arrived_at) {
+                parts.push(banner("is-green", ICON.pin, "<b>At your office</b> " + esc(arrivalSentence(appointment))));
+            } else if (atGate) {
+                parts.push(banner("is-blue", ICON.info, "Registered at the gate by Security at " + esc(clock(appointment.checked_in_at)) +
+                    ". No app, so their arrival isn't tracked."));
+            } else if (!help) {
+                parts.push(banner("is-blue", ICON.info, "Checked in at the gate at " + esc(clock(appointment.checked_in_at)) + ". Not at your office yet."));
+            }
+            break;
+        case "completed":
+        case "window_closed":
+            parts.push(banner("is-gray", ICON.info, esc(endedText(appointment)) + "."));
+            break;
+        case "rejected":
+            parts.push(banner("is-red", ICON.x, "<b>Declined" + (appointment.processed_by ? " by " + esc(appointment.processed_by) : "") + ":</b> " +
+                esc(appointment.rejection_reason || "No reason recorded.")));
+            break;
+        case "cancelled":
+            parts.push(banner("is-gray", ICON.info, "Cancelled" + (appointment.processed_by ? " by " + esc(appointment.processed_by) : "") + "."));
+            break;
+        case "unanswered":
+            parts.push(banner("is-red", ICON.clock, "Nobody answered before " + esc(clock(appointment.scheduled_end_at)) + ", so the request expired."));
+            break;
+        default:
+            break;
+        }
+
+        const start = parseServerDate(appointment.scheduled_start_at);
+        const days = start ? daysFromToday(start) : null;
+        const near = days !== null && days >= -1 && days <= 1;
+        const whenTitle = atGate ? "Walk-in, " + clock(start)
+            : appointment.visit_type === "walk_in" ? dayWord(start) + " · walk-in, " + clock(start)
+                : (start ? dayWord(start) : "No date") + " · " + timeRange(appointment.scheduled_start_at, appointment.scheduled_end_at);
+        parts.push('<div class="ofc-when"><small>When</small><strong>' + esc(whenTitle) + "</strong>" +
+            (near && start ? "<span>" + esc(longDayFormat.format(start)) + "</span>" : "") + "</div>");
+
+        if (data.visit) {
+            const others = (data.visit.other_stop_times || []).map(function (stop) {
+                return timeRange(stop.scheduled_start_at, stop.scheduled_end_at);
+            });
+            parts.push('<p class="ofc-rmulti">Stop ' + Number(data.visit.stop_number) + " of " + Number(data.visit.stop_count) +
+                " · visit " + esc(data.visit.visit_code) + (others.length ? " · their other stops: " + esc(others.join(", ")) : "") + "</p>");
+        }
+
+        parts.push('<p class="ofc-label">Why</p><dl class="ofc-facts">' + fact("Purpose", appointment.purpose || "Not given") +
+            fact("Concern", appointment.subject && appointment.subject !== appointment.purpose ? appointment.subject : "") + "</dl>");
+        if (appointment.additional_details) {
+            parts.push('<p class="ofc-quote">' + esc(appointment.additional_details) + "</p>");
+        }
+        parts.push('<p class="ofc-label">Visitor</p><dl class="ofc-facts">' +
+            fact("Phone", appointment.contact_number) +
+            fact("Email", atGate ? "" : appointment.visitor_email) +
+            fact("Visit type", atGate ? "Walk-in, registered at the gate" : appointment.visit_type === "walk_in" ? "Walk-in" : "Appointment") +
+            fact("ID checked", atGate ? appointment.id_type_shown : "") +
+            fact(atGate ? "Registered" : "Asked", fullDate(appointment.created_at)) + "</dl>");
+        if (appointment.visitor_email && !atGate) {
+            parts.push('<a class="ofc-btn is-quiet ofc-mail" href="mailto:' + esc(encodeURI(appointment.visitor_email)) + '">' + ICON.mail + "Email the visitor</a>");
+        }
+
+        const history = Array.isArray(data.history) ? data.history : [];
+        parts.push('<details class="ofc-activity"><summary>Activity</summary><ul class="ofc-tl">' + (history.length ? history.map(function (event) {
+            return "<li><i></i><span><strong>" + esc(HISTORY_LABELS[event.to_status] || event.to_status || "Updated") + "</strong>" +
+                (event.note ? "<em>" + esc(event.note) + "</em>" : "") +
+                "<small>" + esc(fullDate(event.changed_at) + " · " + (event.changed_by || "System")) + "</small></span></li>";
+        }).join("") : "<li><span><small>No recorded activity.</small></span></li>") + "</ul></details>");
+        return parts.join("");
     }
 
     async function openAppointment(appointmentId) {
-        state.selectedAppointmentId = Number(appointmentId);
-        showError("officeAppointmentError", "");
         const data = await fetchJson("office_appointment.php?id=" + encodeURIComponent(appointmentId));
         if (!data || !data.success) {
-            toast((data && data.message) || "Could not open appointment.", "error");
+            toast((data && data.message) || "Could not open the visit.", "error");
             return;
         }
         const appointment = data.appointment;
-        setText("officeAppointmentTitle", appointment.visitor_full_name || "Visitor request");
-        setText("officeAppointmentCode", appointment.registration_code || "No registration code");
-        const meta = statusMeta(appointment.status, appointment);
-        const status = byId("officeAppointmentStatus");
-        status.className = "admin-status " + meta.className;
-        status.textContent = meta.label;
-        const schedule = formatSchedule(appointment);
-        const details = byId("officeAppointmentDetails");
-        const atGate = appointment.registration_source === "gate";
-        details.replaceChildren(...[
-            detailPair("Visitor's name", appointment.visitor_full_name),
-            detailPair("Contact number", appointment.contact_number),
-            atGate ? null : detailPair("Email", appointment.visitor_email),
-            detailPair("Visit type", atGate
-                ? "Walk-in, registered at the gate by Security (not tracked)"
-                : (appointment.visit_type === "walk_in" ? "Walk-in" : "Appointment")),
-            atGate ? detailPair("ID checked at the gate", appointment.id_type_shown) : null,
-            detailPair("Purpose", appointment.purpose),
-            detailPair("Destination", appointment.destination),
-            detailPair("Subject / concern", appointment.subject),
-            detailPair("Schedule", atGate ? "Walk-in, no booked time" : schedule.date + " · " + schedule.time),
-            detailPair("Additional details", appointment.additional_details, true),
-            detailPair(atGate ? "Registered at the gate" : "Date submitted", formatDateTime(appointment.created_at), true),
-        ].filter(Boolean));
-        if (appointment.rejection_reason) {
-            details.appendChild(detailPair("Decision reason", appointment.rejection_reason, true));
-        }
-        if (appointment.arrived_at) {
-            details.appendChild(detailPair("Arrived at this office", arrivalText(appointment), true));
-        }
+        state.selectedAppointmentId = Number(appointment.id);
+        state.selectedAppointment = appointment;
         state.selectedVisit = data.visit || null;
-        if (data.visit) {
-            const otherTimes = otherStopTimesText(data.visit);
-            details.appendChild(detailPair(
-                "Multi-stop visit",
-                "Stop " + data.visit.stop_number + " of " + data.visit.stop_count + " · " + data.visit.visit_code
-                    + (otherTimes ? " · Visitor's other stops that day: " + otherTimes : ""),
-                true
-            ));
-        }
-        renderProposal(data.reschedule_proposal);
-        renderAppointmentHistory(data.history || []);
-        // Pending: decide or suggest. Approved: the office can still move the time.
-        // Checked-in stop of a multi-stop visit: the office marks its meeting done.
-        // Walk-in passes are issued immediately and cannot be moved to another time.
+        setText("officeAppointmentTitle", appointment.visitor_full_name || "Visitor");
+        setText("officeAppointmentCode", appointment.registration_code || "");
+        const meta = statusMeta(appointment);
+        const chip = byId("officeAppointmentStatus");
+        chip.className = "ofc-chip " + meta.className;
+        chip.textContent = meta.label;
+        byId("officeAppointmentBody").innerHTML = renderAppointmentBody(appointment, data);
+        showError("officeAppointmentError", "");
+
+        // Pending: answer it. Approved (not a walk-in): the office can still move the time.
+        // A checked-in stop of a multi-stop visit: the office marks its meeting done.
         const isPending = appointment.status === "pending_approval";
-        const canReschedule = isPending || (appointment.status === "approved" && appointment.visit_type !== "walk_in");
-        const canComplete = appointment.status === "checked_in" && Boolean(data.visit);
+        const canMove = appointment.status === "approved" && appointment.visit_type !== "walk_in";
+        const canFinish = appointment.status === "checked_in" && Boolean(data.visit);
+        const help = appointment.status === "checked_in" ? helpFor(appointment.id) : null;
         byId("openDeclineAppointmentBtn").hidden = !isPending;
         byId("approveOfficeAppointmentBtn").hidden = !isPending;
-        byId("openRescheduleAppointmentBtn").hidden = !canReschedule;
-        byId("completeOfficeStopBtn").hidden = !canComplete;
-        byId("officeAppointmentActions").hidden = !(canReschedule || canComplete);
-        byId("officeAppointmentDialog").showModal();
+        const move = byId("openRescheduleAppointmentBtn");
+        move.hidden = !(isPending || canMove);
+        move.textContent = canMove ? "Suggest another time" : "Other time";
+        byId("completeOfficeStopBtn").hidden = !canFinish;
+        const going = byId("officeGoingBtn");
+        going.hidden = !help;
+        going.dataset.notificationId = help ? String(help.id) : "";
+        const footer = byId("officeAppointmentActions");
+        const count = [isPending ? 3 : 0, canMove ? 1 : 0, canFinish ? 1 : 0, help ? 1 : 0].reduce(function (sum, value) { return sum + value; }, 0);
+        footer.hidden = count === 0;
+        footer.dataset.count = String(count);
+        const dialog = byId("officeAppointmentDialog");
+        if (dialog.open) {
+            dialog.querySelector(".ofc-sheet-body").scrollTop = 0;
+        } else {
+            openSheet(dialog);
+        }
     }
+
+    // ---------- Approve, decline, other times, meeting done ----------
 
     async function processAppointment(action, reason) {
         showError("officeAppointmentError", "");
-        const approveButton = byId("approveOfficeAppointmentBtn");
-        const completeButton = byId("completeOfficeStopBtn");
-        approveButton.disabled = true;
-        completeButton.disabled = true;
+        showError("officeDeclineError", "");
+        const buttons = [byId("approveOfficeAppointmentBtn"), byId("completeOfficeStopBtn"), byId("confirmOfficeDeclineBtn")];
+        buttons.forEach(function (button) { button.disabled = true; });
         try {
             const data = await postJson("office_appointment_action.php", {
                 appointment_id: state.selectedAppointmentId,
@@ -668,38 +1097,156 @@
             if (!data || !data.success) {
                 throw new Error((data && data.message) || "Could not update the appointment.");
             }
-            [byId("officeDeclineDialog"), byId("officeAppointmentDialog")].forEach(function (dialog) {
-                if (dialog.open) { dialog.close(); }
-            });
+            closeSheets([byId("officeAppointmentDialog"), byId("officeDeclineDialog")]);
             toast(data.message || "Appointment updated.");
             await loadOfficeData(true);
         } catch (error) {
-            const target = action === "reject" && byId("officeDeclineDialog").open ? "officeDeclineError" : "officeAppointmentError";
-            showError(target, error.message || "Could not reach the server.");
+            const declineOpen = byId("officeDeclineDialog").open;
+            const target = action === "reject" && declineOpen ? "officeDeclineError" : "officeAppointmentError";
+            if (!byId(target).closest("dialog").open) {
+                toast(error.message || "Could not reach the server.", "error");
+            } else {
+                showError(target, error.message || "Could not reach the server.");
+            }
         } finally {
-            approveButton.disabled = false;
-            completeButton.disabled = false;
-            byId("confirmOfficeDeclineBtn").disabled = false;
+            buttons.forEach(function (button) { button.disabled = false; });
         }
     }
 
-    function toInputDate(date) {
-        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-        return local.toISOString().slice(0, 16);
+    async function approve(appointmentId) {
+        const row = findRow(appointmentId) || state.selectedAppointment;
+        if (!row) {
+            return;
+        }
+        state.selectedAppointmentId = Number(row.id);
+        const when = dayWord(row.scheduled_start_at) + ", " + timeRange(row.scheduled_start_at, row.scheduled_end_at);
+        if (await AppDialog.confirm({
+            title: "Approve this appointment?",
+            message: row.visitor_full_name + ", " + when + ". This issues the visitor's QR pass.",
+            confirmLabel: "Approve",
+        })) {
+            processAppointment("approve", "");
+        }
     }
 
-    function setFutureMinimums() {
-        const now = new Date();
-        const minimum = toInputDate(now);
-        document.querySelectorAll(".office-proposed-slot, #officeExceptionStart, #officeExceptionEnd").forEach(function (input) {
-            input.min = minimum;
+    function openDecline(appointmentId) {
+        const row = findRow(appointmentId) || state.selectedAppointment;
+        if (!row) {
+            return;
+        }
+        state.selectedAppointmentId = Number(row.id);
+        setText("officeDeclineTitle", "Decline " + row.visitor_full_name);
+        byId("officeDeclineReason").value = "";
+        document.querySelectorAll("#officeDeclineReasons [data-reason]").forEach(function (button) { button.classList.remove("is-on"); });
+        showError("officeDeclineError", "");
+        openSheet(byId("officeDeclineDialog"));
+    }
+
+    async function meetingDone(appointmentId) {
+        state.selectedAppointmentId = Number(appointmentId);
+        if (await AppDialog.confirm({
+            title: "Mark this meeting as done?",
+            message: "The visitor's campus visit continues until Security checks them out.",
+            confirmLabel: "Mark as done",
+        })) {
+            processAppointment("complete", "");
+        }
+    }
+
+    function updatePicked() {
+        const other = byId("officeOtherDays").hidden ? "" : document.querySelector("#officeOtherDays .office-proposed-slot").value;
+        const total = state.picked.length + (other ? 1 : 0);
+        const labels = state.picked.map(function (slot) { return dayWord(slot.start) + " " + clock(slot.start); });
+        if (other) {
+            labels.push(dayWord(other) + " " + clock(other));
+        }
+        setText("officePickedLine", total ? total + " of 3 picked: " + labels.join(", ") : "None picked yet");
+        const send = byId("confirmOfficeRescheduleBtn");
+        send.disabled = total === 0;
+        send.textContent = total ? "Send " + total + " time" + (total === 1 ? "" : "s") : "Send times";
+        document.querySelectorAll("#officeFreeTimes [data-slot]").forEach(function (button) {
+            const on = state.picked.some(function (slot) { return slot.start === button.dataset.slot; });
+            button.classList.toggle("is-on", on);
+            button.setAttribute("aria-pressed", String(on));
+            button.disabled = !on && total >= 3;
         });
     }
 
-    // ---------- Weekly visitor hours, with breaks ----------
+    async function loadFreeTimes(appointmentId) {
+        const host = byId("officeFreeTimes");
+        host.innerHTML = '<p class="ofc-empty">Loading free times…</p>';
+        const data = await fetchJson("office_free_times.php?appointment_id=" + encodeURIComponent(appointmentId));
+        if (Number(state.selectedAppointmentId) !== Number(appointmentId)) {
+            return;
+        }
+        if (!data || !data.success) {
+            host.innerHTML = '<p class="ofc-empty">' + esc((data && data.message) || "Could not list the free times.") + "</p>";
+            byId("officeOtherDays").hidden = false;
+            return;
+        }
+        if (!data.days.length) {
+            host.innerHTML = '<p class="ofc-empty">' + (data.accepting_visitors
+                ? "No free times in the next three weeks. Pick a day and time below."
+                : "Your office isn't accepting visitors, so there are no free times.") + "</p>";
+            byId("officeOtherDays").hidden = !data.accepting_visitors;
+            return;
+        }
+        host.innerHTML = data.days.map(function (day) {
+            const date = parseServerDate(day.date + " 00:00:00");
+            const label = daysFromToday(date) === 0 ? "Today, " + shortDayFormat.format(date)
+                : daysFromToday(date) === 1 ? "Tomorrow, " + shortDayFormat.format(date) : shortDayFormat.format(date);
+            return '<div class="ofc-slots-day"><strong>' + esc(label) + '</strong><div class="ofc-slots">' + day.times.map(function (slot) {
+                return '<button class="ofc-slot" type="button" aria-pressed="false" data-slot="' + esc(slot.start) + '" data-slot-end="' + esc(slot.end) + '">' +
+                    esc(clock(slot.start)) + "</button>";
+            }).join("") + "</div></div>";
+        }).join("");
+        updatePicked();
+    }
+
+    async function openReschedule(appointmentId) {
+        const row = findRow(appointmentId) || state.selectedAppointment;
+        if (!row) {
+            return;
+        }
+        state.selectedAppointmentId = Number(row.id);
+        state.picked = [];
+        byId("officeRescheduleForm").reset();
+        byId("officeOtherDays").hidden = true;
+        byId("officePickAnotherDay").hidden = false;
+        const now = new Date(Date.now() + 60 * 60 * 1000);
+        document.querySelector("#officeOtherDays .office-proposed-slot").min = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+        setText("officeRescheduleTitle", row.status === "approved" ? "Suggest another time" : "Suggest other times");
+        setText("officeRescheduleFor", "For " + row.visitor_full_name + ". Pick up to 3; the visitor chooses one or declines them all." +
+            (row.status === "approved" ? " Their QR pass stops working until they choose." : ""));
+        const first = document.querySelector("#officeRescheduleReasons [data-reason]");
+        document.querySelectorAll("#officeRescheduleReasons [data-reason]").forEach(function (button) {
+            button.classList.toggle("is-on", button === first);
+        });
+        byId("officeRescheduleReason").value = first ? first.dataset.reason : "";
+        showError("officeRescheduleError", "");
+        const hint = byId("officeRescheduleVisitHint");
+        hint.hidden = true;
+        updatePicked();
+        openSheet(byId("officeRescheduleDialog"));
+        loadFreeTimes(row.id);
+        if (row.visit_id) {
+            // The visitor's other stops that day, so the office offers a time that fits.
+            const visit = state.selectedVisit && state.selectedAppointment && Number(state.selectedAppointment.id) === Number(row.id)
+                ? state.selectedVisit
+                : ((await fetchJson("office_appointment.php?id=" + encodeURIComponent(row.id))) || {}).visit;
+            if (visit) {
+                const others = (visit.other_stop_times || []).map(function (stop) { return timeRange(stop.scheduled_start_at, stop.scheduled_end_at); });
+                hint.textContent = "Part of a visit to several offices" + (others.length ? ", with other stops at " + others.join(", ") : "") +
+                    ". Times that clash with them are left out. A time on another day moves this request out of the visit.";
+                hint.hidden = false;
+            }
+        }
+    }
+
+    // ---------- Hours: the weekly schedule with breaks ----------
     // A day is its visitor hours with its breaks cut out. The server saves the result as
-    // bookable windows (office_availability_service.php), so visitors are never offered a
-    // time inside a break. These helpers mirror the server's rules for live feedback.
+    // bookable windows (office_availability_service.php), so visitors are never offered a time
+    // inside a break. These helpers mirror the server's rules for live feedback.
 
     const LUNCH = { start: "12:00", end: "13:00", label: "Lunch break" };
     const MAX_BREAKS = 4;
@@ -723,6 +1270,11 @@
         return (hours % 12 || 12) + ":" + String(minutes % 60).padStart(2, "0") + " " + (hours < 12 ? "AM" : "PM");
     }
 
+    function shortClock(minutes) {
+        const hours = Math.floor(minutes / 60) % 24;
+        return (hours % 12 || 12) + ":" + String(minutes % 60).padStart(2, "0");
+    }
+
     function serverClock(value) {
         const date = parseServerDate(value);
         return date ? clockText(date.getHours() * 60 + date.getMinutes()) : "";
@@ -734,11 +1286,7 @@
         if (!date) {
             return "";
         }
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const day = new Date(date.getTime());
-        day.setHours(0, 0, 0, 0);
-        const days = Math.round((day.getTime() - today.getTime()) / 86400000);
+        const days = daysFromToday(date);
         const time = clockText(date.getHours() * 60 + date.getMinutes());
         if (days <= 0) {
             return "at " + time;
@@ -757,6 +1305,16 @@
             start: String(start || "").slice(0, 5),
             end: String(end || "").slice(0, 5),
             label: label == null ? "" : String(label),
+        };
+    }
+
+    function copyDay(day) {
+        return {
+            day: day.day,
+            enabled: day.enabled,
+            start: day.start,
+            end: day.end,
+            breaks: day.breaks.map(function (item) { return newBreak(item.start, item.end, item.label); }),
         };
     }
 
@@ -798,6 +1356,10 @@
 
     function slotLength() {
         return Math.max(15, Number(byId("officeSlotDuration").value) || 30);
+    }
+
+    function slotCapacity() {
+        return Math.min(50, Math.max(1, Number(byId("officeSlotCapacity").value) || 1));
     }
 
     /** The day's breaks in minutes, in time order. A time that can't be read stays null. */
@@ -887,11 +1449,11 @@
         }).filter(Boolean);
     }
 
-    /** The hours every day's timeline shows: the earliest opening to the latest closing. */
-    function timelineRange() {
+    /** The hours every day's bar shows: the earliest opening to the latest closing. */
+    function timelineRange(days) {
         let first = null;
         let last = null;
-        state.week.forEach(function (day) {
+        days.forEach(function (day) {
             const open = minutesOf(day.start);
             const close = minutesOf(day.end);
             if (!day.enabled || open === null || close === null || open >= close) {
@@ -901,273 +1463,157 @@
             last = last === null ? close : Math.max(last, close);
         });
         if (first === null) {
-            return { start: 7 * 60, end: 18 * 60 };
+            return { start: 8 * 60, end: 17 * 60 };
         }
-        const start = Math.floor(first / 60) * 60;
-        return { start: start, end: Math.min(24 * 60, Math.max(start + 4 * 60, Math.ceil(last / 60) * 60)) };
+        return { start: first, end: Math.max(first + 60, last) };
     }
 
     function percent(minutes, range) {
         return ((minutes - range.start) / (range.end - range.start) * 100).toFixed(3) + "%";
     }
 
-    function scaleElement(range) {
-        const scale = document.createElement("div");
-        scale.className = "office-timeline-scale";
-        scale.setAttribute("aria-hidden", "true");
-        const step = range.end - range.start > 12 * 60 ? 120 : 60;
-        for (let minute = range.start; minute <= range.end; minute += step) {
-            const mark = document.createElement("span");
-            const hour = Math.floor(minute / 60) % 24;
-            mark.style.left = percent(minute, range);
-            mark.textContent = (hour % 12 || 12) + (hour < 12 ? " AM" : " PM");
-            scale.appendChild(mark);
+    function barHtml(day, range, slots) {
+        if (!day.enabled) {
+            return "";
         }
-        return scale;
-    }
-
-    function renderTimeline(container, day, range, slots) {
-        container.replaceChildren();
         const parts = [];
-        function segment(className, start, end, title) {
-            const piece = document.createElement("span");
-            piece.className = "office-timeline-segment " + className;
-            piece.style.left = percent(start, range);
-            piece.style.width = ((end - start) / (range.end - range.start) * 100).toFixed(3) + "%";
-            piece.title = title;
-            container.appendChild(piece);
-            parts.push({ at: start, text: title });
-        }
         dayWindows(day).forEach(function (window) {
-            segment("is-open", window[0], window[1], "Visitors " + clockText(window[0]) + " – " + clockText(window[1]));
+            parts.push('<i class="is-open" style="left:' + percent(window[0], range) + ";width:" +
+                ((window[1] - window[0]) / (range.end - range.start) * 100).toFixed(3) + '%"></i>');
         });
         breakSpans(day).forEach(function (span) {
             if (span.start !== null && span.end !== null && span.start < span.end) {
-                segment("is-break", span.start, span.end, span.label + " " + clockText(span.start) + " – " + clockText(span.end));
+                parts.push('<i class="is-break" style="left:' + percent(span.start, range) + ";width:" +
+                    ((span.end - span.start) / (range.end - range.start) * 100).toFixed(3) + '%"></i>');
             }
         });
         (slots || []).forEach(function (start) {
-            const tick = document.createElement("span");
-            tick.className = "office-timeline-tick";
-            tick.style.left = percent(start, range);
-            container.appendChild(tick);
+            parts.push('<i class="is-tick" style="left:' + percent(start, range) + '"></i>');
         });
-        parts.sort(function (left, right) { return left.at - right.at; });
-        container.setAttribute("role", "img");
-        container.setAttribute("aria-label", dayNames[day.day - 1] + ": " + (parts.length
-            ? parts.map(function (part) { return part.text; }).join(", ")
-            : "no visitor hours"));
+        return parts.join("");
     }
 
-    function makeInput(type, className, value, label) {
-        const input = document.createElement("input");
-        input.type = type;
-        input.className = className;
-        input.value = value;
-        input.setAttribute("aria-label", label);
-        return input;
-    }
-
-    function makeButton(className, text, action, label) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = className;
-        button.textContent = text;
-        button.dataset.action = action;
-        if (label) {
-            button.setAttribute("aria-label", label);
-        }
-        return button;
-    }
-
-    function makeText(tag, className, text) {
-        const element = document.createElement(tag);
-        element.className = className;
-        if (text) {
-            element.textContent = text;
-        }
-        return element;
-    }
-
-    function breakRow(day, item) {
-        const dayName = dayNames[day.day - 1];
-        const what = item.label.trim() || "break";
-        const row = makeText("div", "office-break-row");
-        row.dataset.breakKey = item.key;
-        const label = makeInput("text", "office-break-label", item.label, dayName + " break name");
-        label.dataset.field = "label";
-        label.placeholder = "Break name";
-        label.maxLength = 60;
-        label.setAttribute("list", "officeBreakNames");
-        const start = makeInput("time", "office-break-start", item.start, dayName + " " + what + " starts");
-        start.dataset.field = "start";
-        const end = makeInput("time", "office-break-end", item.end, dayName + " " + what + " ends");
-        end.dataset.field = "end";
-        row.append(
-            label,
-            start,
-            makeText("span", "office-day-to", "to"),
-            end,
-            makeButton("office-break-remove", "Remove", "remove-break", "Remove " + what + " on " + dayName)
-        );
-        return row;
-    }
-
-    function dayRow(day, range) {
-        const dayName = dayNames[day.day - 1];
-        const row = makeText("div", "office-schedule-row");
-        row.dataset.day = String(day.day);
-        row.classList.toggle("is-closed", !day.enabled);
-
-        const main = makeText("div", "office-day-main");
-        const toggle = makeText("label", "office-day-toggle");
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.className = "office-day-enabled";
-        checkbox.dataset.field = "enabled";
-        checkbox.checked = day.enabled;
-        toggle.append(checkbox, makeText("strong", "", dayName));
-        const start = makeInput("time", "office-day-start", day.start, dayName + " opens");
-        start.dataset.field = "start";
-        start.disabled = !day.enabled;
-        const end = makeInput("time", "office-day-end", day.end, dayName + " closes");
-        end.dataset.field = "end";
-        end.disabled = !day.enabled;
-        main.append(toggle, start, makeText("span", "office-day-to", "to"), end,
-            makeText("span", "office-day-summary"), makeText("span", "office-day-state"));
-        row.appendChild(main);
-
-        if (day.enabled) {
-            // In time order whenever the day is drawn (not while a time is being typed).
-            day.breaks.sort(function (left, right) {
-                const leftStart = minutesOf(left.start);
-                const rightStart = minutesOf(right.start);
-                return (leftStart === null ? 1e9 : leftStart) - (rightStart === null ? 1e9 : rightStart);
-            });
-            const breaks = makeText("div", "office-day-breaks");
-            day.breaks.forEach(function (item) { breaks.appendChild(breakRow(day, item)); });
-            const tools = makeText("div", "office-day-tools");
-            const add = makeButton("office-link-button", "+ Add break", "add-break", "Add a break on " + dayName);
-            add.disabled = day.breaks.length >= MAX_BREAKS;
-            tools.append(add, makeButton("office-link-button", "Copy to other open days", "copy-day",
-                "Copy " + dayName + "'s hours and breaks to the other open days"));
-            const error = makeText("p", "office-day-error");
-            error.setAttribute("role", "alert");
-            row.append(breaks, tools, makeText("div", "office-day-timeline"), makeText("p", "office-day-note"), error);
-        }
-        refreshRow(row, day, range);
-        return row;
-    }
-
-    /** Updates what a day row shows about its hours: slots, timeline, notes, problems. */
-    function refreshRow(row, day, range) {
-        row.querySelector(".office-day-state").textContent = day.enabled ? "Open" : "Closed";
-        const summary = row.querySelector(".office-day-summary");
-        if (!day.enabled) {
-            summary.textContent = "";
-            return;
-        }
-        const problem = dayProblem(day);
-        const error = row.querySelector(".office-day-error");
-        error.textContent = problem;
-        error.hidden = !problem;
-        row.classList.toggle("has-problem", Boolean(problem));
+    function renderWeekRows() {
+        const range = timelineRange(state.week);
         const length = slotLength();
-        const slots = problem ? [] : daySlots(day, length);
-        summary.textContent = problem ? "" : (slots.length === 1 ? "1 slot" : slots.length + " slots");
-        renderTimeline(row.querySelector(".office-day-timeline"), day, range, slots);
-        const leftovers = problem ? [] : dayLeftovers(day, length);
-        const note = row.querySelector(".office-day-note");
-        note.textContent = leftovers.length ? "Too short for a " + length + "-min slot: " + leftovers.join(", ") + "." : "";
-        note.hidden = leftovers.length === 0;
-    }
-
-    function renderWeek() {
-        const range = timelineRange();
-        const wrap = byId("officeWeeklySchedule");
-        wrap.replaceChildren(scaleElement(range));
-        state.week.forEach(function (day) { wrap.appendChild(dayRow(day, range)); });
-        renderPreview();
-    }
-
-    /** After an edit: every row's slots and timeline (the shared hour scale may change too). */
-    function refreshWeek() {
-        const range = timelineRange();
-        const wrap = byId("officeWeeklySchedule");
-        const scale = wrap.querySelector(".office-timeline-scale");
-        if (scale) {
-            scale.replaceWith(scaleElement(range));
-        }
-        wrap.querySelectorAll(".office-schedule-row").forEach(function (row) {
-            refreshRow(row, state.week[Number(row.dataset.day) - 1], range);
-        });
-        renderPreview();
-    }
-
-    /** Rebuilds one day after its breaks or open/closed state changed, keeping keyboard focus. */
-    function replaceRow(row, day, focusSelector) {
-        const fresh = dayRow(day, timelineRange());
-        row.replaceWith(fresh);
-        const target = focusSelector ? fresh.querySelector(focusSelector) : null;
-        if (target) {
-            target.focus();
-        }
-        refreshWeek();
-    }
-
-    function renderPreview() {
-        const days = byId("officePreviewDays");
-        days.replaceChildren();
-        state.week.forEach(function (day) {
-            const button = makeText("button", "office-preview-day" + (day.enabled ? "" : " is-closed"), dayNames[day.day - 1].slice(0, 3));
-            button.type = "button";
-            button.dataset.previewDay = String(day.day);
-            button.title = dayNames[day.day - 1] + (day.enabled ? "" : " (closed)");
-            button.setAttribute("aria-pressed", String(day.day === state.previewDay));
-            days.appendChild(button);
-        });
-        const day = state.week[state.previewDay - 1];
-        const dayName = dayNames[day.day - 1];
-        const list = byId("officeSlotPreview");
-        list.replaceChildren();
-        const summary = byId("officeSlotPreviewSummary");
-        if (!day.enabled) {
-            summary.textContent = dayName + " is closed, so visitors can't book it.";
-            return;
-        }
-        const problem = dayProblem(day);
-        if (problem) {
-            summary.textContent = "Fix " + dayName + " above to see its times.";
-            return;
-        }
-        const length = slotLength();
-        const capacity = Math.max(1, Number(byId("officeSlotCapacity").value) || 1);
-        const slots = daySlots(day, length);
-        summary.textContent = dayName + ": " + (slots.length === 1 ? "1 time" : slots.length + " times") + " of " + length
-            + " min, up to " + capacity + (capacity === 1 ? " visitor" : " visitors") + " each. Visitors don't see times that are full or covered by a temporary change.";
-        const items = slots.map(function (start) { return { at: start }; });
-        breakSpans(day).forEach(function (span) { items.push({ at: span.start, span: span }); });
-        items.sort(function (left, right) { return left.at - right.at || (left.span ? -1 : 1); });
-        items.forEach(function (item) {
-            list.appendChild(item.span
-                ? makeText("span", "office-preview-break", item.span.label + " · " + clockText(item.span.start) + " – " + clockText(item.span.end))
-                : makeText("span", "office-preview-slot", clockText(item.at)));
-        });
-        if (!slots.length) {
-            list.appendChild(makeText("span", "office-preview-empty", "No part of the day is long enough for a " + length + "-min slot."));
-        }
+        byId("officeWeekRows").innerHTML = state.week.map(function (day, index) {
+            const short = dayNames[day.day - 1].slice(0, 3);
+            if (!day.enabled) {
+                return '<button class="ofc-dayrow is-closed" type="button" data-day-index="' + index + '" aria-label="' + dayNames[day.day - 1] +
+                    ': closed. Change it">' + '<span class="ofc-dname">' + short + '</span><span class="ofc-dtext">Closed</span><span class="ofc-bar"></span>' + ICON.chev + "</button>";
+            }
+            const problem = dayProblem(day);
+            const breaks = breakSpans(day).map(function (span) {
+                return span.start === null || span.end === null ? span.label : span.label + " " + shortClock(span.start) + "–" + shortClock(span.end);
+            }).join(" · ");
+            const count = problem ? 0 : daySlots(day, length).length;
+            const detail = problem ? '<small class="is-problem">' + esc(problem) + "</small>"
+                : "<small>" + esc((breaks ? breaks + " · " : "") + count + (count === 1 ? " time" : " times")) + "</small>";
+            const open = minutesOf(day.start);
+            const close = minutesOf(day.end);
+            const hours = open !== null && close !== null ? clockText(open) + " – " + clockText(close) : "Hours not set";
+            return '<button class="ofc-dayrow' + (problem ? " has-problem" : "") + '" type="button" data-day-index="' + index + '" aria-label="' +
+                dayNames[day.day - 1] + ": " + esc(hours) + '. Change it">' +
+                '<span class="ofc-dname">' + short + '</span><span class="ofc-dtext">' + esc(hours) + detail + "</span>" +
+                '<span class="ofc-bar">' + barHtml(day, range, null) + "</span>" + ICON.chev + "</button>";
+        }).join("");
     }
 
     function markDirty() {
         state.weekDirty = true;
-        byId("officeUnsavedNote").hidden = false;
-        // A refused save's message is out of date once something changes; rows show their own.
         showError("officeAvailabilityError", "");
+        updateSaveBar();
     }
 
     function markClean() {
         state.weekDirty = false;
-        byId("officeUnsavedNote").hidden = true;
+        updateSaveBar();
+    }
+
+    function updateSaveBar() {
+        const show = state.weekDirty && state.view === "hours";
+        byId("officeSaveBar").hidden = !show;
+        document.body.classList.toggle("ofc-has-savebar", show);
+    }
+
+    // ---------- Hours: one day at a time ----------
+
+    function dayEditorPreview(day) {
+        if (!day.enabled) {
+            return '<p class="ofc-note">Closed. Visitors can\'t book ' + dayNames[day.day - 1] + "s.</p>";
+        }
+        const problem = dayProblem(day);
+        if (problem) {
+            return '<p class="ofc-day-problem" role="alert">' + esc(problem) + "</p>";
+        }
+        const length = slotLength();
+        const open = minutesOf(day.start);
+        const close = minutesOf(day.end);
+        const range = { start: Math.floor(open / 60) * 60, end: Math.max(Math.floor(open / 60) * 60 + 60, Math.ceil(close / 60) * 60) };
+        const slots = daySlots(day, length);
+        const step = range.end - range.start > 360 ? 120 : 60;
+        const marks = [];
+        for (let minute = range.start; minute <= range.end; minute += step) {
+            const at = minute + step > range.end && minute !== range.end ? range.end : minute;
+            const hour = Math.floor(at / 60) % 24;
+            marks.push('<span style="left:' + percent(at, range) + '">' + (hour % 12 || 12) + " " + (hour < 12 ? "AM" : "PM") + "</span>");
+            if (at === range.end) {
+                break;
+            }
+        }
+        const items = slots.map(function (start) { return { at: start, html: "<span>" + shortClock(start) + "</span>" }; })
+            .concat(breakSpans(day).map(function (span) {
+                return { at: span.start, html: '<span class="is-break">' + esc(span.label) + " " + shortClock(span.start) + "–" + shortClock(span.end) + "</span>" };
+            }))
+            .sort(function (left, right) { return left.at - right.at; });
+        const leftovers = dayLeftovers(day, length);
+        const capacity = slotCapacity();
+        return '<div class="ofc-bigbar">' + barHtml(day, range, slots) + '</div><div class="ofc-scale">' + marks.join("") + "</div>" +
+            '<p class="ofc-note"><b>' + slots.length + (slots.length === 1 ? " time" : " times") + "</b> of " + length + " min, up to " +
+            capacity + (capacity === 1 ? " visitor" : " visitors") + " each.</p>" +
+            '<div class="ofc-pslots">' + items.map(function (item) { return item.html; }).join("") + "</div>" +
+            (leftovers.length ? '<p class="ofc-note">Too short for a ' + length + "-min visit: " + esc(leftovers.join(", ")) + ".</p>" : "");
+    }
+
+    function breakRowHtml(day, item) {
+        const dayName = dayNames[day.day - 1];
+        const what = item.label.trim() || "break";
+        return '<div class="ofc-brk" data-break-key="' + esc(item.key) + '">' +
+            '<input class="ofc-brk-name" data-field="label" value="' + esc(item.label) + '" maxlength="60" list="officeBreakNames" placeholder="Break name" aria-label="' + esc(dayName + " break name") + '">' +
+            '<button class="ofc-icon-btn" type="button" data-remove-break="' + esc(item.key) + '" aria-label="' + esc("Remove " + what) + '">' + ICON.trash + "</button>" +
+            '<div class="ofc-times"><input type="time" data-field="start" value="' + esc(item.start) + '" aria-label="' + esc(what + " starts") + '">' +
+            '<span>to</span><input type="time" data-field="end" value="' + esc(item.end) + '" aria-label="' + esc(what + " ends") + '"></div></div>';
+    }
+
+    function renderDayEditor() {
+        const day = state.dayDraft;
+        const dayName = dayNames[day.day - 1];
+        setText("officeDayTitle", dayName);
+        setText("officeDaySub", "Every " + dayName + ", until you change it.");
+        byId("officeDayBody").innerHTML =
+            '<div class="ofc-setting"><span><strong>Open on ' + dayName + 's</strong><small>Visitors can book this day.</small></span>' +
+            '<label class="office-switch"><input type="checkbox" data-field="enabled"' + (day.enabled ? " checked" : "") + '><span aria-hidden="true"></span>' +
+            '<span class="sr-only">Open on ' + dayName + "s</span></label></div>" +
+            (day.enabled
+                ? '<div class="ofc-field"><span>Visitor hours</span><div class="ofc-times">' +
+                    '<input type="time" data-field="start" value="' + esc(day.start) + '" aria-label="' + dayName + ' opens"><span>to</span>' +
+                    '<input type="time" data-field="end" value="' + esc(day.end) + '" aria-label="' + dayName + ' closes"></div></div>' +
+                    '<div class="ofc-field"><span>Breaks</span><div class="ofc-brks">' +
+                    day.breaks.map(function (item) { return breakRowHtml(day, item); }).join("") + "</div>" +
+                    '<button class="ofc-link" type="button" data-add-break' + (day.breaks.length >= MAX_BREAKS ? " disabled" : "") + ">" + ICON.plus + "Add a break</button></div>"
+                : "") +
+            '<div class="ofc-field"><span>What visitors can book</span><div id="officeDayPreview">' + dayEditorPreview(day) + "</div></div>" +
+            (day.enabled ? '<button class="ofc-link" type="button" data-copy-day>Copy ' + dayName + " to the other open days</button>" : "");
+    }
+
+    function openDayEditor(index) {
+        if (!state.week[index]) {
+            return;
+        }
+        state.dayIndex = index;
+        state.dayDraft = copyDay(state.week[index]);
+        renderDayEditor();
+        openSheet(byId("officeDayDialog"));
     }
 
     /** A break that fits the day: lunch at 12:00 if free, else the first free half hour. */
@@ -1192,23 +1638,6 @@
         return null;
     }
 
-    function copyDay(source) {
-        const targets = state.week.filter(function (day) { return day.enabled && day.day !== source.day; });
-        const sourceName = dayNames[source.day - 1];
-        if (!targets.length) {
-            toast("Turn on the other days first: " + sourceName + " is copied to open days only.", "error");
-            return;
-        }
-        targets.forEach(function (day) {
-            day.start = source.start;
-            day.end = source.end;
-            day.breaks = source.breaks.map(function (item) { return newBreak(item.start, item.end, item.label); });
-        });
-        markDirty();
-        renderWeek();
-        toast("Copied " + sourceName + "'s hours and breaks to " + targets.length + (targets.length === 1 ? " day" : " days") + ". Save to apply.");
-    }
-
     function addLunchEverywhere() {
         let added = 0;
         let already = 0;
@@ -1231,7 +1660,7 @@
         });
         if (added) {
             markDirty();
-            renderWeek();
+            renderWeekRows();
         }
         const notAdded = skipped.length ? " " + skipped.join(", ") + (skipped.length === 1 ? " was" : " were") + " skipped: the time overlaps a break or is outside the hours." : "";
         if (added) {
@@ -1243,101 +1672,57 @@
         }
     }
 
-    function dayOf(element) {
-        const row = element.closest(".office-schedule-row");
-        return row ? { row: row, day: state.week[Number(row.dataset.day) - 1] } : null;
-    }
+    // ---------- Hours: status, pause and temporary changes ----------
 
-    function onWeekEdit(event) {
-        const field = event.target.dataset.field;
-        const found = field ? dayOf(event.target) : null;
-        if (!found) {
-            return;
-        }
-        if (field === "enabled") {
-            if (event.type === "change") {
-                found.day.enabled = event.target.checked;
-                markDirty();
-                replaceRow(found.row, found.day, ".office-day-enabled");
+    function statusParts(info) {
+        switch (info.state) {
+        case "break":
+            return {
+                tone: "is-break",
+                title: info.label === "Break" ? "On a break" : info.label,
+                sub: info.until ? "Back " + whenText(info.until) : "",
+            };
+        case "closed":
+            return { tone: "is-off", title: "Closed now", sub: info.until ? "Opens " + whenText(info.until) : "" };
+        case "paused":
+            return {
+                tone: "is-paused",
+                title: "Paused" + (info.until ? " until " + serverClock(info.until) : ""),
+                sub: (info.label && info.label !== "Office unavailable" ? info.label + " · " : "") + "Booked visits stay",
+            };
+        case "not_accepting":
+            return { tone: "is-stopped", title: "Not accepting visitors", sub: "Turned off in Hours" };
+        default:
+            if (info.label && info.label !== "Open") {
+                return { tone: "is-open", title: info.label, sub: info.until ? "Until " + serverClock(info.until) : "" };
             }
-            return;
-        }
-        const breakElement = event.target.closest(".office-break-row");
-        if (breakElement) {
-            const item = found.day.breaks.find(function (entry) { return entry.key === breakElement.dataset.breakKey; });
-            if (!item) {
-                return;
+            if (info.until && info.next === "Closing") {
+                return { tone: "is-open", title: "Open now", sub: "Closes at " + serverClock(info.until) };
             }
-            item[field] = event.target.value;
-        } else {
-            found.day[field] = event.target.value;
-        }
-        markDirty();
-        refreshWeek();
-    }
-
-    function onWeekClick(event) {
-        const button = event.target.closest("button[data-action]");
-        const found = button ? dayOf(button) : null;
-        if (!found) {
-            return;
-        }
-        if (button.dataset.action === "add-break") {
-            const item = suggestBreak(found.day);
-            if (!item) {
-                toast("There's no free time left on " + dayNames[found.day.day - 1] + " for another break.", "error");
-                return;
+            if (info.until && info.next) {
+                return { tone: "is-open", title: "Open now", sub: info.next + " at " + serverClock(info.until) };
             }
-            found.day.breaks.push(item);
-            markDirty();
-            replaceRow(found.row, found.day, '[data-break-key="' + item.key + '"] .office-break-label');
-        } else if (button.dataset.action === "remove-break") {
-            const key = button.closest(".office-break-row").dataset.breakKey;
-            found.day.breaks = found.day.breaks.filter(function (item) { return item.key !== key; });
-            markDirty();
-            replaceRow(found.row, found.day, '[data-action="add-break"]');
-        } else if (button.dataset.action === "copy-day") {
-            copyDay(found.day);
+            return { tone: "is-open", title: "Open now", sub: info.until ? "Until " + serverClock(info.until) : "" };
         }
     }
-
-    // ---------- Live status and unplanned breaks ----------
 
     function renderStatus(status) {
         state.status = status || null;
         const info = status || { state: "open", label: "Open" };
-        let text = "Open now";
-        let tone = "is-open";
-        if (info.state === "open") {
-            if (info.label && info.label !== "Open") {
-                text = info.label + (info.until ? " · until " + serverClock(info.until) : "");
-            } else if (info.until && info.next === "Closing") {
-                text = "Open now · closes at " + serverClock(info.until);
-            } else if (info.until && info.next) {
-                text = "Open now · " + info.next + " at " + serverClock(info.until);
-            } else if (info.until) {
-                text = "Open now · until " + serverClock(info.until);
-            }
-        } else if (info.state === "break") {
-            tone = "is-break";
-            text = (info.label === "Break" ? "On a break" : info.label) + (info.until ? " · back " + whenText(info.until) : "");
-        } else if (info.state === "closed") {
-            tone = "is-off";
-            text = "Closed now" + (info.until ? " · opens " + whenText(info.until) : "");
-        } else if (info.state === "paused") {
-            tone = "is-paused";
-            text = "Paused · " + info.label + (info.until ? " · until " + serverClock(info.until) : "");
-        } else if (info.state === "not_accepting") {
-            tone = "is-closed";
-            text = "Not accepting visitors";
-        }
-        const chip = byId("officeAvailabilityChip");
-        chip.textContent = text;
-        chip.className = "office-availability-chip " + tone;
-        const pause = byId("officePauseBtn");
-        pause.hidden = info.state === "not_accepting";
-        pause.dataset.mode = info.state === "paused" && info.pause_id ? "resume" : "pause";
-        pause.textContent = pause.dataset.mode === "resume" ? "Resume now" : "Pause visits";
+        const parts = statusParts(info);
+        document.body.dataset.officeState = parts.tone;
+        document.querySelectorAll("[data-status-card]").forEach(function (card) {
+            card.dataset.tone = parts.tone;
+            card.querySelector("[data-status-title]").textContent = parts.title;
+            card.querySelector("[data-status-sub]").textContent = parts.sub;
+        });
+        setText("officeTopStatus", parts.title + (parts.sub ? " · " + parts.sub : ""));
+        const resume = info.state === "paused" && Boolean(info.pause_id);
+        document.querySelectorAll("[data-pause-toggle]").forEach(function (button) {
+            button.hidden = info.state === "not_accepting";
+            button.dataset.mode = resume ? "resume" : "pause";
+            button.textContent = resume ? "Resume" : (button.closest(".is-big") ? "Pause new visits" : "Pause");
+        });
     }
 
     async function refreshStatus() {
@@ -1351,16 +1736,6 @@
             }
         } catch (error) {
             // Keep showing the last status; the next refresh tries again.
-        }
-    }
-
-    function setStatusRefresh(active) {
-        if (state.statusTimer) {
-            window.clearInterval(state.statusTimer);
-            state.statusTimer = null;
-        }
-        if (active) {
-            state.statusTimer = window.setInterval(refreshStatus, 60000);
         }
     }
 
@@ -1379,7 +1754,7 @@
             byId("officeSlotDuration").value = String(settings.slot_duration_minutes || 30);
             byId("officeSlotCapacity").value = String(settings.maximum_visitors_per_slot || 1);
             state.week = weekFromPayload(data);
-            renderWeek();
+            renderWeekRows();
             markClean();
         }
         renderExceptions(data.exceptions || []);
@@ -1389,31 +1764,38 @@
         });
     }
 
+    function changeItem(exception, removable) {
+        const extra = Number(exception.is_available) === 1;
+        const starts = parseServerDate(exception.starts_at);
+        const ends = parseServerDate(exception.ends_at);
+        const sameDay = starts && ends && starts.toDateString() === ends.toDateString();
+        const when = starts && ends
+            ? (sameDay ? dayWord(starts) + " · " + timeRange(starts, ends) : dayWord(starts) + ", " + clock(starts) + " – " + dayWord(ends) + ", " + clock(ends))
+            : "";
+        return '<li class="ofc-change"><span class="ofc-mk' + (extra ? " is-extra" : "") + '"></span><span><strong>' +
+            (extra ? "Extra visitor hours" : "Office unavailable") + "</strong><small>" + esc(when + (exception.reason ? " · " + exception.reason : "")) +
+            "</small></span>" + (removable
+                ? '<button class="ofc-icon-btn" type="button" data-exception-id="' + Number(exception.id) + '" aria-label="Remove this change">' + ICON.trash + "</button>"
+                : "<span></span>") + "</li>";
+    }
+
+    /** Current and coming changes; the ones that ended (such as past pauses) fold away. */
     function renderExceptions(exceptions) {
-        const list = byId("officeExceptionList");
-        list.replaceChildren();
-        exceptions.forEach(function (exception) {
-            const item = document.createElement("article");
-            item.className = "office-exception-item";
-            const marker = document.createElement("span");
-            marker.className = Number(exception.is_available) === 1 ? "is-available" : "is-closed";
-            const copy = document.createElement("div");
-            const title = document.createElement("strong");
-            title.textContent = Number(exception.is_available) === 1 ? "Extra visitor hours" : "Office unavailable";
-            const schedule = document.createElement("span");
-            schedule.textContent = formatDateTime(exception.starts_at) + " – " + formatDateTime(exception.ends_at);
-            const reason = document.createElement("small");
-            reason.textContent = exception.reason || "No reason provided";
-            copy.append(title, schedule, reason);
-            const remove = document.createElement("button");
-            remove.type = "button";
-            remove.className = "office-remove-exception";
-            remove.dataset.exceptionId = String(exception.id);
-            remove.textContent = "Remove";
-            item.append(marker, copy, remove);
-            list.appendChild(item);
-        });
-        byId("officeExceptionEmpty").hidden = exceptions.length !== 0;
+        const now = Date.now();
+        const ended = function (exception) {
+            const ends = parseServerDate(exception.ends_at);
+            return ends !== null && ends.getTime() <= now;
+        };
+        const current = exceptions.filter(function (exception) { return !ended(exception); });
+        const past = exceptions.filter(ended).reverse();
+        byId("officeExceptionList").innerHTML = current.map(function (exception) { return changeItem(exception, true); }).join("");
+        byId("officeExceptionEmpty").hidden = current.length !== 0;
+        const host = byId("officeExceptionPast");
+        host.hidden = past.length === 0;
+        host.innerHTML = past.length
+            ? "<summary>Ended in the last 30 days (" + past.length + ')</summary><ul class="ofc-changes">' +
+                past.map(function (exception) { return changeItem(exception, false); }).join("") + "</ul>"
+            : "";
     }
 
     async function loadAvailability() {
@@ -1421,12 +1803,14 @@
         try {
             const data = await fetchJson("office_availability.php");
             if (!data || !data.success) {
-                throw new Error((data && data.message) || "Could not load availability.");
+                throw new Error((data && data.message) || "Could not load the hours.");
             }
             renderAvailability(data);
             state.availabilityLoaded = true;
         } catch (error) {
-            showError("officeAvailabilityError", error.message || "Could not reach the server.");
+            if (error.message !== "Not authenticated") {
+                showError("officeAvailabilityError", error.message || "Could not reach the server.");
+            }
         }
     }
 
@@ -1434,40 +1818,42 @@
         const list = byId("officeConflictList");
         list.replaceChildren();
         (data.conflicts || []).forEach(function (conflict) {
-            const item = makeText("li", "office-conflict-item");
+            const item = document.createElement("li");
+            item.className = "office-conflict-item";
             const copy = document.createElement("div");
-            copy.append(
-                makeText("strong", "", formatDateTime(conflict.starts_at)),
-                makeText("span", "", [conflict.visitor, conflict.code, statusMeta(conflict.status).label].filter(Boolean).join(" · ")),
-                makeText("small", "", conflict.reason)
-            );
-            const open = makeText("button", "office-secondary-button", "Open");
+            const when = document.createElement("strong");
+            when.textContent = fullDate(conflict.starts_at);
+            const who = document.createElement("span");
+            who.textContent = [conflict.visitor, conflict.code, statusMeta({ status: conflict.status }).label].filter(Boolean).join(" · ");
+            const why = document.createElement("small");
+            why.textContent = conflict.reason || "";
+            copy.append(when, who, why);
+            const open = document.createElement("button");
             open.type = "button";
-            open.dataset.appointmentId = String(conflict.id);
-            open.setAttribute("aria-label", "Open " + conflict.visitor + "'s visit on " + formatDateTime(conflict.starts_at));
+            open.className = "ofc-btn is-small";
+            open.dataset.conflictAppointment = String(conflict.id);
+            open.textContent = "Open";
+            open.setAttribute("aria-label", "Open " + conflict.visitor + "'s visit on " + fullDate(conflict.starts_at));
             item.append(copy, open);
             list.appendChild(item);
         });
         const more = Number(data.conflict_total || 0) - (data.conflicts || []).length;
         if (more > 0) {
-            list.appendChild(makeText("li", "office-conflict-more", "…and " + more + " more."));
+            const item = document.createElement("li");
+            item.className = "office-conflict-more";
+            item.textContent = "…and " + more + " more.";
+            list.appendChild(item);
         }
         setText("officeConflictTitle", data.message || "Booked visits fall outside the new schedule");
-        byId("officeConflictDialog").showModal();
+        openSheet(byId("officeConflictDialog"));
     }
 
-    async function saveAvailability(event, confirmConflicts) {
-        if (event) {
-            event.preventDefault();
-        }
+    async function saveAvailability(confirmConflicts) {
         showError("officeAvailabilityError", "");
         const broken = state.week.find(function (day) { return dayProblem(day) !== ""; });
         if (broken) {
             showError("officeAvailabilityError", dayNames[broken.day - 1] + ": " + dayProblem(broken));
-            const row = document.querySelector('.office-schedule-row[data-day="' + broken.day + '"]');
-            if (row) {
-                row.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
+            toast(dayNames[broken.day - 1] + " needs a fix before saving.", "error");
             return;
         }
         const button = byId("saveOfficeAvailabilityBtn");
@@ -1476,8 +1862,8 @@
             const data = await postJson("office_availability.php", {
                 action: "save_schedule",
                 accepting_visitors: byId("officeAcceptingVisitors").checked,
-                slot_duration_minutes: Number(byId("officeSlotDuration").value),
-                maximum_visitors_per_slot: Number(byId("officeSlotCapacity").value),
+                slot_duration_minutes: slotLength(),
+                maximum_visitors_per_slot: slotCapacity(),
                 unavailable_reason: byId("officeUnavailableReason").value.trim(),
                 available_again_at: byId("officeAvailableAgain").value,
                 schedules: state.week.map(function (day) {
@@ -1498,184 +1884,25 @@
                 return;
             }
             if (!data || !data.success) {
-                throw new Error((data && data.message) || "Could not save availability.");
+                throw new Error((data && data.message) || "Could not save the hours.");
             }
             markClean();
             renderAvailability(data);
-            toast(data.message || "Availability saved.");
+            toast(data.message || "Hours saved.");
         } catch (error) {
             showError("officeAvailabilityError", error.message || "Could not reach the server.");
+            toast(error.message || "Could not save the hours.", "error");
         } finally {
             button.disabled = false;
         }
     }
 
-    document.querySelectorAll("[data-office-view]").forEach(function (button) {
-        button.addEventListener("click", function () { switchView(button.dataset.officeView); });
-    });
-    document.querySelectorAll("[data-summary-view]").forEach(function (button) {
-        button.addEventListener("click", function () {
-            const view = button.dataset.summaryView;
-            const status = button.dataset.summaryStatus || "";
-            if (view === "dashboard") {
-                state.recentStatus = status;
-                byId("officeRecentStatus").value = status;
-                state.recentPage = 1;
-                renderRecent();
-            }
-            switchView(view);
-        });
-    });
-
-    byId("officeRecentSearch").addEventListener("input", function (event) { state.recentQuery = event.target.value.trim(); state.recentPage = 1; renderRecent(); });
-    byId("officeRecentStatus").addEventListener("change", function (event) { state.recentStatus = event.target.value; state.recentPage = 1; renderRecent(); });
-    byId("officeRequestSearch").addEventListener("input", function (event) { state.requestQuery = event.target.value.trim(); renderRequests(); });
-
-    document.addEventListener("click", function (event) {
-        const appointmentButton = event.target.closest(".office-view-button[data-appointment-id]");
-        if (appointmentButton) {
-            openAppointment(Number(appointmentButton.dataset.appointmentId));
-            return;
-        }
-        if (!byId("officeProfileMenu").hidden && !byId("officeProfileMenu").contains(event.target) && !byId("officeProfileBtn").contains(event.target)) {
-            byId("officeProfileMenu").hidden = true;
-            byId("officeProfileBtn").setAttribute("aria-expanded", "false");
-        }
-        if (!byId("officeNotificationPanel").hidden && !byId("officeNotificationPanel").contains(event.target) && !byId("officeNotificationBtn").contains(event.target)) {
-            byId("officeNotificationPanel").hidden = true;
-            byId("officeNotificationBtn").setAttribute("aria-expanded", "false");
-        }
-    });
-
-    byId("closeOfficeAppointmentBtn").addEventListener("click", function () { byId("officeAppointmentDialog").close(); });
-    byId("approveOfficeAppointmentBtn").addEventListener("click", async function () {
-        if (await AppDialog.confirm({
-            title: "Approve this appointment?",
-            message: "This issues the visitor's QR pass.",
-            confirmLabel: "Approve",
-        })) {
-            processAppointment("approve", "");
-        }
-    });
-    byId("openDeclineAppointmentBtn").addEventListener("click", function () {
-        byId("officeDeclineReason").value = "";
-        showError("officeDeclineError", "");
-        byId("officeDeclineDialog").showModal();
-    });
-    byId("closeOfficeDeclineBtn").addEventListener("click", function () { byId("officeDeclineDialog").close(); });
-    byId("cancelOfficeDeclineBtn").addEventListener("click", function () { byId("officeDeclineDialog").close(); });
-    byId("officeDeclineForm").addEventListener("submit", function (event) {
-        event.preventDefault();
-        const reason = byId("officeDeclineReason").value.trim();
-        if (reason.length < 5) {
-            showError("officeDeclineError", "Please give the visitor a clear reason.");
-            return;
-        }
-        byId("confirmOfficeDeclineBtn").disabled = true;
-        processAppointment("reject", reason);
-    });
-
-    byId("completeOfficeStopBtn").addEventListener("click", async function () {
-        if (await AppDialog.confirm({
-            title: "Mark this meeting as done?",
-            message: "The visitor's campus visit continues until Security checks them out.",
-            confirmLabel: "Mark as done",
-        })) {
-            processAppointment("complete", "");
-        }
-    });
-
-    byId("openRescheduleAppointmentBtn").addEventListener("click", function () {
-        byId("officeRescheduleForm").reset();
-        setFutureMinimums();
-        showError("officeRescheduleError", "");
-        const hint = byId("officeRescheduleVisitHint");
-        const visit = state.selectedVisit;
-        const otherTimes = visit ? otherStopTimesText(visit) : "";
-        hint.textContent = visit
-            ? "This request is part of a multi-stop visit"
-                + (otherTimes ? " with other stops at " + otherTimes : "")
-                + ". Offer times on the same day that leave 10 minutes before and after those stops. A time on another day moves this request out of the visit."
-            : "";
-        hint.hidden = !visit;
-        byId("officeRescheduleDialog").showModal();
-    });
-    byId("closeOfficeRescheduleBtn").addEventListener("click", function () { byId("officeRescheduleDialog").close(); });
-    byId("cancelOfficeRescheduleBtn").addEventListener("click", function () { byId("officeRescheduleDialog").close(); });
-    byId("officeRescheduleForm").addEventListener("submit", async function (event) {
-        event.preventDefault();
-        showError("officeRescheduleError", "");
-        const slots = Array.from(document.querySelectorAll(".office-proposed-slot")).map(function (input) { return input.value; }).filter(Boolean);
-        const button = byId("confirmOfficeRescheduleBtn");
-        button.disabled = true;
-        try {
-            const data = await postJson("office_propose_reschedule.php", {
-                appointment_id: state.selectedAppointmentId,
-                reason: byId("officeRescheduleReason").value.trim(),
-                message: byId("officeRescheduleMessage").value.trim(),
-                slots: slots,
-            });
-            if (!data || !data.success) {
-                throw new Error((data && data.message) || "Could not send the proposed schedules.");
-            }
-            byId("officeRescheduleDialog").close();
-            byId("officeAppointmentDialog").close();
-            toast(data.message || "Schedule options sent.");
-            await loadOfficeData(true);
-        } catch (error) {
-            showError("officeRescheduleError", error.message || "Could not reach the server.");
-        } finally {
-            button.disabled = false;
-        }
-    });
-
-    byId("officeAcceptingVisitors").addEventListener("change", function (event) {
-        byId("officeClosureFields").hidden = event.target.checked;
-        markDirty();
-    });
-    byId("officeAvailabilityForm").addEventListener("submit", function (event) { saveAvailability(event, false); });
-    byId("officeWeeklySchedule").addEventListener("input", onWeekEdit);
-    byId("officeWeeklySchedule").addEventListener("change", onWeekEdit);
-    byId("officeWeeklySchedule").addEventListener("click", onWeekClick);
-    byId("officeAddLunchBtn").addEventListener("click", addLunchEverywhere);
-    byId("officePreviewDays").addEventListener("click", function (event) {
-        const button = event.target.closest("[data-preview-day]");
-        if (button) {
-            state.previewDay = Number(button.dataset.previewDay);
-            renderPreview();
-        }
-    });
-    byId("officeSlotDuration").addEventListener("change", function () { markDirty(); refreshWeek(); });
-    byId("officeSlotCapacity").addEventListener("input", function () { markDirty(); renderPreview(); });
-    byId("officeUnavailableReason").addEventListener("input", markDirty);
-    byId("officeAvailableAgain").addEventListener("change", markDirty);
-    window.addEventListener("beforeunload", function (event) {
-        if (state.weekDirty) {
-            event.preventDefault();
-            event.returnValue = "";
-        }
-    });
-
-    byId("officeConflictList").addEventListener("click", function (event) {
-        const button = event.target.closest("button[data-appointment-id]");
-        if (button) {
-            byId("officeConflictDialog").close();
-            openAppointment(Number(button.dataset.appointmentId));
-        }
-    });
-    byId("closeOfficeConflictBtn").addEventListener("click", function () { byId("officeConflictDialog").close(); });
-    byId("cancelOfficeConflictBtn").addEventListener("click", function () { byId("officeConflictDialog").close(); });
-    byId("confirmOfficeConflictBtn").addEventListener("click", function () {
-        byId("officeConflictDialog").close();
-        saveAvailability(null, true);
-    });
-
-    byId("officePauseBtn").addEventListener("click", async function () {
-        const button = byId("officePauseBtn");
-        if (button.dataset.mode !== "resume") {
+    async function onPauseToggle() {
+        const mode = document.querySelector("[data-pause-toggle]").dataset.mode;
+        if (mode !== "resume") {
             byId("officePauseForm").reset();
             showError("officePauseError", "");
-            byId("officePauseDialog").showModal();
+            openSheet(byId("officePauseDialog"));
             return;
         }
         if (!(await AppDialog.confirm({
@@ -1685,7 +1912,8 @@
         }))) {
             return;
         }
-        button.disabled = true;
+        const buttons = document.querySelectorAll("[data-pause-toggle]");
+        buttons.forEach(function (button) { button.disabled = true; });
         try {
             const data = await postJson("office_availability.php", { action: "resume_now", exception_id: state.status ? state.status.pause_id : 0 });
             if (!data || !data.success) {
@@ -1697,11 +1925,397 @@
             toast(error.message || "Could not reach the server.", "error");
             refreshStatus();
         } finally {
-            button.disabled = false;
+            buttons.forEach(function (button) { button.disabled = false; });
+        }
+    }
+
+    function toInputDate(date) {
+        const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 16);
+    }
+
+    // ---------- Notifications ----------
+
+    function renderNotifications() {
+        const count = byId("officeNotificationCount");
+        count.textContent = state.unread > 99 ? "99+" : String(state.unread);
+        count.hidden = state.unread === 0;
+        document.querySelectorAll("[data-unread-badge]").forEach(function (badge) {
+            badge.textContent = count.textContent;
+            badge.hidden = state.unread === 0;
+        });
+        setText("officeNotificationSummary", state.unread ? state.unread + " unread" : "No unread updates");
+        byId("officeNotificationList").innerHTML = state.notifications.map(function (notification) {
+            const help = notification.notification_type === "visitor_needs_help" && !notification.read_at;
+            return '<li><button class="ofc-note-item' + (notification.read_at ? "" : " is-unread") + (help ? " is-help" : "") +
+                '" type="button" data-notification-id="' + Number(notification.id) + '"' +
+                (notification.appointment_id ? ' data-notification-appointment="' + Number(notification.appointment_id) + '"' : "") + "><i></i><span>" +
+                "<strong>" + esc(notification.title || "Appointment update") + "</strong>" +
+                "<span>" + esc(notification.message || "") + "</span>" +
+                "<time>" + esc(agoText(notification.created_at)) + "</time></span></button></li>";
+        }).join("");
+        byId("officeNotificationEmpty").hidden = state.notifications.length !== 0;
+        byId("markOfficeNotificationsReadBtn").hidden = state.unread === 0;
+        byId("officeNotesFoot").hidden = state.unread === 0;
+    }
+
+    // ---------- Clicks ----------
+
+    document.addEventListener("click", function (event) {
+        const target = event.target;
+        if (!byId("officeProfileMenu").hidden && !byId("officeProfileMenu").contains(target) && !byId("officeProfileBtn").contains(target)) {
+            closeProfileMenu();
+        }
+        const viewButton = target.closest("[data-office-view]");
+        if (viewButton && !target.closest("dialog")) {
+            const tab = viewButton.dataset.visitsTab;
+            if (tab) {
+                state.visitsTab = tab;
+                state.visitsStatus = "";
+                state.visitsShown = VISITS_PAGE;
+                renderVisits();
+            }
+            switchView(viewButton.dataset.officeView, { history: "push" });
+            return;
+        }
+        const openButton = target.closest("[data-open-appointment]");
+        if (openButton) {
+            openAppointment(Number(openButton.dataset.openAppointment));
+            return;
+        }
+        const approveButton = target.closest("[data-approve]");
+        if (approveButton) {
+            approve(Number(approveButton.dataset.approve));
+            return;
+        }
+        const declineButton = target.closest("[data-decline]");
+        if (declineButton) {
+            openDecline(Number(declineButton.dataset.decline));
+            return;
+        }
+        const otherButton = target.closest("[data-other-time]");
+        if (otherButton) {
+            openReschedule(Number(otherButton.dataset.otherTime));
+            return;
+        }
+        const doneButton = target.closest("[data-meeting-done]");
+        if (doneButton) {
+            meetingDone(Number(doneButton.dataset.meetingDone));
+            return;
+        }
+        const goingButton = target.closest("[data-help-going]");
+        if (goingButton) {
+            someoneIsGoing(goingButton.dataset.helpGoing, goingButton);
+            return;
+        }
+        const jump = target.closest("[data-jump]");
+        if (jump) {
+            const group = byId("officeGroup-" + jump.dataset.jump);
+            if (group) {
+                const top = group.getBoundingClientRect().top + window.scrollY - (phoneQuery.matches ? 70 : 96);
+                window.scrollTo({ top: top, behavior: "smooth" });
+            } else {
+                toast("Nobody in that group right now.");
+            }
+            return;
+        }
+        if (target.closest("[data-pause-toggle]")) {
+            onPauseToggle();
+            return;
+        }
+        const dayRow = target.closest("[data-day-index]");
+        if (dayRow) {
+            openDayEditor(Number(dayRow.dataset.dayIndex));
         }
     });
-    byId("closeOfficePauseBtn").addEventListener("click", function () { byId("officePauseDialog").close(); });
-    byId("cancelOfficePauseBtn").addEventListener("click", function () { byId("officePauseDialog").close(); });
+
+    document.querySelectorAll("[data-request-tab]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            state.requestTab = button.dataset.requestTab;
+            renderRequests();
+        });
+    });
+    document.querySelectorAll(".ofc-seg [data-visits-tab]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            state.visitsTab = button.dataset.visitsTab;
+            state.visitsStatus = "";
+            state.visitsShown = VISITS_PAGE;
+            renderVisits();
+        });
+    });
+    document.querySelectorAll("[data-visits-status]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            state.visitsStatus = button.dataset.visitsStatus;
+            state.visitsShown = VISITS_PAGE;
+            renderVisits();
+        });
+    });
+    byId("officeVisitMore").addEventListener("click", function () {
+        state.visitsShown += VISITS_PAGE;
+        renderVisits();
+    });
+    byId("officeRequestSearch").addEventListener("input", function (event) {
+        state.requestQuery = event.target.value.trim();
+        renderRequests();
+    });
+    byId("officeVisitSearch").addEventListener("input", function (event) {
+        state.visitsQuery = event.target.value.trim();
+        state.visitsShown = VISITS_PAGE;
+        renderVisits();
+    });
+
+    // Details sheet buttons
+    byId("approveOfficeAppointmentBtn").addEventListener("click", function () { approve(state.selectedAppointmentId); });
+    byId("openDeclineAppointmentBtn").addEventListener("click", function () { openDecline(state.selectedAppointmentId); });
+    byId("openRescheduleAppointmentBtn").addEventListener("click", function () { openReschedule(state.selectedAppointmentId); });
+    byId("completeOfficeStopBtn").addEventListener("click", function () { meetingDone(state.selectedAppointmentId); });
+    byId("officeGoingBtn").addEventListener("click", function (event) {
+        someoneIsGoing(event.currentTarget.dataset.notificationId, event.currentTarget);
+    });
+
+    // Decline
+    byId("officeDeclineReasons").addEventListener("click", function (event) {
+        const button = event.target.closest("[data-reason]");
+        if (!button) {
+            return;
+        }
+        document.querySelectorAll("#officeDeclineReasons [data-reason]").forEach(function (item) { item.classList.toggle("is-on", item === button); });
+        byId("officeDeclineReason").value = button.dataset.reason;
+        showError("officeDeclineError", "");
+    });
+    byId("officeDeclineForm").addEventListener("submit", function (event) {
+        event.preventDefault();
+        const reason = byId("officeDeclineReason").value.trim();
+        if (reason.length < 5) {
+            showError("officeDeclineError", "Please give the visitor a clear reason.");
+            return;
+        }
+        processAppointment("reject", reason);
+    });
+
+    // Other times
+    byId("officeRescheduleReasons").addEventListener("click", function (event) {
+        const button = event.target.closest("[data-reason]");
+        if (!button) {
+            return;
+        }
+        document.querySelectorAll("#officeRescheduleReasons [data-reason]").forEach(function (item) { item.classList.toggle("is-on", item === button); });
+        byId("officeRescheduleReason").value = button.dataset.reason;
+    });
+    byId("officeRescheduleReason").addEventListener("input", function () {
+        document.querySelectorAll("#officeRescheduleReasons [data-reason]").forEach(function (item) {
+            item.classList.toggle("is-on", item.dataset.reason === byId("officeRescheduleReason").value);
+        });
+    });
+    byId("officeFreeTimes").addEventListener("click", function (event) {
+        const button = event.target.closest("[data-slot]");
+        if (!button || button.disabled) {
+            return;
+        }
+        const index = state.picked.findIndex(function (slot) { return slot.start === button.dataset.slot; });
+        if (index !== -1) {
+            state.picked.splice(index, 1);
+        } else if (state.picked.length < 3) {
+            state.picked.push({ start: button.dataset.slot, end: button.dataset.slotEnd });
+        }
+        updatePicked();
+    });
+    byId("officePickAnotherDay").addEventListener("click", function () {
+        byId("officeOtherDays").hidden = false;
+        byId("officePickAnotherDay").hidden = true;
+        document.querySelector("#officeOtherDays .office-proposed-slot").focus();
+        updatePicked();
+    });
+    document.querySelector("#officeOtherDays .office-proposed-slot").addEventListener("input", updatePicked);
+    byId("officeRescheduleForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        showError("officeRescheduleError", "");
+        const reason = byId("officeRescheduleReason").value.trim();
+        if (reason.length < 5) {
+            showError("officeRescheduleError", "Give the visitor a clear reason for the change.");
+            return;
+        }
+        const slots = state.picked.map(function (slot) { return { start: slot.start, end: slot.end }; });
+        const other = byId("officeOtherDays").hidden ? "" : document.querySelector("#officeOtherDays .office-proposed-slot").value;
+        if (other && slots.length < 3) {
+            slots.push(other);
+        }
+        if (!slots.length) {
+            showError("officeRescheduleError", "Pick at least one time.");
+            return;
+        }
+        const button = byId("confirmOfficeRescheduleBtn");
+        button.disabled = true;
+        try {
+            const data = await postJson("office_propose_reschedule.php", {
+                appointment_id: state.selectedAppointmentId,
+                reason: reason,
+                message: byId("officeRescheduleMessage").value.trim(),
+                slots: slots,
+            });
+            if (!data || !data.success) {
+                throw new Error((data && data.message) || "Could not send the times.");
+            }
+            closeSheets([byId("officeAppointmentDialog"), byId("officeRescheduleDialog")]);
+            toast("Sent " + slots.length + (slots.length === 1 ? " time" : " times") + ". The visitor chooses one or declines.");
+            await loadOfficeData(true);
+        } catch (error) {
+            showError("officeRescheduleError", error.message || "Could not reach the server.");
+        } finally {
+            button.disabled = false;
+            updatePicked();
+        }
+    });
+
+    // Hours: the day editor
+    byId("officeDayBody").addEventListener("input", function (event) {
+        const field = event.target.dataset.field;
+        const day = state.dayDraft;
+        if (!field || !day || field === "enabled") {
+            return;
+        }
+        const breakElement = event.target.closest("[data-break-key]");
+        if (breakElement) {
+            const item = day.breaks.find(function (entry) { return entry.key === breakElement.dataset.breakKey; });
+            if (item) {
+                item[field] = event.target.value;
+            }
+        } else {
+            day[field] = event.target.value;
+        }
+        byId("officeDayPreview").innerHTML = dayEditorPreview(day);
+    });
+    byId("officeDayBody").addEventListener("change", function (event) {
+        if (event.target.dataset.field === "enabled" && state.dayDraft) {
+            state.dayDraft.enabled = event.target.checked;
+            renderDayEditor();
+        }
+    });
+    byId("officeDayBody").addEventListener("click", function (event) {
+        const day = state.dayDraft;
+        if (!day) {
+            return;
+        }
+        if (event.target.closest("[data-add-break]")) {
+            const item = suggestBreak(day);
+            if (!item) {
+                toast("There's no free time left on " + dayNames[day.day - 1] + " for another break.", "error");
+                return;
+            }
+            day.breaks.push(item);
+            renderDayEditor();
+            const input = byId("officeDayBody").querySelector('[data-break-key="' + item.key + '"] .ofc-brk-name');
+            if (input) {
+                input.focus();
+            }
+            return;
+        }
+        const remove = event.target.closest("[data-remove-break]");
+        if (remove) {
+            day.breaks = day.breaks.filter(function (item) { return item.key !== remove.dataset.removeBreak; });
+            renderDayEditor();
+            return;
+        }
+        if (event.target.closest("[data-copy-day]")) {
+            const problem = dayProblem(day);
+            if (problem) {
+                toast("Fix " + dayNames[day.day - 1] + " first: " + problem, "error");
+                return;
+            }
+            state.week[state.dayIndex] = copyDay(day);
+            const targets = state.week.filter(function (other) { return other.enabled && other.day !== day.day; });
+            if (!targets.length) {
+                toast("Turn on the other days first: " + dayNames[day.day - 1] + " is copied to open days only.", "error");
+                return;
+            }
+            targets.forEach(function (other) {
+                other.start = day.start;
+                other.end = day.end;
+                other.breaks = day.breaks.map(function (item) { return newBreak(item.start, item.end, item.label); });
+            });
+            markDirty();
+            renderWeekRows();
+            toast("Copied " + dayNames[day.day - 1] + " to " + targets.length + (targets.length === 1 ? " day" : " days") + ". Save to apply.");
+        }
+    });
+    byId("officeDayDoneBtn").addEventListener("click", function () {
+        const day = state.dayDraft;
+        if (!day) {
+            return;
+        }
+        const problem = dayProblem(day);
+        if (problem) {
+            byId("officeDayPreview").innerHTML = dayEditorPreview(day);
+            toast(problem, "error");
+            return;
+        }
+        const before = JSON.stringify(state.week[state.dayIndex], ["enabled", "start", "end", "breaks", "label"]);
+        const after = JSON.stringify(day, ["enabled", "start", "end", "breaks", "label"]);
+        state.week[state.dayIndex] = day;
+        state.dayDraft = null;
+        if (before !== after) {
+            markDirty();
+        }
+        renderWeekRows();
+        closeSheet(byId("officeDayDialog"));
+    });
+
+    // Hours: the rest of the page
+    byId("officeAddLunchBtn").addEventListener("click", addLunchEverywhere);
+    byId("officeSlotDuration").addEventListener("change", function () {
+        markDirty();
+        renderWeekRows();
+    });
+    byId("officeSlotCapacity").addEventListener("input", markDirty);
+    document.querySelectorAll("[data-capacity-step]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            const input = byId("officeSlotCapacity");
+            const next = Math.min(50, Math.max(1, slotCapacity() + Number(button.dataset.capacityStep)));
+            if (String(next) !== input.value) {
+                input.value = String(next);
+                markDirty();
+            }
+        });
+    });
+    byId("officeAcceptingVisitors").addEventListener("change", function (event) {
+        byId("officeClosureFields").hidden = event.target.checked;
+        markDirty();
+    });
+    byId("officeUnavailableReason").addEventListener("input", markDirty);
+    byId("officeAvailableAgain").addEventListener("change", markDirty);
+    byId("saveOfficeAvailabilityBtn").addEventListener("click", function () { saveAvailability(false); });
+    byId("officeDiscardBtn").addEventListener("click", async function () {
+        if (await AppDialog.confirm({
+            title: "Discard your changes?",
+            message: "Your hours go back to what was last saved.",
+            confirmLabel: "Discard changes",
+            danger: true,
+        })) {
+            markClean();
+            await loadAvailability();
+            toast("Changes discarded.");
+        }
+    });
+    window.addEventListener("beforeunload", function (event) {
+        if (state.weekDirty) {
+            event.preventDefault();
+            event.returnValue = "";
+        }
+    });
+
+    byId("officeConflictList").addEventListener("click", function (event) {
+        const button = event.target.closest("[data-conflict-appointment]");
+        if (button) {
+            closeSheets([byId("officeConflictDialog")]);
+            openAppointment(Number(button.dataset.conflictAppointment));
+        }
+    });
+    byId("confirmOfficeConflictBtn").addEventListener("click", function () {
+        closeSheets([byId("officeConflictDialog")]);
+        saveAvailability(true);
+    });
+
+    // Pause
     byId("officePauseForm").addEventListener("submit", async function (event) {
         event.preventDefault();
         showError("officePauseError", "");
@@ -1718,7 +2332,7 @@
                 throw new Error((data && data.message) || "Could not pause visits.");
             }
             renderAvailability(data, true);
-            byId("officePauseDialog").close();
+            closeSheets([byId("officePauseDialog")]);
             toast(data.message || "Visits paused.");
         } catch (error) {
             showError("officePauseError", error.message || "Could not reach the server.");
@@ -1726,9 +2340,13 @@
             button.disabled = false;
         }
     });
+
+    // Temporary changes
     byId("addOfficeExceptionBtn").addEventListener("click", function () {
         byId("officeExceptionForm").reset();
-        setFutureMinimums();
+        const minimum = toInputDate(new Date());
+        byId("officeExceptionStart").min = minimum;
+        byId("officeExceptionEnd").min = minimum;
         const start = new Date(Date.now() + 60 * 60 * 1000);
         start.setMinutes(0, 0, 0);
         const end = new Date(start.getTime() + 60 * 60 * 1000);
@@ -1736,20 +2354,21 @@
         byId("officeExceptionEnd").value = toInputDate(end);
         byId("officeExceptionCapacityField").hidden = true;
         showError("officeExceptionError", "");
-        byId("officeExceptionDialog").showModal();
+        openSheet(byId("officeExceptionDialog"));
     });
-    byId("officeExceptionType").addEventListener("change", function (event) {
-        byId("officeExceptionCapacityField").hidden = event.target.value !== "available";
+    byId("officeExceptionForm").addEventListener("change", function (event) {
+        if (event.target.name === "officeExceptionType") {
+            byId("officeExceptionCapacityField").hidden = event.target.value !== "available";
+        }
     });
-    byId("closeOfficeExceptionBtn").addEventListener("click", function () { byId("officeExceptionDialog").close(); });
-    byId("cancelOfficeExceptionBtn").addEventListener("click", function () { byId("officeExceptionDialog").close(); });
     byId("officeExceptionForm").addEventListener("submit", async function (event) {
         event.preventDefault();
         showError("officeExceptionError", "");
         const button = byId("saveOfficeExceptionBtn");
+        const typeInput = byId("officeExceptionForm").querySelector('input[name="officeExceptionType"]:checked');
+        const type = typeInput ? typeInput.value : "closed";
         button.disabled = true;
         try {
-            const type = byId("officeExceptionType").value;
             const data = await postJson("office_availability.php", {
                 action: "add_exception",
                 starts_at: byId("officeExceptionStart").value,
@@ -1759,11 +2378,11 @@
                 reason: byId("officeExceptionReason").value.trim(),
             });
             if (!data || !data.success) {
-                throw new Error((data && data.message) || "Could not add the schedule change.");
+                throw new Error((data && data.message) || "Could not add the change.");
             }
             renderAvailability(data, true);
-            byId("officeExceptionDialog").close();
-            toast(data.message || "Schedule change added.");
+            closeSheets([byId("officeExceptionDialog")]);
+            toast(data.message || "Change added.");
         } catch (error) {
             showError("officeExceptionError", error.message || "Could not reach the server.");
         } finally {
@@ -1773,8 +2392,8 @@
     byId("officeExceptionList").addEventListener("click", async function (event) {
         const button = event.target.closest("button[data-exception-id]");
         if (!button || !(await AppDialog.confirm({
-            title: "Remove this temporary schedule change?",
-            message: "The regular weekly hours apply again for that time.",
+            title: "Remove this temporary change?",
+            message: "The weekly hours apply again for that time.",
             confirmLabel: "Remove change",
             danger: true,
         }))) {
@@ -1784,59 +2403,85 @@
         const data = await postJson("office_availability.php", { action: "delete_exception", exception_id: Number(button.dataset.exceptionId) });
         if (data && data.success) {
             renderAvailability(data, true);
-            toast(data.message || "Schedule change removed.");
+            toast(data.message || "Change removed.");
         } else {
-            toast((data && data.message) || "Could not remove the schedule change.", "error");
+            toast((data && data.message) || "Could not remove the change.", "error");
             button.disabled = false;
         }
     });
 
-    byId("officeNotificationBtn").addEventListener("click", function () {
-        const willOpen = byId("officeNotificationPanel").hidden;
-        byId("officeNotificationPanel").hidden = !willOpen;
-        byId("officeNotificationBtn").setAttribute("aria-expanded", String(willOpen));
-        byId("officeProfileMenu").hidden = true;
-    });
-    byId("closeOfficeNotificationsBtn").addEventListener("click", function () { byId("officeNotificationPanel").hidden = true; });
+    // Notifications
+    function openNotifications() {
+        closeProfileMenu();
+        renderNotifications();
+        openSheet(byId("officeNotesDialog"));
+    }
+
+    byId("officeNotificationBtn").addEventListener("click", openNotifications);
+    byId("officeMenuNotes").addEventListener("click", openNotifications);
     byId("markOfficeNotificationsReadBtn").addEventListener("click", async function () {
         const data = await postJson("office_notifications.php", { action: "mark_all_read" });
         if (data && data.success) {
             state.unread = 0;
             state.notifications.forEach(function (item) { item.read_at = item.read_at || new Date().toISOString(); });
             renderNotifications();
+            renderHelpAlerts();
+            renderToday();
         }
-    });
-    byId("officeHelpAlerts").addEventListener("click", async function (event) {
-        const button = event.target.closest("button[data-help-notification-id]");
-        if (!button) {
-            return;
-        }
-        button.disabled = true;
-        await postJson("office_notifications.php", { action: "mark_read", notification_id: Number(button.dataset.helpNotificationId) });
-        loadOfficeData(true);
     });
     byId("officeNotificationList").addEventListener("click", async function (event) {
         const button = event.target.closest("button[data-notification-id]");
         if (!button) {
             return;
         }
-        await postJson("office_notifications.php", { action: "mark_read", notification_id: Number(button.dataset.notificationId) });
-        if (button.dataset.appointmentId) {
-            byId("officeNotificationPanel").hidden = true;
-            openAppointment(Number(button.dataset.appointmentId));
+        // A visitor who can't find the office stays on every page until someone taps
+        // "Someone is going", so opening that notification doesn't mark it read.
+        if (!button.classList.contains("is-help")) {
+            await postJson("office_notifications.php", { action: "mark_read", notification_id: Number(button.dataset.notificationId) });
+        }
+        if (button.dataset.notificationAppointment) {
+            closeSheets([byId("officeNotesDialog")]);
+            openAppointment(Number(button.dataset.notificationAppointment));
         }
         loadOfficeData(true);
     });
 
+    // Profile and menu
     byId("officeProfileBtn").addEventListener("click", function () {
+        if (phoneQuery.matches) {
+            switchView("menu", { history: "push" });
+            return;
+        }
         const willOpen = byId("officeProfileMenu").hidden;
         byId("officeProfileMenu").hidden = !willOpen;
         byId("officeProfileBtn").setAttribute("aria-expanded", String(willOpen));
-        byId("officeNotificationPanel").hidden = true;
     });
     byId("editOfficeProfileBtn").addEventListener("click", openProfileEditor);
+    byId("officeMenuProfile").addEventListener("click", openProfileEditor);
+    // On phones the account button opens this Menu, so Account security lives here too.
+    byId("officeMenuSecurity").addEventListener("click", function () {
+        if (window.PhoneTrackerSecurity) {
+            window.PhoneTrackerSecurity.open();
+        }
+    });
+    byId("officeMenuRefresh").addEventListener("click", async function () {
+        const button = byId("officeMenuRefresh");
+        button.disabled = true;
+        const results = await Promise.all([loadOfficeData(false), refreshStatus()]);
+        button.disabled = false;
+        if (results[0]) {
+            toast("Updated.");
+        }
+    });
+    byId("officeLogoutBtn").addEventListener("click", signOut);
+    byId("officeMenuSignOut").addEventListener("click", signOut);
     byId("closeOfficeProfileBtn").addEventListener("click", closeProfileEditor);
     byId("cancelOfficeProfileBtn").addEventListener("click", closeProfileEditor);
+    byId("officeProfileDialog").addEventListener("click", function (event) {
+        if (event.target === byId("officeProfileDialog")) {
+            closeProfileEditor();
+        }
+    });
     byId("officeProfileImage").addEventListener("change", function () {
         clearProfilePreviewUrl();
         const file = this.files && this.files[0];
@@ -1903,34 +2548,26 @@
             saveButton.textContent = "Save profile";
         }
     });
-    byId("officeLogoutBtn").addEventListener("click", function () {
-        PhoneTrackerAuth.logout().then(function () { window.location.href = "login.html"; });
-    });
 
-    ["officeAppointmentDialog", "officeDeclineDialog", "officeRescheduleDialog", "officeExceptionDialog", "officeProfileDialog"].forEach(function (id) {
-        const dialog = byId(id);
-        dialog.addEventListener("click", function (event) {
-            if (event.target === dialog) {
-                if (id === "officeProfileDialog") {
-                    closeProfileEditor();
-                } else {
-                    dialog.close();
-                }
-            }
-        });
-    });
+    // ---------- Start ----------
 
-    setText("officeProfileName", PhoneTrackerAuth.getDisplayName() || PhoneTrackerAuth.getUsername() || "Office Personnel");
-    setText("officeProfileUsername", PhoneTrackerAuth.getUsername() || "office");
-    setFutureMinimums();
-    const initialView = String(window.location.hash || "#dashboard").slice(1);
-    switchView(initialView);
+    renderProfile();
+    renderToday();
+    renderRequests();
+    renderVisits();
+    switchView(viewFromHash(), { history: "replace" });
     loadOfficeData(false);
-    window.addEventListener("focus", function () { loadOfficeData(true); });
+    refreshStatus();
+    window.setInterval(function () { loadOfficeData(true); }, 30000);
+    window.setInterval(refreshStatus, 60000);
+    window.addEventListener("focus", function () {
+        loadOfficeData(true);
+        refreshStatus();
+    });
     document.addEventListener("visibilitychange", function () {
         if (!document.hidden) {
             loadOfficeData(true);
+            refreshStatus();
         }
     });
-    window.setInterval(function () { loadOfficeData(true); }, 30000);
 })();

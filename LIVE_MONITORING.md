@@ -99,7 +99,8 @@ attention.
 - **Visitors:** Inside now, Expected, Left today and All records, with one search for all
   of them. On a phone the search and the tabs stay on top while the list scrolls.
 - **Menu:** the account, Register at the gate, All records, Refresh now, the map colours,
-  and Sign out (which asks first).
+  Account security (password, two-step sign-in, signed-in devices) and Sign out (which asks
+  first).
 - Each page has its own address (`dashboard.html#map`, `#visitors`, `#menu`; the old
   `#monitoring` still opens the map), so a phone's Back button returns to the page before.
 

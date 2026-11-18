@@ -5,11 +5,25 @@ require_once __DIR__ . "/session_bootstrap.php";
 require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/appointment_maintenance.php";
+require_once __DIR__ . "/arrival_service.php";
+require_once __DIR__ . "/gate_service.php";
 
 require_permission_json("appointments.list");
 refresh_appointment_time_states($conn);
 
 $visitColumns = visit_list_columns($conn, "a");
+// For the Office "Today" page (OFFICE_MOBILE.md): who has reached the office, how a visit
+// ended, and visitors registered at the gate.
+if (arrival_schema_ready($conn)) {
+    $visitColumns .= ", a.arrived_at, a.arrival_method, a.arrival_accuracy_meters";
+}
+if (gate_schema_ready($conn)) {
+    $visitColumns .= ", a.registration_source";
+}
+$checkoutColumn = $conn->query("SHOW COLUMNS FROM appointments LIKE 'checkout_method'");
+if ($checkoutColumn && $checkoutColumn->num_rows > 0) {
+    $visitColumns .= ", a.checkout_method";
+}
 $sql =
     "SELECT a.id, a.registration_code, a.public_token, a.office_code,
             a.visitor_full_name, a.visitor_email, a.contact_number, a.device_name,
@@ -75,6 +89,41 @@ while ($row = $result->fetch_assoc()) {
     $rows[] = $row;
 }
 $stmt->close();
+
+// "Waiting for visitor": the times this office offered, when, and until when the visitor can choose.
+if ($isOfficeUser) {
+    $waiting = [];
+    foreach ($rows as $index => $row) {
+        if ($row["status"] === "reschedule_proposed") {
+            $waiting[(int) $row["id"]] = $index;
+        }
+    }
+    if ($waiting) {
+        $ids = implode(",", array_keys($waiting));
+        $offers = $conn->query(
+            "SELECT p.id AS proposal_id, p.appointment_id, p.created_at, p.response_deadline, s.scheduled_start_at
+             FROM appointment_reschedule_proposals p
+             JOIN appointment_reschedule_slots s ON s.proposal_id = p.id
+             WHERE p.appointment_id IN ({$ids}) AND p.status = 'pending'
+             ORDER BY p.id DESC, s.scheduled_start_at ASC"
+        );
+        $latest = [];
+        while ($offers && ($offer = $offers->fetch_assoc())) {
+            $appointmentId = (int) $offer["appointment_id"];
+            $latest[$appointmentId] = $latest[$appointmentId] ?? (int) $offer["proposal_id"];
+            if ($latest[$appointmentId] !== (int) $offer["proposal_id"]) {
+                continue;
+            }
+            $index = $waiting[$appointmentId];
+            $rows[$index]["offer"] = $rows[$index]["offer"] ?? [
+                "sent_at" => $offer["created_at"],
+                "response_deadline" => $offer["response_deadline"],
+                "times" => [],
+            ];
+            $rows[$index]["offer"]["times"][] = $offer["scheduled_start_at"];
+        }
+    }
+}
 $conn->close();
 
 echo json_encode(["success" => true, "data" => $rows]);

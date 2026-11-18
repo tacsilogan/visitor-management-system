@@ -2574,6 +2574,12 @@
         toggleLegend(true);
     });
     document.getElementById("secMenuSignOut").addEventListener("click", signOut);
+    // On phones the account button opens this Menu, so Account security lives here too.
+    document.getElementById("secMenuAccount").addEventListener("click", function () {
+        if (window.PhoneTrackerSecurity) {
+            window.PhoneTrackerSecurity.open();
+        }
+    });
 
     const role = PhoneTrackerAuth.getRole();
     const displayName = PhoneTrackerAuth.getDisplayName() || PhoneTrackerAuth.getUsername() || "Security Desk";

@@ -973,3 +973,86 @@ function office_visits_between(mysqli $conn, string $officeCode, DateTimeInterfa
         "starts_at" => (string) $row["scheduled_start_at"],
     ], $rows);
 }
+
+/**
+ * The times visitors could book on $date, worked out the way the visitor app's list is
+ * (api/v1/availability.php): that weekday's visitor hours (8:00 to 5:00 when the office has
+ * never set any) plus "Extra visitor hours" changes, cut into slots, each one checked with
+ * office_availability_check(). Slots before $earliest are left out. Used by the office's
+ * "Other time" list (office_free_times.php); $excludeAppointmentId keeps the visit being moved
+ * from taking up a place.
+ *
+ * @return list<array{scheduled_start_at:string, scheduled_end_at:string, remaining_capacity:int}>
+ */
+function office_free_slots(
+    mysqli $conn,
+    string $officeCode,
+    DateTimeImmutable $date,
+    DateTimeImmutable $earliest,
+    int $excludeAppointmentId = 0
+): array {
+    $settings = office_availability_get_settings($conn, $officeCode);
+    if (!(int) $settings["accepting_visitors"]) {
+        return [];
+    }
+    $duration = max(15, (int) $settings["slot_duration_minutes"]);
+    $dateText = $date->format("Y-m-d");
+    $day = (int) $date->format("N");
+
+    $windows = [];
+    $rule = $conn->prepare(
+        "SELECT start_time, end_time FROM office_availability_rules
+         WHERE office_code = ? AND day_of_week = ? AND is_active = 1 ORDER BY start_time"
+    );
+    $rule->bind_param("si", $officeCode, $day);
+    $rule->execute();
+    foreach ($rule->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $windows[] = [substr((string) $row["start_time"], 0, 5), substr((string) $row["end_time"], 0, 5)];
+    }
+    $rule->close();
+    if (!$windows) {
+        $count = $conn->prepare("SELECT COUNT(*) FROM office_availability_rules WHERE office_code = ? AND is_active = 1");
+        $count->bind_param("s", $officeCode);
+        $count->execute();
+        $hasRules = (int) $count->get_result()->fetch_row()[0] > 0;
+        $count->close();
+        if (!$hasRules) {
+            $windows[] = ["08:00", "17:00"];
+        }
+    }
+    $extra = $conn->prepare(
+        "SELECT starts_at, ends_at FROM office_availability_exceptions
+         WHERE office_code = ? AND is_available = 1 AND DATE(starts_at) = ? ORDER BY starts_at"
+    );
+    $extra->bind_param("ss", $officeCode, $dateText);
+    $extra->execute();
+    foreach ($extra->get_result()->fetch_all(MYSQLI_ASSOC) as $row) {
+        $windows[] = [date("H:i", strtotime((string) $row["starts_at"])), date("H:i", strtotime((string) $row["ends_at"]))];
+    }
+    $extra->close();
+
+    $slots = [];
+    $seen = [];
+    foreach ($windows as [$from, $to]) {
+        $cursor = new DateTimeImmutable("{$dateText} {$from}:00");
+        $windowEnd = new DateTimeImmutable("{$dateText} {$to}:00");
+        for (; $cursor->modify("+{$duration} minutes") <= $windowEnd; $cursor = $cursor->modify("+{$duration} minutes")) {
+            $key = $cursor->format("Y-m-d H:i:s");
+            if (isset($seen[$key]) || $cursor < $earliest) {
+                continue;
+            }
+            $seen[$key] = true;
+            $end = $cursor->modify("+{$duration} minutes");
+            $check = office_availability_check($conn, $officeCode, $cursor, $end, $excludeAppointmentId);
+            if ($check["available"]) {
+                $slots[] = [
+                    "scheduled_start_at" => $key,
+                    "scheduled_end_at" => $end->format("Y-m-d H:i:s"),
+                    "remaining_capacity" => (int) $check["remaining"],
+                ];
+            }
+        }
+    }
+    usort($slots, fn(array $a, array $b): int => strcmp($a["scheduled_start_at"], $b["scheduled_start_at"]));
+    return $slots;
+}
