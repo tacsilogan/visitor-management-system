@@ -579,7 +579,7 @@ function office_load_exceptions_between(mysqli $conn, string $officeCode, DateTi
     $fromSql = $from->format("Y-m-d H:i:s");
     $toSql = $to->format("Y-m-d H:i:s");
     $stmt = $conn->prepare(
-        "SELECT id, starts_at, ends_at, is_available, reason FROM office_availability_exceptions
+        "SELECT id, starts_at, ends_at, is_available, reason, campus_closure_id FROM office_availability_exceptions
          WHERE office_code = ? AND ends_at > ? AND starts_at < ? ORDER BY id DESC"
     );
     $stmt->bind_param("sss", $officeCode, $fromSql, $toSql);
@@ -695,9 +695,16 @@ function office_open_state_at(DateTimeImmutable $now, array $settings, array $wi
         if ($starts <= $stamp && $stamp < $ends) {
             $reason = trim((string) ($exception["reason"] ?? ""));
             $until = date("Y-m-d H:i:s", $ends);
-            return (int) $exception["is_available"]
-                ? office_state("open", $reason !== "" ? $reason : "Extra visitor hours", $until)
-                : office_state("paused", $reason !== "" ? $reason : "Office unavailable", $until, null, (int) $exception["id"]);
+            if ((int) $exception["is_available"]) {
+                return office_state("open", $reason !== "" ? $reason : "Extra visitor hours", $until);
+            }
+            if (!empty($exception["campus_closure_id"])) {
+                // The whole campus is closed: only an administrator reopens it, so there is no Resume.
+                $state = office_state("paused", $reason !== "" ? $reason : "Campus closed", $until);
+                $state["campus_closed"] = true;
+                return $state;
+            }
+            return office_state("paused", $reason !== "" ? $reason : "Office unavailable", $until, null, (int) $exception["id"]);
         }
     }
     if (!$windowsByDay) {

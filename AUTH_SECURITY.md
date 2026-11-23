@@ -87,6 +87,12 @@ checks count too.
   a one-time temporary password (for example `Kq7m-Xr4p-Tz9w`) that expires in 24 hours.
 - The seeded staff accounts must change `password` at their first sign-in.
 - Changing a password signs the account out everywhere else and forgets trusted browsers.
+- **Forgot password?** on the sign-in page (`staff_password_reset.php`, since 2026-11-22): staff
+  with an email on file get a 6-digit code by email (15 minutes, 5 wrong tries, 5 codes an hour
+  per account and limits per network) and choose a new password with the same rules. The reply is
+  the same whether or not the account exists. It also releases the account's locks; two-step
+  sign-in is still asked afterwards. Staff without an email ask an administrator, as before.
+  See `ADMIN_DASHBOARD.md`.
 
 ## Two-step verification
 

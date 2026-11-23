@@ -14,7 +14,10 @@ const ACTIVITY_GATE_ACTIONS = [
     "appointment.checked_in", "appointment.completed", "appointment.qr_override_created", "visit.checked_in", "visit.completed",
     "presence.left_campus", "presence.returned_to_campus", "visit.arrived", "visit.help_requested",
 ];
-const ACTIVITY_SCHEDULE_ACTIONS = ["office.availability_updated", "office.availability_exception_added", "office.availability_exception_removed"];
+const ACTIVITY_SCHEDULE_ACTIONS = [
+    "office.availability_updated", "office.availability_exception_added", "office.availability_exception_removed",
+    "campus.closed", "campus.closure_changed", "campus.reopened",
+];
 const ACTIVITY_VISITOR_ACTIONS = ["appointment.created", "appointment.cancelled", "appointment.reschedule_response"];
 const ACTIVITY_CATEGORIES = ["all", "signins", "decisions", "gate", "schedules", "accounts", "visitors", "system"];
 
@@ -365,6 +368,39 @@ function activity_describe(array $row): array
             return ["Updated directions inside a building", "Saved the directions to " . appointment_office_label((string) ($details["office_code"] ?? "")) . ": "
                 . (($details["where"] ?? "") !== "" ? $details["where"] . ", " : "") . (int) ($details["steps"] ?? 0) . " step(s), "
                 . (int) ($details["photos"] ?? 0) . " photo(s)", "info"];
+
+        case "office.reminded":
+            return ["Reminded an office", "Reminded " . ($detailOffice !== "" ? $detailOffice : "an office") . " about "
+                . (int) ($details["requests"] ?? 0) . " waiting request(s)", "info"];
+        case "appointment.office_reminded":
+            return [
+                "Reminded an office automatically",
+                "Reminded " . ($detailOffice !== "" ? $detailOffice : "an office") . " about " . (int) ($details["requests"] ?? 0) . " waiting request(s)"
+                    . (($details["stage"] ?? "") === "expiry" ? ": one expires within the hour" : ": they passed the answer target"),
+                "warn",
+            ];
+        case "campus.closed":
+            return ["Closed the campus to visitors", "Closed the campus " . ($details["when"] ?? "") . ($reason !== "" ? " (" . $reason . ")" : "")
+                . ": " . (int) ($details["cancelled_visits"] ?? 0) . " booked visit(s) cancelled", "danger"];
+        case "campus.closure_changed":
+            return ["Changed a campus closure", "Changed the campus closure to " . ($details["when"] ?? "")
+                . ((int) ($details["cancelled_visits"] ?? 0) > 0 ? ": " . (int) $details["cancelled_visits"] . " more visit(s) cancelled" : ""), "warn"];
+        case "campus.reopened":
+            return ["Reopened the campus", "Reopened the campus for " . ($details["when"] ?? "the closed time"), "good"];
+        case "campus.office_pin_saved":
+            return ["Placed an office on the map", "Placed " . ($detailOffice !== "" ? $detailOffice : "an office") . " on the campus map", "info"];
+        case "admin.reminders_changed":
+            return ["Changed the request reminders", !empty($details["on"])
+                ? "Turned on automatic request reminders (answer within " . activity_minutes((int) ($details["target_minutes"] ?? 0)) . " of working time)"
+                : "Turned off automatic request reminders", "info"];
+        case "admin.digest_changed":
+            return ["Changed the morning summary email", !empty($details["on"])
+                ? "Turned on the morning summary email (weekdays at " . date("g:i A", mktime((int) ($details["hour"] ?? 7), 0)) . ")"
+                : "Turned off the morning summary email", "muted"];
+        case "auth.password_reset_requested":
+            return ["Asked for a password reset code", "Asked for a code by email to reset their password", "warn"];
+        case "auth.password_reset_by_email":
+            return ["Reset their password by email", "Chose a new password with a code sent to their email; other devices were signed out", "warn"];
 
         case "auth.password_changed":
             return ["Changed their password", ($details["during"] ?? "") === "sign_in" ? "Set a new password while signing in" : "Changed it in Account security; other devices were signed out", "info"];

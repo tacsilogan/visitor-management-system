@@ -411,6 +411,30 @@
 
     const sheets = [];
     let ignorePops = 0;
+    let settleTimer = 0;
+    const afterPops = [];
+
+    /*
+     * Closing a sheet goes back in the history, which the browser does a moment later. A new
+     * history entry (another sheet, another page) made before that would be the one taken back,
+     * and a later Back would then leave the page, so it waits until the back step is done.
+     */
+    function whenSettled(callback) {
+        if (ignorePops <= 0) {
+            callback();
+            return;
+        }
+        afterPops.push(callback);
+        window.clearTimeout(settleTimer);
+        settleTimer = window.setTimeout(flushSettled, 800);
+    }
+
+    function flushSettled() {
+        window.clearTimeout(settleTimer);
+        while (afterPops.length) {
+            afterPops.shift()();
+        }
+    }
 
     function openSheet(dialog) {
         if (dialog.open) {
@@ -418,7 +442,9 @@
         }
         dialog.showModal();
         sheets.push(dialog);
-        window.history.pushState({ officeSheet: dialog.id }, "", window.location.href);
+        whenSettled(function () {
+            window.history.pushState({ officeSheet: dialog.id }, "", window.location.href);
+        });
     }
 
     function closeSheet(dialog) {
@@ -496,7 +522,9 @@
             }
         });
         if (settings.history === "push" && changed) {
-            window.history.pushState({ officeView: view }, "", urlFor(view));
+            whenSettled(function () {
+                window.history.pushState({ officeView: view }, "", urlFor(view));
+            });
         } else if (settings.history === "replace") {
             window.history.replaceState({ officeView: view }, "", urlFor(view));
         }
@@ -512,6 +540,9 @@
     window.addEventListener("popstate", function () {
         if (ignorePops > 0) {
             ignorePops -= 1;
+            if (ignorePops === 0) {
+                flushSettled();
+            }
             return;
         }
         const top = sheets[sheets.length - 1];
@@ -1719,7 +1750,7 @@
         setText("officeTopStatus", parts.title + (parts.sub ? " · " + parts.sub : ""));
         const resume = info.state === "paused" && Boolean(info.pause_id);
         document.querySelectorAll("[data-pause-toggle]").forEach(function (button) {
-            button.hidden = info.state === "not_accepting";
+            button.hidden = info.state === "not_accepting" || Boolean(info.campus_closed);
             button.dataset.mode = resume ? "resume" : "pause";
             button.textContent = resume ? "Resume" : (button.closest(".is-big") ? "Pause new visits" : "Pause");
         });
@@ -1774,7 +1805,8 @@
             : "";
         return '<li class="ofc-change"><span class="ofc-mk' + (extra ? " is-extra" : "") + '"></span><span><strong>' +
             (extra ? "Extra visitor hours" : "Office unavailable") + "</strong><small>" + esc(when + (exception.reason ? " · " + exception.reason : "")) +
-            "</small></span>" + (removable
+            (exception.campus_closure_id ? " · set by the administrator for the whole campus" : "") +
+            "</small></span>" + (removable && !exception.campus_closure_id
                 ? '<button class="ofc-icon-btn" type="button" data-exception-id="' + Number(exception.id) + '" aria-label="Remove this change">' + ICON.trash + "</button>"
                 : "<span></span>") + "</li>";
     }

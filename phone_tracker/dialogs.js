@@ -10,7 +10,8 @@
  *   await AppDialog.alert({ title: "Couldn't remove Ana", message: data.message });
  *
  * Options: title, message (a blank line starts a new paragraph), confirmLabel, cancelLabel, danger
- * (a red button, and Cancel gets the focus), eyebrow (the small label above the title).
+ * (a red button, and Cancel gets the focus), eyebrow (the small label above the title), altLabel
+ * (a third button, the safer choice: "Add someone first"; confirm() then resolves "alt" for it).
  * confirm() resolves true only for the action button; the X, Escape, Cancel and a click outside all
  * mean no. One dialog shows at a time; a second waits for the first to close.
  */
@@ -34,6 +35,7 @@
             '<div class="app-dialog-message" id="appDialogMessage"></div>' +
             '<div class="admin-dialog-actions app-dialog-actions">' +
             '<button class="admin-cancel-button" type="button" data-app-dialog="cancel" id="appDialogCancel"></button>' +
+            '<button class="admin-primary-button" type="button" data-app-dialog="alt" id="appDialogAlt" hidden></button>' +
             '<button class="admin-primary-button" type="button" data-app-dialog="confirm" id="appDialogConfirm"></button>' +
             "</div>" +
             "</form>";
@@ -63,6 +65,10 @@
         const cancelButton = dialog.querySelector("#appDialogCancel");
         cancelButton.textContent = options.cancelLabel || "Cancel";
         cancelButton.hidden = kind === "alert";
+        const altButton = dialog.querySelector("#appDialogAlt");
+        altButton.textContent = options.altLabel || "";
+        altButton.hidden = !options.altLabel || kind === "alert";
+        dialog.classList.toggle("has-alt", !altButton.hidden);
         dialog.classList.toggle("is-danger", danger);
         // A risky action starts on the safe button, so a quick Enter doesn't do it.
         return danger && kind !== "alert" ? cancelButton : confirmButton;
@@ -76,7 +82,7 @@
             function onClick(event) {
                 const button = event.target.closest("[data-app-dialog]");
                 if (button) {
-                    answer = button.dataset.appDialog === "confirm";
+                    answer = button.dataset.appDialog === "alt" ? "alt" : button.dataset.appDialog === "confirm";
                     dialog.close();
                     return;
                 }
@@ -110,7 +116,7 @@
     }
 
     window.AppDialog = {
-        /** Resolves true when the person chooses the action, false otherwise. */
+        /** Resolves true when the person chooses the action, "alt" for the third button, false otherwise. */
         confirm: function (options) {
             return enqueue("confirm", options);
         },

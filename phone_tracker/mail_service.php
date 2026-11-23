@@ -154,9 +154,10 @@ function mail_signature(bool $app): string
 
 /**
  * The emails with a 6-digit code: the code that confirms a new visitor's email (signup_service.php),
- * and the code that resets a forgotten password (api/v1/auth/_password_reset.php).
+ * the code that resets a visitor's forgotten password (api/v1/auth/_password_reset.php), and the
+ * code that resets a staff member's password from the sign-in page (staff_password_reset.php).
  */
-const MAIL_ACCOUNT_TEMPLATES = ["account_code", "password_reset"];
+const MAIL_ACCOUNT_TEMPLATES = ["account_code", "password_reset", "staff_password_reset"];
 
 function mail_render_account(string $templateKey, array $payload, string $recipientName): array
 {
@@ -173,6 +174,18 @@ function mail_render_account(string $templateKey, array $payload, string $recipi
         $intro = "Enter this code in the " . mail_app_name() . " app to finish creating your visitor account:";
         $after = "The code works once and expires in " . $minutes . " minutes.";
         $outro = "If you didn't ask for an ISATU account, ignore this email. Nothing is created without the code.";
+    } elseif ($templateKey === "staff_password_reset") {
+        $code = (string) ($payload["code"] ?? "");
+        if (!preg_match('/^\d{6}$/', $code)) {
+            throw new InvalidArgumentException("The email has no valid code to send.");
+        }
+        $minutes = max(1, (int) ($payload["minutes"] ?? 15));
+        $username = trim((string) ($payload["username"] ?? ""));
+        $intro = "Someone asked to reset the password of your ISATU Visitor Management staff account"
+            . ($username !== "" ? " (" . $username . ")" : "") . ". If it was you, enter this code on the sign-in page with your new password:";
+        $after = "The code works once and expires in " . $minutes . " minutes. Asking for another code ends this one. "
+            . "If two-step sign-in is on, you'll still be asked for your authenticator code.";
+        $outro = "If you didn't ask for this, ignore this email. Your password stays the same.";
     } else {
         $code = (string) ($payload["code"] ?? "");
         if (!preg_match('/^\d{6}$/', $code)) {
@@ -210,6 +223,9 @@ function mail_render(string $templateKey, array $payload, string $recipientName)
 {
     if (in_array($templateKey, MAIL_ACCOUNT_TEMPLATES, true)) {
         return mail_render_account($templateKey, $payload, $recipientName);
+    }
+    if ($templateKey === "admin_digest") {
+        return mail_render_digest($payload, $recipientName);
     }
     $code = (string) ($payload["token"] ?? "");
     if (!preg_match('/^[a-f0-9]{64}$/', $code)) {
@@ -253,6 +269,83 @@ function mail_render(string $templateKey, array $payload, string $recipientName)
         . '</div></body></html>';
 
     return ["text" => $text, "html" => $html, "from_name" => $appName];
+}
+
+/**
+ * The administrator's morning summary (workers/send_admin_digest.php): what needs them, the last
+ * working day's numbers and the slowest office. Never visitors' contact details or locations.
+ */
+function mail_render_digest(array $payload, string $recipientName): array
+{
+    $escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, "UTF-8");
+    $name = trim((string) ($payload["first_name"] ?? "")) ?: $recipientName;
+    $greeting = $name !== "" ? "Good morning, " . $name : "Good morning";
+    $dateLabel = (string) ($payload["date_label"] ?? "");
+    $attention = is_array($payload["attention"] ?? null) ? $payload["attention"] : null;
+    $numbers = is_array($payload["numbers"] ?? null) ? $payload["numbers"] : null;
+    $slowest = is_array($payload["slowest"] ?? null) ? $payload["slowest"] : null;
+    $url = (string) ($payload["dashboard_url"] ?? "");
+    $settingsNote = (string) ($payload["settings_note"] ?? "");
+
+    $text = $greeting . "\n" . ($dateLabel !== "" ? "Your summary for " . $dateLabel . "\n" : "");
+    $html = '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:24px;background:#f4f6fa;font-family:Arial,Helvetica,sans-serif;color:#1f2937">'
+        . '<div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:28px">'
+        . mail_header_html(false)
+        . '<p style="margin:14px 0 2px;font-size:20px;font-weight:bold;color:#142033">' . $escape($greeting) . '</p>'
+        . ($dateLabel !== "" ? '<p style="margin:0 0 18px;color:#64748b">Your summary for ' . $escape($dateLabel) . '</p>' : '');
+
+    if ($attention !== null) {
+        $count = count($attention);
+        $text .= "\nNEEDS YOUR ATTENTION (" . $count . ")\n";
+        $html .= '<h3 style="margin:18px 0 8px;font-size:15px;color:#142033">Needs your attention (' . $count . ')</h3>';
+        if ($count === 0) {
+            $text .= "Nothing. All clear.\n";
+            $html .= '<p style="margin:0 0 12px;color:#0a8a4c">Nothing. All clear.</p>';
+        } else {
+            $html .= '<ol style="margin:0 0 12px;padding-left:20px;line-height:1.5">';
+            foreach ($attention as $index => $item) {
+                $title = (string) ($item["title"] ?? "");
+                $detail = (string) ($item["text"] ?? "");
+                $text .= ($index + 1) . ". " . $title . ($detail !== "" ? ". " . $detail : "") . "\n";
+                $html .= '<li style="margin:0 0 6px"><b>' . $escape($title) . '.</b> ' . $escape($detail) . '</li>';
+            }
+            $html .= '</ol>';
+        }
+    }
+    if ($url !== "") {
+        $text .= "\nOpen the dashboard: " . $url . "\n";
+        $html .= '<p style="margin:6px 0 18px"><a href="' . $escape($url) . '" style="display:inline-block;padding:10px 18px;border-radius:8px;background:#0755b5;color:#ffffff;font-weight:bold;text-decoration:none">Open the dashboard</a></p>';
+    }
+    if ($numbers !== null) {
+        $dayLabel = (string) ($numbers["day_label"] ?? "the last working day");
+        $cells = [
+            [(string) ($numbers["visits"] ?? "0"), "Visits"],
+            [(string) ($numbers["answered"] ?? "—"), "Requests answered in time"],
+            [(string) ($numbers["no_shows"] ?? "0"), "Didn't come"],
+            [(string) ($numbers["average"] ?? "—"), "Average visit"],
+        ];
+        $text .= "\n" . strtoupper($dayLabel) . "\n";
+        $html .= '<h3 style="margin:18px 0 8px;font-size:15px;color:#142033">' . $escape(ucfirst($dayLabel)) . '</h3>'
+            . '<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:separate;border-spacing:6px"><tr>';
+        foreach ($cells as [$value, $label]) {
+            $text .= $label . ": " . $value . "\n";
+            $html .= '<td style="width:25%;padding:10px;border-radius:8px;background:#f3f5f9;vertical-align:top">'
+                . '<div style="font-size:20px;font-weight:bold;color:#142033">' . $escape($value) . '</div>'
+                . '<div style="font-size:12px;color:#64748b">' . $escape($label) . '</div></td>';
+        }
+        $html .= '</tr></table>';
+    }
+    if ($slowest !== null && ($slowest["name"] ?? "") !== "") {
+        $line = "Slowest to answer: " . $slowest["name"] . ", " . ($slowest["label"] ?? "") . " on average.";
+        $text .= "\n" . $line . "\n";
+        $html .= '<p style="margin:12px 0 0;line-height:1.5">Slowest to answer: <b>' . $escape((string) $slowest["name"]) . '</b>, '
+            . $escape((string) ($slowest["label"] ?? "")) . ' on average.</p>';
+    }
+    $foot = ($settingsNote !== "" ? $settingsNote . " " : "") . "It never includes visitors' contact details or where they went.";
+    $text .= "\n" . $foot . "\n\nISATU Visitor Management\n";
+    $html .= '<p style="margin:22px 0 0;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.5;color:#64748b">' . $escape($foot) . '</p>'
+        . '</div></body></html>';
+    return ["text" => $text, "html" => $html, "from_name" => null];
 }
 
 /** POSTs JSON and returns [HTTP status, decoded body]. */

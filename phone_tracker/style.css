@@ -15824,3 +15824,2149 @@ body.ofc-has-savebar .ofc-main {
         animation: none;
     }
 }
+
+/* ==========================================================================
+   Admin dashboard on phones, tablets and laptops (2026-11-22)
+   The Office Personnel parts above (.ofc-) with the admin's own (.adm-): Home, Offices, People,
+   Activity, Reports, Campus map and Menu. The body also has .office-page, so the menu, sheets,
+   buttons and chips are the same as on the Office and Security pages. The campus map editor
+   stays outside .ofc-main, so its own rules (and the maps' SVG) are untouched.
+   ========================================================================== */
+
+.office-page .adm-main {
+    min-width: 0;
+    padding: 24px clamp(20px, 3vw, 40px) 48px;
+}
+
+.office-page .adm-main .adm-pane {
+    padding: 0;
+}
+
+.adm-page .ofc-dot {
+    background: #e08a00;
+    box-shadow: 0 0 0 3px #ffe7c2;
+}
+
+.adm-page.is-clear .ofc-dot {
+    background: #16a34a;
+    box-shadow: 0 0 0 3px #d9f2e4;
+}
+
+.adm-page .admin-topbar-actions {
+    gap: 8px;
+}
+
+.adm-page .adm-bell svg {
+    width: 26px;
+    height: 26px;
+    fill: none;
+    stroke: var(--ofc-ink);
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.adm-page .adm-avatar {
+    display: grid;
+    place-items: center;
+    background: var(--ofc-blue);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.adm-page .adm-profile {
+    border: 0;
+    cursor: pointer;
+}
+
+.ofc-count.is-red {
+    background: var(--ofc-red-bg);
+    color: var(--ofc-red);
+}
+
+.adm-dotchip i {
+    width: 7px;
+    height: 7px;
+    flex: none;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+.adm-stack {
+    display: grid;
+    min-width: 0;
+    align-content: start;
+    gap: 18px;
+}
+
+.adm-bar-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.adm-bar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.adm-page .adm-sel {
+    width: auto;
+    height: 38px;
+    padding: 0 10px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--ofc-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.adm-page .adm-more {
+    justify-self: center;
+    min-width: 200px;
+}
+
+.adm-phone-only {
+    display: none !important;
+}
+
+/* ---------- One search for everything ---------- */
+
+.adm-search {
+    position: relative;
+    z-index: 30;
+}
+
+.adm-kbd {
+    display: inline-grid;
+    min-width: 24px;
+    height: 24px;
+    flex: none;
+    padding: 0 7px;
+    place-items: center;
+    border: 1px solid #c9d2de;
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    background: #ffffff;
+    color: var(--ofc-ink);
+    font: 600 12px "Cascadia Mono", Consolas, monospace;
+}
+
+.adm-hint-key {
+    margin-left: auto;
+}
+
+.adm-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    left: 0;
+    display: grid;
+    max-height: min(440px, 60vh);
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 18px 40px rgba(17, 42, 71, 0.2);
+}
+
+.adm-results p {
+    margin: 8px 10px 4px;
+    color: var(--ofc-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.office-page .adm-result {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .adm-result:hover,
+.office-page .adm-result:focus-visible {
+    background: var(--ofc-bg);
+    outline: 0;
+}
+
+.adm-result strong,
+.adm-prow strong {
+    display: block;
+    overflow: hidden;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+    text-overflow: ellipsis;
+}
+
+.adm-result small {
+    display: block;
+    overflow: hidden;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.adm-none {
+    padding: 14px 10px;
+    color: var(--ofc-muted);
+    font-size: 13px;
+}
+
+/* ---------- Right now ---------- */
+
+.adm-glance em {
+    font-size: 11.5px;
+    font-style: normal;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.adm-glance em.is-up {
+    color: var(--ofc-green);
+}
+
+.adm-glance em.is-down {
+    color: var(--ofc-red);
+}
+
+/* ---------- Needs your attention ---------- */
+
+.adm-alist {
+    display: grid;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.adm-aitem {
+    --adm-c: var(--ofc-blue);
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 12px;
+    padding: 14px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: inset 4px 0 0 var(--adm-c);
+}
+
+.adm-aitem.is-red {
+    --adm-c: var(--ofc-red);
+    border-color: var(--ofc-red-line);
+}
+
+.adm-aitem.is-amber {
+    --adm-c: #e08a00;
+    border-color: var(--ofc-amber-line);
+}
+
+.adm-aitem.adm-flat {
+    box-shadow: none;
+}
+
+.adm-aico {
+    display: grid;
+    width: 36px;
+    height: 36px;
+    grid-row: span 2;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+}
+
+.adm-aitem.is-red .adm-aico {
+    background: var(--ofc-red-bg);
+    color: var(--ofc-red);
+}
+
+.adm-aitem.is-amber .adm-aico {
+    background: var(--ofc-amber-bg);
+    color: var(--ofc-amber);
+}
+
+.adm-aitem strong {
+    color: var(--ofc-ink);
+    font-size: 14.5px;
+    line-height: 1.35;
+}
+
+.adm-aitem p {
+    margin: 0;
+    color: var(--ofc-text);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.adm-aitem p.adm-why {
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.adm-aacts {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 2;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.adm-allclear {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--ofc-green-line);
+    border-radius: 16px;
+    background: var(--ofc-green-bg);
+    color: #0b5e36;
+    font-size: 13.5px;
+    font-weight: 600;
+}
+
+/* ---------- A campus closure ---------- */
+
+.adm-closure-host:empty {
+    display: none;
+}
+
+.adm-closure-host {
+    display: grid;
+    gap: 10px;
+}
+
+.adm-closure {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 4px 12px;
+    padding: 14px;
+    border: 1px solid #c7d2fe;
+    border-radius: 16px;
+    background: #eef2ff;
+}
+
+.adm-closure .adm-aico {
+    background: #ffffff;
+    color: #4338ca;
+}
+
+.adm-closure strong {
+    color: #1e1b4b;
+    font-size: 14.5px;
+    line-height: 1.35;
+}
+
+.adm-closure p {
+    margin: 0;
+    color: #3730a3;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+/* ---------- Offices ---------- */
+
+.adm-orows,
+.adm-plist,
+.adm-tlist {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+    list-style: none;
+}
+
+.adm-orows > li + li,
+.adm-plist > li + li,
+.adm-tlist > li + li {
+    border-top: 1px solid var(--ofc-line);
+}
+
+.adm-orows > .ofc-empty,
+.adm-plist > .ofc-empty,
+.adm-tlist > .ofc-empty {
+    border: 0;
+    border-radius: 0;
+}
+
+.office-page .adm-orow {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .adm-orow:hover,
+.office-page .adm-prow:hover,
+.office-page button.adm-titem:hover,
+.office-page .adm-vrow:hover {
+    background: #f8fafc;
+}
+
+.adm-orow strong {
+    overflow: hidden;
+    color: var(--ofc-ink);
+    font-size: 14px;
+    text-overflow: ellipsis;
+}
+
+.adm-nums {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+    gap: 4px 14px;
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.adm-nums b {
+    color: var(--ofc-ink);
+}
+
+.adm-nums b.is-red,
+.adm-ostats b.is-red,
+.adm-secstats b.is-red {
+    color: var(--ofc-red);
+}
+
+.adm-ogrid {
+    display: grid;
+    gap: 12px;
+}
+
+.office-page .adm-ocard {
+    display: grid;
+    width: 100%;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.office-page .adm-ocard:hover {
+    border-color: #b9c6d8;
+    box-shadow: 0 6px 18px rgba(17, 42, 71, 0.07);
+}
+
+.office-page .adm-ocard.is-nostaff {
+    border-color: var(--ofc-red-line);
+}
+
+.office-page .adm-ocard.is-archived {
+    background: #fafbfc;
+    opacity: 0.85;
+}
+
+.adm-ohead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.adm-ohead > span {
+    min-width: 0;
+}
+
+.adm-ohead strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 15px;
+}
+
+.adm-ohead small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.adm-staff {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    color: var(--ofc-text);
+    font-size: 12.5px;
+}
+
+.adm-staff > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.adm-staff.is-none {
+    color: var(--ofc-red);
+    font-weight: 600;
+}
+
+.adm-faces {
+    display: flex;
+    flex: none;
+}
+
+.adm-faces .adm-ini + .adm-ini {
+    margin-left: -8px;
+}
+
+.adm-ini {
+    position: relative;
+    display: inline-grid;
+    width: 36px;
+    height: 36px;
+    flex: none;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+    font-size: 12.5px;
+    font-weight: 700;
+}
+
+.adm-ini.is-sm {
+    width: 26px;
+    height: 26px;
+    border: 2px solid #ffffff;
+    font-size: 10.5px;
+}
+
+.adm-ini.is-sys {
+    background: var(--ofc-gray-bg);
+    color: var(--ofc-gray);
+    font-size: 10px;
+}
+
+.adm-ini.is-online::after {
+    content: "";
+    position: absolute;
+    right: -1px;
+    bottom: -1px;
+    width: 9px;
+    height: 9px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    background: #16a34a;
+}
+
+.adm-ini svg {
+    width: 18px;
+    height: 18px;
+}
+
+.adm-ostats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.adm-ostats div {
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: var(--ofc-bg);
+}
+
+.adm-ostats b {
+    display: block;
+    overflow: hidden;
+    color: var(--ofc-ink);
+    font-size: 16px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.adm-ostats span {
+    color: var(--ofc-muted);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.adm-setup {
+    display: grid;
+    gap: 6px;
+}
+
+.adm-setup-top {
+    display: flex;
+    justify-content: space-between;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.adm-setup-top b {
+    color: var(--ofc-ink);
+}
+
+.adm-segs,
+.adm-wz-steps,
+.adm-wz-names {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+}
+
+.adm-segs i,
+.adm-wz-steps i {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--ofc-gray-bg);
+}
+
+.adm-segs i.on,
+.adm-wz-steps i.done {
+    background: #22a565;
+}
+
+.adm-wz-steps i.now {
+    background: var(--ofc-blue);
+}
+
+.adm-steps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+}
+
+.adm-steps .ok {
+    color: var(--ofc-green);
+}
+
+.adm-steps .no {
+    color: var(--ofc-red);
+}
+
+#admRemCard:empty {
+    display: none;
+}
+
+.adm-page .adm-rem-card {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+}
+
+.adm-rem-card .adm-aico {
+    grid-row: auto;
+    background: var(--ofc-green-bg);
+    color: var(--ofc-green);
+}
+
+.adm-rem-card.is-off .adm-aico {
+    background: var(--ofc-gray-bg);
+    color: var(--ofc-gray);
+}
+
+.adm-rem-card strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 14px;
+}
+
+/* ---------- People ---------- */
+
+.office-page .adm-prow {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.adm-prow .adm-ini {
+    width: 40px;
+    height: 40px;
+}
+
+.adm-prow > span:nth-child(2) {
+    min-width: 0;
+}
+
+.adm-prow strong {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+}
+
+.adm-prow small {
+    display: block;
+    overflow: hidden;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.adm-flags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+}
+
+.adm-flags:empty {
+    display: none;
+}
+
+/* ---------- Activity ---------- */
+
+.adm-person-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 12px;
+}
+
+.adm-secstats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.adm-secstats div {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--ofc-bg);
+}
+
+.adm-secstats b {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 18px;
+}
+
+.adm-secstats span {
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+    font-weight: 600;
+}
+
+#admLockList:empty {
+    display: none;
+}
+
+.adm-attempts summary {
+    padding: 4px 0;
+    color: var(--ofc-blue);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.adm-attempts .adm-tlist {
+    margin-top: 10px;
+}
+
+.adm-tday {
+    margin: 6px 0 -2px;
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+#admTimeline {
+    gap: 10px;
+}
+
+.adm-titem,
+.office-page button.adm-titem {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 2px 10px;
+    padding: 12px 14px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font-size: inherit;
+    text-align: left;
+}
+
+.office-page button.adm-titem {
+    cursor: pointer;
+}
+
+.adm-titem .adm-ini {
+    grid-row: span 2;
+}
+
+.adm-titem p {
+    margin: 0;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.adm-titem p b {
+    font-weight: 600;
+}
+
+.adm-titem small {
+    grid-column: 2 / -1;
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.adm-titem time {
+    color: var(--ofc-muted);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.adm-titem.is-alert .adm-ini {
+    background: var(--ofc-red-bg);
+    color: var(--ofc-red);
+}
+
+/* ---------- Reports ---------- */
+
+.adm-kpis {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.adm-kpi {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+    padding: 12px 14px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 16px;
+    background: #ffffff;
+}
+
+.adm-kpi span {
+    color: var(--ofc-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.adm-kpi strong {
+    color: var(--ofc-ink);
+    font-size: 24px;
+    line-height: 1.15;
+}
+
+.adm-kpi em {
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+    font-style: normal;
+    font-weight: 600;
+}
+
+.adm-kpi em.up {
+    color: var(--ofc-green);
+}
+
+.adm-kpi em.down {
+    color: var(--ofc-red);
+}
+
+.adm-insights {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.adm-insights li {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--ofc-bg);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.adm-insights b {
+    color: var(--ofc-ink);
+}
+
+.adm-ico {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border-radius: 10px;
+    background: #ffffff;
+    color: var(--ofc-blue);
+}
+
+.adm-insights li.is-warn .adm-ico {
+    color: var(--ofc-amber);
+}
+
+.adm-cols-wide {
+    display: grid;
+    align-items: start;
+    gap: 16px;
+}
+
+.adm-chart {
+    position: relative;
+}
+
+.adm-vbars {
+    display: grid;
+    height: 150px;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    align-items: end;
+    gap: 3px;
+    padding: 0 2px;
+    border-bottom: 1px solid var(--ofc-line);
+}
+
+.adm-chart.is-few .adm-vbars,
+.adm-chart.is-few .adm-vlabels {
+    gap: 12px;
+    padding: 0 6px;
+}
+
+.adm-vbars i {
+    display: block;
+    min-height: 2px;
+    border-radius: 4px 4px 0 0;
+    background: var(--ofc-blue);
+    cursor: pointer;
+}
+
+.adm-vbars i.is-wk {
+    background: #c9d6ea;
+}
+
+.adm-vbars i.is-future {
+    background: transparent;
+}
+
+.adm-vbars i:hover {
+    background: var(--ofc-blue-dark);
+}
+
+.adm-vlabels {
+    display: grid;
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    gap: 3px;
+    padding: 4px 2px 0;
+    color: var(--ofc-muted);
+    font-size: 10px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.adm-tip {
+    position: absolute;
+    z-index: 5;
+    padding: 5px 9px;
+    border-radius: 8px;
+    background: var(--ofc-ink);
+    color: #ffffff;
+    font-size: 11.5px;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translate(-50%, calc(-100% - 6px));
+}
+
+.adm-hbars {
+    display: grid;
+    gap: 10px;
+}
+
+.adm-hbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+}
+
+.adm-hbar span {
+    min-width: 0;
+    color: var(--ofc-ink);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.adm-hbar small {
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+    font-weight: 500;
+}
+
+.adm-hbar b {
+    color: var(--ofc-ink);
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.adm-track {
+    height: 10px;
+    grid-column: 1 / -1;
+    border-radius: 5px;
+    background: var(--ofc-gray-bg);
+}
+
+.adm-track i {
+    display: block;
+    height: 100%;
+    border-radius: 5px;
+    background: var(--ofc-blue);
+}
+
+.adm-heat {
+    display: grid;
+    grid-template-columns: 34px repeat(10, minmax(0, 1fr));
+    gap: 3px;
+    color: var(--ofc-muted);
+    font-size: 10px;
+}
+
+.adm-heat span {
+    display: grid;
+    place-items: center;
+}
+
+.adm-heat i {
+    display: block;
+    height: 26px;
+    border-radius: 5px;
+    background: #f3f6fb;
+}
+
+.adm-heat i.is-1,
+.adm-heat-key .is-1 {
+    background: #e8f0fb;
+}
+
+.adm-heat i.is-2,
+.adm-heat-key .is-2 {
+    background: #a9c4ec;
+}
+
+.adm-heat i.is-3,
+.adm-heat-key .is-3 {
+    background: #5b8fd8;
+}
+
+.adm-heat i.is-4,
+.adm-heat-key .is-4 {
+    background: #0755b5;
+}
+
+.adm-heat .adm-span {
+    grid-column: 1 / -1;
+}
+
+.adm-heat-key {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--ofc-muted);
+    font-size: 11px;
+}
+
+.adm-heat-key i {
+    width: 18px;
+    height: 10px;
+    border-radius: 3px;
+}
+
+.adm-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+table.adm-data,
+table.adm-otable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
+}
+
+.adm-data th,
+.adm-data td,
+.adm-otable th,
+.adm-otable td {
+    padding: 7px 8px;
+    border-bottom: 1px solid var(--ofc-line);
+    text-align: left;
+    vertical-align: top;
+}
+
+.adm-data th,
+.adm-otable th {
+    color: var(--ofc-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.adm-otable td.y,
+.adm-ok {
+    color: var(--ofc-green);
+    font-weight: 700;
+}
+
+.adm-otable td.n {
+    color: #c4ccd6;
+    font-weight: 700;
+}
+
+.adm-skip {
+    color: var(--ofc-amber);
+    font-weight: 700;
+}
+
+/* ---------- Campus map checklist ---------- */
+
+.adm-checks {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.adm-checks li {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid var(--ofc-line);
+    font-size: 13px;
+}
+
+.adm-checks li:first-child {
+    border-top: 0;
+}
+
+.adm-checks b {
+    color: var(--ofc-ink);
+}
+
+.adm-checks .ok,
+.adm-checks .no {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border-radius: 50%;
+}
+
+.adm-checks .ok {
+    background: var(--ofc-green-bg);
+    color: var(--ofc-green);
+}
+
+.adm-checks .no {
+    background: var(--ofc-amber-bg);
+    color: var(--ofc-amber);
+}
+
+.adm-checks .ok svg,
+.adm-checks .no svg {
+    width: 15px;
+    height: 15px;
+}
+
+.adm-campus:not([hidden]) {
+    display: grid;
+    gap: 16px;
+}
+
+.adm-campus > .adm-pane {
+    width: 100%;
+}
+
+/* The map editor keeps the page's original spacing: the shared rules above don't reach it. */
+.adm-campus .campus-view {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+}
+
+/* ---------- Sheets ---------- */
+
+/* Lists with overflow: hidden would shrink to nothing in the scrolling sheet body otherwise. */
+.adm-sheet .ofc-sheet-body,
+.adm-wide-sheet .ofc-sheet-body {
+    grid-auto-rows: max-content;
+}
+
+.office-page .ofc-menu-item.is-danger .ofc-menu-ico {
+    background: var(--ofc-red-bg);
+    color: var(--ofc-red);
+}
+
+.office-page .ofc-menu-item.is-danger strong {
+    color: var(--ofc-red);
+}
+
+.adm-sheet-headtext {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.adm-sheet-seg {
+    margin-top: 10px;
+}
+
+.office-page dialog.ofc-sheet.adm-wide-sheet {
+    width: min(760px, calc(100vw - 32px));
+}
+
+.adm-sheet .ofc-sheet-body h3,
+.adm-wide-sheet .ofc-sheet-body h3 {
+    margin: 0;
+    color: var(--ofc-ink);
+    font-size: 14px;
+}
+
+.adm-sheet-error {
+    margin: 0;
+}
+
+.adm-facts div {
+    grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.adm-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.adm-actions.is-row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.office-page .adm-actions .ofc-btn {
+    min-width: 0;
+    white-space: normal;
+    text-align: center;
+}
+
+.office-page .adm-remove {
+    justify-self: start;
+    color: var(--ofc-red);
+}
+
+.adm-two {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.adm-roles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.office-page .adm-roles button {
+    display: grid;
+    gap: 2px;
+    padding: 10px 6px;
+    border: 1.5px solid #c9d2de;
+    border-radius: 12px;
+    background: #ffffff;
+    color: var(--ofc-ink);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    cursor: pointer;
+}
+
+.adm-roles small {
+    color: var(--ofc-muted);
+    font-size: 10.5px;
+    font-weight: 500;
+}
+
+.office-page .adm-roles button.is-on {
+    border-color: var(--ofc-blue);
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+    box-shadow: inset 0 0 0 1px var(--ofc-blue);
+}
+
+.adm-temp {
+    display: grid;
+    gap: 6px;
+    padding: 14px;
+    border: 1.5px dashed var(--ofc-blue);
+    border-radius: 14px;
+    background: var(--ofc-blue-soft);
+    text-align: center;
+}
+
+.adm-temp code {
+    color: var(--ofc-ink);
+    font: 700 22px "Cascadia Mono", Consolas, monospace;
+    letter-spacing: 0.08em;
+    user-select: all;
+    overflow-wrap: anywhere;
+}
+
+.adm-temp .adm-actions {
+    justify-content: center;
+}
+
+.adm-vlist {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.office-page .adm-vrow {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 2px 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--ofc-line);
+    border-radius: 12px;
+    background: #ffffff;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.adm-vrow b {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+}
+
+.adm-vrow small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.adm-affects {
+    display: grid;
+    gap: 6px;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--ofc-bg);
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.adm-affects b {
+    color: var(--ofc-ink);
+}
+
+.adm-affects .adm-bad {
+    color: var(--ofc-red);
+    font-weight: 600;
+}
+
+.office-page .adm-qchips button.is-on {
+    border-color: var(--ofc-blue);
+    background: var(--ofc-blue-soft);
+    color: var(--ofc-blue);
+}
+
+.adm-setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.adm-setting + .adm-setting {
+    padding-top: 12px;
+    border-top: 1px solid var(--ofc-line);
+}
+
+.adm-setting strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 14px;
+}
+
+.adm-setting small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+}
+
+.office-page .adm-checkline {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    color: var(--ofc-text);
+    font-size: 13px;
+    line-height: 1.45;
+    cursor: pointer;
+}
+
+.office-page .adm-checkline input,
+.office-page .adm-pickrow input {
+    width: 18px;
+    height: 18px;
+    margin: 1px 0 0;
+    accent-color: var(--ofc-blue);
+}
+
+.adm-checkline b {
+    color: var(--ofc-ink);
+}
+
+.office-page .adm-pickrow {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    padding: 12px;
+    border: 1.5px solid var(--ofc-line);
+    border-radius: 12px;
+    cursor: pointer;
+}
+
+.office-page .adm-pickrow:has(input:checked) {
+    border-color: var(--ofc-blue);
+    background: #f7faff;
+}
+
+.adm-pickrow b {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 13.5px;
+}
+
+.adm-pickrow small {
+    color: var(--ofc-muted);
+    font-size: 12px;
+}
+
+.adm-wz-staff {
+    display: grid;
+    gap: 12px;
+    padding-left: 8px;
+}
+
+.adm-wz-names {
+    margin-top: 4px;
+    color: var(--ofc-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.adm-wz-names .now {
+    color: var(--ofc-blue);
+}
+
+.adm-wz-steps {
+    margin-top: 10px;
+}
+
+.adm-wz-map {
+    height: 260px;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #e8ecf1;
+}
+
+.adm-pin {
+    display: block;
+    width: 18px;
+    height: 18px;
+    border: 3px solid #ffffff;
+    border-radius: 50% 50% 50% 0;
+    background: #7c3aed;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+    transform: rotate(-45deg);
+}
+
+.adm-wz-done {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.adm-wz-done li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: var(--ofc-bg);
+    font-size: 13px;
+}
+
+.adm-wz-done b {
+    color: var(--ofc-ink);
+}
+
+.adm-wz-done .ok {
+    color: var(--ofc-green);
+    font-weight: 700;
+}
+
+.adm-later {
+    margin-left: auto;
+    color: var(--ofc-amber);
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.adm-danger-zone {
+    display: grid;
+    justify-items: start;
+    gap: 8px;
+    padding: 12px;
+    border: 1px solid var(--ofc-red-line);
+    border-radius: 12px;
+    background: #fffafa;
+}
+
+.office-page .adm-bulk-ta {
+    min-height: 120px;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12.5px;
+}
+
+.office-page .adm-file {
+    position: relative;
+    overflow: hidden;
+}
+
+.office-page .adm-file input {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.adm-options {
+    display: grid;
+    gap: 10px;
+}
+
+.office-page .adm-option {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 40px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    border: 1.5px solid var(--ofc-line);
+    border-radius: 14px;
+    background: #ffffff;
+    color: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.office-page .adm-option.is-main {
+    border-color: #b8cdeb;
+}
+
+.office-page .adm-option:hover {
+    background: #f8fafc;
+}
+
+.adm-option strong {
+    display: block;
+    color: var(--ofc-ink);
+    font-size: 14px;
+}
+
+.adm-option small {
+    display: block;
+    color: var(--ofc-muted);
+    font-size: 12px;
+    line-height: 1.4;
+}
+
+.adm-keys {
+    display: grid;
+    margin: 0;
+}
+
+.adm-keys div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--ofc-line);
+    font-size: 13.5px;
+}
+
+.adm-keys div:last-child {
+    border-bottom: 0;
+}
+
+.adm-keys dt {
+    color: var(--ofc-ink);
+}
+
+.adm-keys dd {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    margin: 0;
+    color: var(--ofc-muted);
+}
+
+.adm-howto {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding-left: 20px;
+    color: var(--ofc-text);
+    font-size: 13.5px;
+    line-height: 1.5;
+}
+
+.adm-howto b {
+    color: var(--ofc-ink);
+}
+
+.adm-email {
+    overflow: hidden;
+    border: 1px solid var(--ofc-line);
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.adm-email-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: #0b2a5b;
+    color: #ffffff;
+}
+
+.adm-email-head img {
+    width: 40px;
+    height: 40px;
+}
+
+.adm-email-head strong {
+    display: block;
+    font-size: 16px;
+}
+
+.adm-email-head span {
+    font-size: 12.5px;
+    opacity: 0.85;
+}
+
+.adm-email-body {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    color: var(--ofc-text);
+    font-size: 13.5px;
+    line-height: 1.55;
+}
+
+.adm-email-body h3 {
+    margin: 0;
+    color: var(--ofc-ink);
+    font-size: 14.5px;
+}
+
+.adm-email-body ol {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding-left: 20px;
+}
+
+.adm-email-body p {
+    margin: 0;
+}
+
+.adm-email-cta {
+    justify-self: start;
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: var(--ofc-blue);
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.adm-email-foot {
+    padding: 12px 16px;
+    border-top: 1px solid var(--ofc-line);
+    color: var(--ofc-muted);
+    font-size: 11.5px;
+}
+
+/* The route map sheet: the old Visitor Analytics parts in a wide panel. */
+.adm-routes .analytics-route-layout {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.adm-routes .analytics-route-map {
+    height: 360px;
+}
+
+/* A third, safer choice in the system's confirmation dialog (dialogs.js altLabel). */
+.app-dialog.has-alt .admin-dialog-actions {
+    flex-direction: column;
+}
+
+.app-dialog.has-alt .admin-dialog-actions button {
+    width: 100%;
+}
+
+.app-dialog.has-alt #appDialogAlt {
+    order: -2;
+}
+
+.app-dialog.has-alt #appDialogConfirm {
+    order: -1;
+}
+
+/* ---------- Printing: the report and the password slips only ---------- */
+
+.adm-print {
+    display: none;
+}
+
+.adm-slips {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.adm-slip {
+    display: grid;
+    gap: 6px;
+    padding: 16px;
+    border: 1.5px dashed #9aa4b2;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #1f2937;
+    font-size: 12.5px;
+    line-height: 1.45;
+    break-inside: avoid;
+}
+
+.adm-slip-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #0b2a5b;
+    font-weight: 700;
+}
+
+.adm-slip-title img {
+    width: 26px;
+    height: 26px;
+}
+
+.adm-slip code {
+    justify-self: start;
+    padding: 6px 10px;
+    border: 1px solid #c9d2de;
+    border-radius: 8px;
+    color: #111827;
+    font: 700 17px "Cascadia Mono", Consolas, monospace;
+    letter-spacing: 0.06em;
+}
+
+.adm-slip-note {
+    color: #4b5563;
+    font-size: 11.5px;
+}
+
+.adm-pdf {
+    display: grid;
+    gap: 14px;
+    color: #111827;
+    font-size: 12px;
+}
+
+.adm-pdf-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid #0b2a5b;
+}
+
+.adm-pdf-head img {
+    width: 54px;
+    height: 54px;
+}
+
+.adm-pdf-head h2 {
+    margin: 0 0 4px;
+    color: #0b2a5b;
+    font-size: 18px;
+}
+
+.adm-pdf-head p {
+    margin: 0;
+    color: #4b5563;
+    line-height: 1.5;
+}
+
+.adm-pdf-kpis {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.adm-pdf-kpis div {
+    padding: 10px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+}
+
+.adm-pdf-kpis b {
+    display: block;
+    font-size: 20px;
+}
+
+.adm-pdf-kpis span {
+    color: #4b5563;
+    font-size: 10.5px;
+}
+
+.adm-pdf h3 {
+    margin: 4px 0 0;
+    color: #0b2a5b;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.adm-pdf ul {
+    margin: 0;
+    padding-left: 18px;
+    line-height: 1.6;
+}
+
+.adm-pdf table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.adm-pdf th,
+.adm-pdf td {
+    padding: 5px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+}
+
+.adm-pdf th {
+    color: #4b5563;
+    font-size: 10px;
+    text-transform: uppercase;
+}
+
+.adm-pdf-bars {
+    display: flex;
+    height: 110px;
+    align-items: flex-end;
+    gap: 2px;
+    border-bottom: 1px solid #9ca3af;
+}
+
+.adm-pdf-bars div {
+    display: flex;
+    height: 100%;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: stretch;
+}
+
+.adm-pdf-bars i {
+    display: block;
+    background: #0755b5;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+}
+
+.adm-pdf-bars span {
+    height: 12px;
+    overflow: hidden;
+    color: #6b7280;
+    font-size: 7.5px;
+    text-align: center;
+}
+
+.adm-pdf-sign {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    margin-top: 26px;
+}
+
+.adm-pdf-sign div {
+    padding-top: 8px;
+    border-top: 1px solid #111827;
+    font-size: 11px;
+    text-align: center;
+}
+
+@media print {
+    body.adm-page[data-print] > *:not(.adm-print) {
+        display: none !important;
+    }
+
+    body.adm-page[data-print] {
+        background: #ffffff;
+    }
+
+    body.adm-page[data-print] .adm-print {
+        display: block;
+    }
+
+    body.adm-page[data-print="slips"] .adm-print {
+        padding: 0;
+    }
+
+    @page {
+        margin: 14mm;
+    }
+}
+
+/* ---------- Tablets and laptops ---------- */
+
+@media (min-width: 721px) {
+    .adm-glance em {
+        margin-top: 1px;
+    }
+
+    .adm-kpis {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .adm-ogrid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+
+    .adm-secstats {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1025px) {
+    .adm-cols-wide {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+    }
+
+    .adm-routes .analytics-route-layout {
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    }
+}
+
+@media (min-width: 1300px) {
+    .adm-ogrid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Tablets: the sidebar is a strip of icons with small names; seven pages fit. An older rule hid
+   the names up to 820px wide (on the Office page too); this one is stronger. */
+@media (min-width: 721px) and (max-width: 940px) {
+    .adm-page .office-sidebar .admin-nav-item {
+        min-height: 56px;
+    }
+
+    .office-page .office-sidebar .admin-nav-item > span:not(.office-nav-count) {
+        position: static;
+        width: auto;
+        height: auto;
+        overflow: visible;
+        clip: auto;
+    }
+}
+
+/* ---------- Phones ---------- */
+
+@media (max-width: 720px) {
+    .office-page .adm-main {
+        padding: 16px 16px calc(92px + env(safe-area-inset-bottom));
+    }
+
+    .adm-phone-only {
+        display: flex !important;
+    }
+
+    .adm-laptop-only,
+    .adm-hint-key {
+        display: none !important;
+    }
+
+    .adm-page .adm-profile .admin-profile-copy,
+    .adm-page .adm-profile {
+        padding: 0;
+    }
+
+    .adm-page .adm-profile .admin-profile-copy {
+        display: none;
+    }
+
+    /* Right now: two by two */
+    .adm-glance {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .office-page .adm-glance button {
+        align-items: flex-start;
+        padding: 12px 14px;
+        text-align: left;
+    }
+
+    .office-page .adm-glance button + button {
+        border-left: 0;
+    }
+
+    .office-page .adm-glance button:nth-child(even) {
+        border-left: 1px solid var(--ofc-line);
+    }
+
+    .office-page .adm-glance button:nth-child(n+3) {
+        border-top: 1px solid var(--ofc-line);
+    }
+
+    .adm-glance strong {
+        font-size: 24px;
+    }
+
+    .adm-glance span {
+        font-size: 12px;
+    }
+
+    .adm-aacts {
+        grid-column: 1 / -1;
+    }
+
+    .adm-facts div {
+        grid-template-columns: 96px minmax(0, 1fr);
+    }
+
+    .adm-rem-card {
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .adm-rem-card > .ofc-btn {
+        grid-column: 1 / -1;
+    }
+
+    .adm-slips {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .adm-routes .analytics-route-map {
+        height: 300px;
+    }
+
+    .adm-wz-map {
+        height: 230px;
+    }
+}
+
+@media (max-width: 380px) {
+    .adm-kpi strong,
+    .adm-glance strong {
+        font-size: 20px;
+    }
+
+    .adm-roles small {
+        display: none;
+    }
+
+    .adm-actions {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .adm-two {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* Sign-in page: "Forgot password?" for staff (login.html, staff_password_reset.php). */
+.auth-forgot-link {
+    margin-top: 12px;
+}
+
+.auth-help-note {
+    margin: 12px 0 0;
+    color: #667085;
+    font-size: 12.5px;
+    line-height: 1.5;
+    text-align: center;
+}

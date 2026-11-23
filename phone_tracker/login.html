@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In | ISATU Visitor Management System</title>
-    <link rel="stylesheet" href="style.css?v=20261110-1">
+    <link rel="stylesheet" href="style.css?v=20261122-1">
 </head>
 <body class="auth-page">
     <header class="auth-header">
@@ -59,11 +59,80 @@
                 </form>
 
                 <button class="auth-submit" id="signInBtn" type="submit" form="loginForm">Log In</button>
+                <div class="auth-links auth-forgot-link">
+                    <button class="auth-text-button" id="forgotPasswordBtn" type="button">Forgot password?</button>
+                </div>
                 <p class="auth-secure-note">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
                     Protected by sign-in lockout and two-step verification
                 </p>
 
+            </div>
+
+            <!-- Forgot password, 1: the account. Staff with an email on file get a 6-digit code. -->
+            <div class="auth-panel auth-panel-step" id="forgotPanel" hidden>
+                <span class="auth-step-badge" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l3 3"/></svg>
+                </span>
+                <h1 class="auth-panel-title auth-panel-title-small" tabindex="-1">Reset your password</h1>
+                <p class="auth-panel-subtitle">Enter your username or email. If your account has an email on file, we'll send a 6-digit code to it.</p>
+                <form id="forgotForm" class="auth-form auth-form-compact" novalidate>
+                    <div class="auth-field">
+                        <input type="text" id="forgotIdentifier" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder=" " required>
+                        <label for="forgotIdentifier">Username or email</label>
+                    </div>
+                    <p class="auth-message" id="forgotMessage" role="alert" hidden></p>
+                </form>
+                <button class="auth-submit" id="forgotBtn" type="submit" form="forgotForm">Send code</button>
+                <p class="auth-help-note">No email on your account? Ask an administrator to make you a new password.</p>
+                <div class="auth-links">
+                    <button class="auth-text-button" type="button" data-back-to-signin>Back to sign in</button>
+                </div>
+            </div>
+
+            <!-- Forgot password, 2: the code from the email and a new password. -->
+            <div class="auth-panel auth-panel-step" id="resetPanel" hidden>
+                <span class="auth-step-badge" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+                </span>
+                <h1 class="auth-panel-title auth-panel-title-small" tabindex="-1">Check your email</h1>
+                <p class="auth-panel-subtitle" id="resetIntro">If this account has an email on file, a 6-digit code is on its way. It works for 15 minutes.</p>
+                <form id="resetForm" class="auth-form auth-form-compact" novalidate>
+                    <input type="text" id="resetUsername" name="username" autocomplete="username" hidden>
+                    <div class="auth-otp" id="resetCodeGroup">
+                        <input id="resetCode" class="auth-otp-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" spellcheck="false" aria-label="6-digit code from the email">
+                        <div class="auth-otp-slots" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                    </div>
+                    <div class="auth-field auth-password-field">
+                        <input type="password" id="resetPassword" autocomplete="new-password" placeholder=" " required>
+                        <label for="resetPassword">New password</label>
+                        <button class="auth-password-toggle" type="button" data-password-toggle="resetPassword" aria-label="Show password" aria-pressed="false">
+                            <img src="assets/icons/visibility_icon.svg" alt="" aria-hidden="true">
+                        </button>
+                    </div>
+                    <div class="auth-strength" id="resetStrengthMeter" data-score="0" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+                    <p class="auth-strength-label" id="resetStrengthLabel">Password strength</p>
+                    <ul class="auth-rules" id="resetPasswordRules">
+                        <li data-rule="length" data-state="idle">At least 10 characters</li>
+                        <li data-rule="mix" data-state="idle">A letter and a number</li>
+                        <li data-rule="common" data-state="idle">Not a common or easy-to-guess password</li>
+                        <li data-rule="identity" data-state="idle">Doesn't include your username or name</li>
+                        <li data-rule="match" data-state="idle">Both passwords match</li>
+                    </ul>
+                    <div class="auth-field auth-password-field">
+                        <input type="password" id="resetConfirm" autocomplete="new-password" placeholder=" " required>
+                        <label for="resetConfirm">Type it again</label>
+                        <button class="auth-password-toggle" type="button" data-password-toggle="resetConfirm" aria-label="Show password" aria-pressed="false">
+                            <img src="assets/icons/visibility_icon.svg" alt="" aria-hidden="true">
+                        </button>
+                    </div>
+                    <p class="auth-message" id="resetMessage" role="alert" hidden></p>
+                </form>
+                <button class="auth-submit" id="resetBtn" type="submit" form="resetForm">Save new password</button>
+                <div class="auth-links">
+                    <button class="auth-text-button" id="resendCodeBtn" type="button">Send a new code</button>
+                    <button class="auth-text-button" type="button" data-back-to-signin>Back to sign in</button>
+                </div>
             </div>
 
             <!-- 2. Two-step verification -->
@@ -220,6 +289,6 @@
 
     <script src="auth.js?v=20261110-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
-    <script src="login.js?v=20261110-1"></script>
+    <script src="login.js?v=20261122-1"></script>
 </body>
 </html>

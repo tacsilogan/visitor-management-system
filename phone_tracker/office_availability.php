@@ -36,7 +36,7 @@ function office_availability_payload(mysqli $conn, string $officeCode): array
 
     $exceptions = [];
     $exceptionStmt = $conn->prepare(
-        "SELECT id, starts_at, ends_at, is_available, capacity_override, reason, created_at
+        "SELECT id, starts_at, ends_at, is_available, capacity_override, reason, campus_closure_id, created_at
          FROM office_availability_exceptions
          WHERE office_code = ? AND ends_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
          ORDER BY starts_at ASC, id ASC LIMIT 100"
@@ -48,6 +48,8 @@ function office_availability_payload(mysqli $conn, string $officeCode): array
         while ($row = $result->fetch_assoc()) {
             $row["id"] = (int) $row["id"];
             $row["is_available"] = (int) $row["is_available"];
+            // A campus closure (admin_campus_closure.php): shown, but only an administrator removes it.
+            $row["campus_closure_id"] = $row["campus_closure_id"] !== null ? (int) $row["campus_closure_id"] : null;
             $exceptions[] = $row;
         }
         $exceptionStmt->close();
@@ -241,6 +243,15 @@ try {
         $message = "Availability exception added";
     } elseif ($action === "delete_exception") {
         $exceptionId = (int) ($input["exception_id"] ?? 0);
+        $closureCheck = $conn->prepare("SELECT campus_closure_id FROM office_availability_exceptions WHERE id = ? AND office_code = ?");
+        $closureCheck->bind_param("is", $exceptionId, $officeCode);
+        $closureCheck->execute();
+        $closureRow = $closureCheck->get_result()->fetch_row();
+        $closureCheck->close();
+        if ($closureRow && $closureRow[0] !== null) {
+            // A campus closure (admin_campus_closure.php) covers every office; only an administrator reopens it.
+            throw new RuntimeException("The administrator closed the whole campus for this time. Only an administrator can reopen it.");
+        }
         $stmt = $conn->prepare(
             "DELETE FROM office_availability_exceptions WHERE id = ? AND office_code = ?"
         );
@@ -310,6 +321,15 @@ try {
         }
     } elseif ($action === "resume_now") {
         $exceptionId = (int) ($input["exception_id"] ?? 0);
+        $closureCheck = $conn->prepare("SELECT campus_closure_id FROM office_availability_exceptions WHERE id = ? AND office_code = ?");
+        $closureCheck->bind_param("is", $exceptionId, $officeCode);
+        $closureCheck->execute();
+        $closureRow = $closureCheck->get_result()->fetch_row();
+        $closureCheck->close();
+        if ($closureRow && $closureRow[0] !== null) {
+            // A campus closure (admin_campus_closure.php) covers every office; only an administrator reopens it.
+            throw new RuntimeException("The administrator closed the whole campus for this time. Only an administrator can reopen it.");
+        }
         $stmt = $conn->prepare(
             "UPDATE office_availability_exceptions SET ends_at = NOW()
              WHERE id = ? AND office_code = ? AND is_available = 0 AND starts_at <= NOW() AND ends_at > NOW()"

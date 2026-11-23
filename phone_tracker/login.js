@@ -41,6 +41,8 @@
         password: $("passwordPanel"),
         setup: $("setupPanel"),
         backup: $("backupPanel"),
+        forgot: $("forgotPanel"),
+        reset: $("resetPanel"),
     };
     const loginForm = $("loginForm");
     const usernameInput = $("loginEmail");
@@ -516,6 +518,136 @@
         await progress.leave();
         window.location.replace(ROLE_HOME[data.role] || data.redirect || "index.html");
     }
+
+    /* ---------- Forgot password (staff with an email on file; staff_password_reset.php) ---------- */
+
+    const resetState = { identifier: "", resendAt: 0, timer: 0, busy: false };
+    const resetOtp = UI.bindOtpInput($("resetCode"), document.querySelector("#resetCodeGroup .auth-otp-slots"), function () {
+        $("resetPassword").focus();
+    });
+    const resetFeedback = UI.bindPasswordFeedback({
+        input: $("resetPassword"),
+        confirm: $("resetConfirm"),
+        meter: $("resetStrengthMeter"),
+        label: $("resetStrengthLabel"),
+        rules: $("resetPasswordRules"),
+        getPolicy: function () { return null; },
+        getIdentity: function () { return { username: resetState.identifier }; },
+    });
+
+    function renderResend() {
+        const button = $("resendCodeBtn");
+        const left = Math.ceil((resetState.resendAt - Date.now()) / 1000);
+        button.disabled = left > 0;
+        button.textContent = left > 0 ? "Send a new code in " + left + " s" : "Send a new code";
+        if (left <= 0) {
+            window.clearInterval(resetState.timer);
+        }
+    }
+
+    async function requestResetCode(identifier, button) {
+        button.disabled = true;
+        const result = await api("staff_password_reset.php", { action: "request", identifier: identifier });
+        button.disabled = false;
+        if (!result.data.success) {
+            return result.data.message || (result.status === 0 ? "Couldn't reach the server. Check your connection." : "That didn't work. Please try again.");
+        }
+        resetState.identifier = identifier;
+        resetState.resendAt = Date.now() + (Number(result.data.resend_after_seconds) || 60) * 1000;
+        window.clearInterval(resetState.timer);
+        resetState.timer = window.setInterval(renderResend, 1000);
+        renderResend();
+        $("resetIntro").textContent = result.data.message || "";
+        if (result.data.development_code) {
+            $("resetIntro").textContent += " (Development server: the code is " + result.data.development_code + ".)";
+        }
+        return "";
+    }
+
+    $("forgotPasswordBtn").addEventListener("click", function () {
+        showNotice("");
+        $("forgotIdentifier").value = usernameInput.value.trim();
+        showMessage($("forgotMessage"), "");
+        showPanel("forgot");
+        window.setTimeout(function () { $("forgotIdentifier").focus(); }, 40);
+    });
+
+    $("forgotForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const identifier = $("forgotIdentifier").value.trim();
+        if (!identifier) {
+            showMessage($("forgotMessage"), "Enter your username or email.");
+            return;
+        }
+        const problem = await requestResetCode(identifier, $("forgotBtn"));
+        if (problem) {
+            showMessage($("forgotMessage"), problem);
+            return;
+        }
+        $("resetForm").reset();
+        $("resetUsername").value = identifier;
+        resetOtp.clear();
+        resetFeedback.update();
+        showMessage($("resetMessage"), "");
+        showPanel("reset");
+        window.setTimeout(function () { resetOtp.focus(); }, 40);
+    });
+
+    $("resendCodeBtn").addEventListener("click", async function () {
+        const problem = await requestResetCode(resetState.identifier, $("resendCodeBtn"));
+        showMessage($("resetMessage"), problem || "A new code is on its way. The one before it no longer works.", problem ? "error" : "success");
+        resetOtp.clear();
+        resetOtp.focus();
+    });
+
+    $("resetForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        if (resetState.busy) {
+            return;
+        }
+        const code = $("resetCode").value.trim();
+        if (!/^\d{6}$/.test(code)) {
+            showMessage($("resetMessage"), "Enter the 6-digit code from the email.");
+            resetOtp.focus();
+            return;
+        }
+        const problem = resetFeedback.firstProblem();
+        if (problem) {
+            showMessage($("resetMessage"), problem);
+            return;
+        }
+        resetState.busy = true;
+        $("resetBtn").disabled = true;
+        const result = await api("staff_password_reset.php", {
+            action: "reset",
+            identifier: resetState.identifier,
+            code: code,
+            new_password: $("resetPassword").value,
+            confirm_password: $("resetConfirm").value,
+        });
+        resetState.busy = false;
+        $("resetBtn").disabled = false;
+        if (!result.data.success) {
+            showMessage($("resetMessage"), result.data.message || (result.status === 0 ? "Couldn't reach the server. Check your connection." : "That didn't work. Please try again."));
+            if (result.data.code === "wrong_code" || result.data.code === "invalid_code") {
+                resetOtp.clear();
+                resetOtp.focus();
+            }
+            return;
+        }
+        window.clearInterval(resetState.timer);
+        usernameInput.value = resetState.identifier;
+        $("resetForm").reset();
+        returnToSignIn();
+        showNotice(result.data.message || "Password changed. Sign in with your new password.", "success");
+    });
+
+    document.querySelectorAll("[data-back-to-signin]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            window.clearInterval(resetState.timer);
+            returnToSignIn();
+        });
+    });
 
     /* ---------- Step panels ---------- */
 

@@ -52,6 +52,7 @@ JSON for this Android client file.
      files above it added; keep all three, in this order)
    - `phone_tracker/gate_registration_migration.sql` (visitors registered at the gate by Security)
    - `phone_tracker/visitor_rights_migration.sql` (which notice version each visitor agreed to)
+   - `phone_tracker/campus_closure_migration.sql` (the administrator closing the whole campus for a day)
 
    An existing database only needs the files it is missing. Every migration can be run
    again safely. Do not import `app_users_office_code_migration.sql`,

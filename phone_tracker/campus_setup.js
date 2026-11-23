@@ -640,4 +640,15 @@
             initialize();
         }
     });
+    // A pin placed elsewhere (the Admin dashboard's guided office setup) shows here too, unless
+    // this editor has changes of its own that are not saved yet.
+    document.addEventListener("admin:campuschanged", async function () {
+        if (!state.map || !state.loaded || state.dirty) {
+            return;
+        }
+        const campus = await CampusMap.load();
+        if (campus && !state.dirty) {
+            applyCampus(campus);
+        }
+    });
 })();

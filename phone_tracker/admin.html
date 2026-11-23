@@ -2,701 +2,282 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
     <title>ISATU Admin Dashboard</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
-    <link rel="stylesheet" href="style.css?v=20261110-1">
+    <link rel="stylesheet" href="style.css?v=20261122-1">
 </head>
-<body class="admin-page">
+<!-- The Admin dashboard (2026-11-22): the same menu and look as the Office Personnel and Security
+     pages (style.css "ofc-" parts), with the admin's own parts ("adm-"). admin.js runs it. -->
+<body class="admin-page office-page adm-page" data-adm-view="home">
     <header class="admin-topbar">
-        <a class="admin-brand" href="admin.html" aria-label="ISATU Admin Dashboard home">
-            <span class="admin-brand-mark" aria-hidden="true">
-                <img src="assets/images/isatu-logo.png" alt="">
+        <a class="admin-brand ofc-brand" href="#home" data-adm-go="home" aria-label="Admin dashboard: Home">
+            <span class="admin-brand-mark"><img src="assets/images/isatu-logo.png" alt="ISATU"></span>
+            <span class="ofc-brand-copy">
+                <strong>ISATU Admin<span class="ofc-brand-long"> · Visitor Management</span></strong>
+                <small><i class="ofc-dot" aria-hidden="true"></i><span id="admTopStatus">Loading…</span></small>
             </span>
-            <span>ISATU Admin Dashboard</span>
         </a>
-
         <div class="admin-topbar-actions">
-            <button class="admin-icon-button" id="notificationBtn" type="button" aria-label="Show pending appointments" aria-expanded="false" aria-controls="notificationPanel">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>
-                <span class="admin-notification-count" id="notificationCount" hidden>0</span>
+            <button class="admin-icon-button adm-bell" id="admBellBtn" type="button" aria-label="Needs your attention">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2H4.4z"/><path d="M10 21h4"/></svg>
+                <span class="admin-notification-count" data-att-badge hidden>0</span>
             </button>
-            <section class="admin-notification-panel" id="notificationPanel" aria-labelledby="notificationTitle" hidden>
-                <div class="admin-notification-header">
-                    <div>
-                        <strong id="notificationTitle">Pending appointments</strong>
-                        <span id="notificationSummary">Nothing needs attention</span>
-                    </div>
-                    <button type="button" id="closeNotificationsBtn" aria-label="Close notifications">×</button>
-                </div>
-                <div class="admin-notification-list" id="notificationList"></div>
-                <p class="admin-notification-empty" id="notificationEmpty">No pending appointments right now.</p>
-                <button class="admin-notification-view" id="viewPendingBtn" type="button">View pending appointments</button>
-            </section>
-            <button class="admin-profile-button" id="profileBtn" type="button" aria-expanded="false" aria-controls="profileMenu">
-                <span class="admin-avatar" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 21a7.5 7.5 0 0 1 15 0"/></svg>
-                </span>
-                <span class="admin-profile-copy">
-                    <strong id="profileName">Administrator</strong>
-                    <small>Admin</small>
-                </span>
-                <svg class="admin-chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4"/></svg>
+            <button class="admin-profile-button adm-profile" type="button" data-adm-go="menu" aria-label="Account and menu">
+                <span class="admin-avatar adm-avatar" data-my-initials aria-hidden="true">AD</span>
+                <span class="admin-profile-copy"><strong data-my-name>Administrator</strong><small data-my-position>System Administrator</small></span>
             </button>
-            <div class="admin-profile-menu" id="profileMenu" hidden>
-                <p>Signed in as <strong id="profileUsername">admin</strong></p>
-                <button type="button" id="logoutBtn">Sign out</button>
-            </div>
         </div>
     </header>
 
-    <div class="admin-layout">
-        <aside class="admin-sidebar" aria-label="Admin navigation">
-            <nav>
-                <button class="admin-nav-item is-active" type="button" data-admin-view="dashboard">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg>
-                    <span>Admin Dashboard</span>
+    <div class="admin-layout office-layout">
+        <aside class="admin-sidebar office-sidebar">
+            <nav aria-label="Admin dashboard sections">
+                <button class="admin-nav-item" type="button" data-adm-go="home">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10"/></svg>
+                    <span>Home</span>
+                    <b class="ofc-badge" data-att-badge hidden>0</b>
                 </button>
-                <button class="admin-nav-item" type="button" data-admin-view="users">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm13 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    <span>User Management</span>
+                <button class="admin-nav-item" type="button" data-adm-go="offices">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V7l8-4 8 4v14M9 21v-5h6v5M8 10h.01M12 10h.01M16 10h.01M8 13h.01M12 13h.01M16 13h.01"/></svg>
+                    <span>Offices</span>
                 </button>
-                <button class="admin-nav-item" type="button" data-admin-view="security">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
-                    <span>Security</span>
-                    <span class="sec-nav-badge" id="securityNavBadge" hidden>0</span>
+                <button class="admin-nav-item" type="button" data-adm-go="people">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/></svg>
+                    <span>People</span>
                 </button>
-                <button class="admin-nav-item" type="button" data-admin-view="analytics">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18M7 16l4-5 4 3 5-7"/></svg>
-                    <span>Visitor Analytics</span>
+                <button class="admin-nav-item" type="button" data-adm-go="activity">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>
+                    <span>Activity</span>
+                    <b class="ofc-badge" data-lock-badge hidden>0</b>
                 </button>
-                <button class="admin-nav-item" type="button" data-admin-view="campus">
+                <button class="admin-nav-item" type="button" data-adm-go="reports">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+                    <span>Reports</span>
+                </button>
+                <button class="admin-nav-item" type="button" data-adm-go="campus">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Zm0 0v14m6-12v14"/></svg>
-                    <span>Campus Map</span>
+                    <span>Campus map</span>
+                </button>
+                <button class="admin-nav-item ofc-nav-menu" type="button" data-adm-go="menu">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    <span>Menu</span>
                 </button>
             </nav>
         </aside>
 
-        <main class="admin-main">
-            <section class="admin-view" id="dashboardView" data-view-panel="dashboard">
-                <div class="admin-mobile-heading">
-                    <p class="admin-eyebrow">Overview</p>
-                    <h1>Admin Dashboard</h1>
+        <main class="admin-main office-main adm-main">
+            <p class="admin-message is-error" id="admPageError" role="alert" hidden></p>
+
+            <!-- ================= HOME ================= -->
+            <section class="admin-view ofc-page ofc-main adm-pane" data-adm-panel="home" aria-labelledby="admHomeTitle">
+                <div class="ofc-head-row">
+                    <div><p class="admin-eyebrow" id="admHomeDate">Today</p><h1 class="ofc-title" id="admHomeTitle">Overview</h1></div>
                 </div>
-
-                <div class="admin-stat-grid" aria-label="Visitor summary">
-                    <button class="admin-stat-card" type="button" data-visitor-filter="checked_in">
-                        <strong class="is-green" id="activeVisitorCount">0</strong>
-                        <span>Active Visitors</span>
-                        <small>Currently checked in</small>
-                    </button>
-                    <button class="admin-stat-card" type="button" data-visitor-filter="pending_approval">
-                        <strong class="is-orange" id="pendingApprovalCount">0</strong>
-                        <span>Pending Approvals</span>
-                        <small>Awaiting check-in</small>
-                    </button>
-                    <button class="admin-stat-card admin-stat-card-icon" id="recentActivitiesBtn" type="button">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2"/></svg>
-                        <span>Recent Activities</span>
-                        <small id="recentActivitySummary">No activity yet</small>
-                    </button>
+                <div class="adm-search" id="admSearchBox">
+                    <label class="ofc-find">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                        <span class="sr-only">Search everything</span>
+                        <input id="admSearch" type="search" placeholder="Find a visitor, a person or an office" autocomplete="off" aria-controls="admResults">
+                        <span class="adm-kbd adm-hint-key" title="Press / to search" aria-hidden="true">/</span>
+                    </label>
+                    <div class="adm-results" id="admResults" role="listbox" aria-label="Search results" hidden></div>
                 </div>
-
-                <section class="admin-content-card" aria-labelledby="recentVisitorsTitle">
-                    <div class="admin-section-header">
-                        <div>
-                            <h2 id="recentVisitorsTitle">Recent Visitors</h2>
-                            <p id="dashboardDate">Latest appointment activity</p>
-                        </div>
-                        <div class="admin-table-tools">
-                            <label class="admin-select-label" for="visitorStatusFilter">
-                                <span>Filter</span>
-                                <select id="visitorStatusFilter">
-                                    <option value="">All statuses</option>
-                                    <option value="checked_in">Active</option>
-                                    <option value="pending_approval">Pending approval</option>
-                                    <option value="approved">Approved</option>
-                                    <option value="reschedule_proposed">Reschedule proposed</option>
-                                    <option value="rejected">Declined</option>
-                                    <option value="unanswered">Office did not respond</option>
-                                    <option value="window_closed">Appointment done</option>
-                                    <option value="completed">Completed</option>
-                                    <option value="cancelled">Cancelled</option>
-                                </select>
-                            </label>
-                            <label class="admin-search" for="visitorSearch">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                                <input id="visitorSearch" type="search" placeholder="Search visitors" autocomplete="off">
-                            </label>
-                        </div>
-                    </div>
-
-                    <p class="admin-message is-error" id="dashboardError" role="alert" hidden></p>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Visitor</th>
-                                    <th>Type</th>
-                                    <th>Purpose</th>
-                                    <th>Destination</th>
-                                    <th>Subject</th>
-                                    <th>Time</th>
-                                    <th>Status</th>
-                                    <th><span class="sr-only">History</span></th>
-                                </tr>
-                            </thead>
-                            <tbody id="recentVisitorsBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state" id="recentVisitorsEmpty" hidden>
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M17 8h5M19.5 5.5v5"/></svg>
-                        <strong>No visitor records yet</strong>
-                        <span>New appointments and check-ins will appear here automatically.</span>
+                <div class="adm-closure-host" id="admClosureBanner"></div>
+                <section class="ofc-sec" aria-labelledby="admNowTitle">
+                    <div class="ofc-sec-head"><h2 id="admNowTitle">Right now</h2></div>
+                    <div class="ofc-glance adm-glance">
+                        <button class="is-green" type="button" data-visits="campus"><strong data-now="on_campus">–</strong><span>On campus</span></button>
+                        <button type="button" data-visits="today"><strong data-now="expected_today">–</strong><span>Expected today</span></button>
+                        <button class="is-amber" type="button" data-visits="waiting"><strong data-now="waiting">–</strong><span>Waiting for an office</span></button>
+                        <button type="button" data-adm-go="reports"><strong data-now="visits_7">–</strong><span>Visits in 7 days</span><em id="admVisitsChange"></em></button>
                     </div>
                 </section>
-
-                <section class="admin-content-card admin-activity-card" id="recentActivitiesSection" aria-labelledby="recentActivitiesTitle">
-                    <div class="admin-section-header">
-                        <div>
-                            <h2 id="recentActivitiesTitle">User Activity</h2>
-                            <p>Who did what in the last 7 days, with names and departments</p>
-                        </div>
-                        <div class="admin-table-tools">
-                            <label class="admin-select-label" for="feedDepartment">
-                                <span>Department</span>
-                                <select id="feedDepartment" data-department-select>
-                                    <option value="">All departments</option>
-                                </select>
-                            </label>
-                            <button class="admin-primary-button" id="openActivityLogBtn" type="button">Full activity log</button>
-                        </div>
-                    </div>
-                    <div class="admin-filter-tabs" role="group" aria-label="Choose the activity to show">
-                        <button class="is-active" type="button" data-feed-category="all">All</button>
-                        <button type="button" data-feed-category="signins">Sign-ins</button>
-                        <button type="button" data-feed-category="decisions">Approvals &amp; declines</button>
-                        <button type="button" data-feed-category="gate">Gate &amp; visits</button>
-                        <button type="button" data-feed-category="schedules">Office schedules</button>
-                        <button type="button" data-feed-category="accounts">Accounts</button>
-                    </div>
-                    <div class="ua-feed" id="recentActivitiesList"></div>
-                    <div class="admin-empty-state is-compact" id="recentActivitiesEmpty" hidden>
-                        <strong>Nothing to show for this choice</strong>
-                        <span>Sign-ins, approvals, check-ins, and account changes appear here with the person's name.</span>
-                    </div>
-                </section>
-            </section>
-
-            <section class="admin-view" id="usersView" data-view-panel="users" hidden>
-                <div class="admin-mobile-heading">
-                    <p class="admin-eyebrow">Accounts</p>
-                    <h1>User Management</h1>
-                </div>
-
-                <div class="admin-stat-grid" aria-label="User summary">
-                    <div class="admin-stat-card">
-                        <strong class="is-blue" id="totalUserCount">0</strong>
-                        <span>Total Users</span>
-                        <small>All registered accounts</small>
-                    </div>
-                    <div class="admin-stat-card">
-                        <strong class="is-green" id="activeUserCount">0</strong>
-                        <span>Active Users</span>
-                        <small>Enabled accounts</small>
-                    </div>
-                    <div class="admin-stat-card">
-                        <strong class="is-orange" id="suspendedUserCount">0</strong>
-                        <span>Suspended Users</span>
-                        <small>Disabled accounts</small>
-                    </div>
-                </div>
-
-                <section class="admin-content-card" aria-labelledby="directoryTitle">
-                    <div class="admin-section-header admin-directory-header">
-                        <div>
-                            <h2 id="directoryTitle">Personnel Directory</h2>
-                            <p>Security, admin, office personnel, and visitor accounts</p>
-                        </div>
-                        <div class="admin-table-tools">
-                            <button class="admin-text-action" id="sortUsersBtn" type="button">Sort A–Z</button>
-                            <label class="admin-select-label" for="userDepartmentFilter">
-                                <span>Department</span>
-                                <select id="userDepartmentFilter" data-department-select>
-                                    <option value="">All departments</option>
-                                </select>
-                            </label>
-                            <label class="admin-search" for="userSearch">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
-                                <input id="userSearch" type="search" placeholder="Search users" autocomplete="off">
-                            </label>
-                            <button class="admin-primary-button" id="openAddUserBtn" type="button">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                                Add user
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="admin-filter-tabs role-filter-tabs" role="group" aria-label="Filter users by role">
-                        <button class="is-active" type="button" data-role-filter="">All Users <span data-role-count="" hidden></span></button>
-                        <button type="button" data-role-filter="admin">Admin <span data-role-count="admin" hidden></span></button>
-                        <button type="button" data-role-filter="security">Security <span data-role-count="security" hidden></span></button>
-                        <button type="button" data-role-filter="offices">Office Personnel <span data-role-count="offices" hidden></span></button>
-
-                        <button type="button" data-role-filter="visitor">Visitor <span data-role-count="visitor" hidden></span></button>
-                    </div>
-
-                    <p class="admin-message is-error" id="adminListError" role="alert" hidden></p>
-                    <p class="admin-message is-success" id="adminListSuccess" role="status" hidden></p>
-                    <div class="admin-table-wrap">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>User</th>
-                                    <th>Role</th>
-                                    <th>Department</th>
-                                    <th>Account Status</th>
-                                    <th>Security</th>
-                                    <th><span class="sr-only">Actions</span></th>
-                                </tr>
-                            </thead>
-                            <tbody id="usersBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state" id="usersEmpty" hidden>
-                        <strong id="usersEmptyTitle">No matching users</strong>
-                        <span id="usersEmptyText">Try a different role or search term.</span>
-                    </div>
-                    <div class="admin-pagination">
-                        <p id="usersShowing">Showing 0 users</p>
-                        <div class="admin-page-buttons" id="userPageButtons" aria-label="User list pages"></div>
-                    </div>
-                </section>
-
-                <section class="admin-content-card" aria-labelledby="departmentsTitle">
-                    <div class="admin-section-header">
-                        <div>
-                            <h2 id="departmentsTitle">Office Directory</h2>
-                            <p>The offices visitors can book, each with its own Office Personnel</p>
-                        </div>
-                        <div class="admin-table-tools">
-                            <button class="admin-primary-button" id="addOfficeBtn" type="button">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                                Add office
-                            </button>
-                        </div>
-                    </div>
-                    <p class="admin-message is-error" id="departmentsError" role="alert" hidden></p>
-                    <p class="admin-message is-success" id="departmentsSuccess" role="status" hidden></p>
-                    <div class="dept-grid" id="departmentsGrid"></div>
-                </section>
-            </section>
-
-            <section class="admin-view sec-view" id="securityView" data-view-panel="security" hidden>
-                <div class="admin-mobile-heading">
-                    <p class="admin-eyebrow">Protection</p>
-                    <h1>Security</h1>
-                </div>
-
-                <div class="ua-tabs" role="tablist" aria-label="Security sections">
-                    <button class="is-active" type="button" role="tab" id="secTabSignin" aria-selected="true" aria-controls="secPanelSignin" data-sec-tab="signin">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-                        Sign-in security
-                    </button>
-                    <button type="button" role="tab" id="secTabActivity" aria-selected="false" aria-controls="secPanelActivity" data-sec-tab="activity" tabindex="-1">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 12h-4l-2 3-3-6-2 3"/></svg>
-                        User activity
-                    </button>
-                </div>
-
-                <div id="secPanelSignin" role="tabpanel" aria-labelledby="secTabSignin">
-                <div class="admin-stat-grid sec-stat-grid" aria-label="Sign-in security summary">
-                    <div class="admin-stat-card">
-                        <strong class="is-orange" id="secFailed">0</strong>
-                        <span>Failed Sign-ins</span>
-                        <small>Last 24 hours</small>
-                    </div>
-                    <div class="admin-stat-card">
-                        <strong class="is-red" id="secLocked">0</strong>
-                        <span>Active Lockouts</span>
-                        <small>Sign-ins paused right now</small>
-                    </div>
-                    <div class="admin-stat-card">
-                        <strong class="is-green" id="secTwoFactor">0/0</strong>
-                        <span>Staff with 2-Step</span>
-                        <small>Active staff accounts</small>
-                    </div>
-                    <div class="admin-stat-card">
-                        <strong class="is-blue" id="secMustChange">0</strong>
-                        <span>Need New Password</span>
-                        <small>Temporary or default password</small>
-                    </div>
-                </div>
-
-                <p class="admin-message is-error" id="securityError" role="alert" hidden></p>
-
-                <section class="admin-content-card" aria-labelledby="lockoutsTitle">
-                    <div class="admin-section-header">
-                        <div>
-                            <h2 id="lockoutsTitle">Locked Sign-ins</h2>
-                            <p>Accounts and networks paused after too many failed attempts</p>
-                        </div>
-                    </div>
-                    <div class="admin-table-wrap" id="lockoutsWrap">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Account</th>
-                                    <th>Lock</th>
-                                    <th>Network</th>
-                                    <th>Attempts</th>
-                                    <th>Ends in</th>
-                                    <th><span class="sr-only">Actions</span></th>
-                                </tr>
-                            </thead>
-                            <tbody id="lockoutsBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="admin-empty-state is-compact" id="lockoutsEmpty" hidden>
-                        <strong>No active lockouts</strong>
-                        <span>Sign-in is paused automatically after 5 wrong attempts and shows up here.</span>
-                    </div>
-                </section>
-
-                <section class="admin-content-card" aria-labelledby="attemptsTitle">
-                    <div class="admin-section-header">
-                        <div>
-                            <h2 id="attemptsTitle">Sign-in Activity</h2>
-                            <p>The latest 100 sign-in attempts on the website and the visitor app</p>
-                        </div>
-                        <div class="admin-filter-tabs sec-filter-tabs" role="group" aria-label="Filter sign-in activity">
-                            <button class="is-active" type="button" data-attempt-filter="all">All</button>
-                            <button type="button" data-attempt-filter="failure">Failed</button>
-                            <button type="button" data-attempt-filter="success">Successful</button>
-                        </div>
-                    </div>
-                    <div class="admin-table-wrap" id="attemptsWrap">
-                        <table class="admin-table">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Account</th>
-                                    <th>Result</th>
-                                    <th>Device</th>
-                                    <th>Network</th>
-                                    <th>Via</th>
-                                </tr>
-                            </thead>
-                            <tbody id="attemptsBody"></tbody>
-                        </table>
-                    </div>
-                    <div class="sec-more">
-                        <button class="admin-text-action" id="attemptsMoreBtn" type="button" hidden>Show more</button>
-                    </div>
-                    <div class="admin-empty-state is-compact" id="attemptsEmpty" hidden>
-                        <strong>No sign-in attempts yet</strong>
-                        <span>Every sign-in on the website and the visitor app is recorded here.</span>
-                    </div>
-                </section>
-
-                <section class="admin-content-card" aria-labelledby="securityEventsTitle">
-                    <div class="admin-section-header">
-                        <div>
-                            <h2 id="securityEventsTitle">Security Events</h2>
-                            <p>Lockouts, password resets, two-step changes, and account changes</p>
-                        </div>
-                    </div>
-                    <ul class="sec-events" id="securityEvents"></ul>
-                    <div class="admin-empty-state is-compact" id="securityEventsEmpty" hidden>
-                        <strong>No security events yet</strong>
-                    </div>
-                </section>
-
-                <p class="sec-policy" id="securityPolicy"></p>
-                </div>
-
-                <div id="secPanelActivity" role="tabpanel" aria-labelledby="secTabActivity" hidden>
-                    <section class="admin-content-card ua-filters" aria-label="Choose what activity to view">
-                        <div class="ua-filter-row">
-                            <label class="ua-field" for="uaPeriod">
-                                <span>Period</span>
-                                <select id="uaPeriod">
-                                    <option value="today">Today</option>
-                                    <option value="7" selected>Last 7 days</option>
-                                    <option value="30">Last 30 days</option>
-                                    <option value="90">Last 90 days</option>
-                                    <option value="custom">Custom dates</option>
-                                </select>
-                            </label>
-                            <label class="ua-field" for="uaFrom" data-ua-custom hidden>
-                                <span>From</span>
-                                <input type="date" id="uaFrom">
-                            </label>
-                            <label class="ua-field" for="uaTo" data-ua-custom hidden>
-                                <span>To</span>
-                                <input type="date" id="uaTo">
-                            </label>
-                            <label class="ua-field" for="uaDepartment">
-                                <span>Department</span>
-                                <select id="uaDepartment" data-department-select data-include-other>
-                                    <option value="">All departments</option>
-                                </select>
-                            </label>
-                            <label class="ua-field" for="uaPerson">
-                                <span>Person</span>
-                                <select id="uaPerson">
-                                    <option value="">Everyone</option>
-                                </select>
-                            </label>
-                            <label class="ua-field ua-search" for="uaSearch">
-                                <span>Search</span>
-                                <input type="search" id="uaSearch" placeholder="Name or appointment #" autocomplete="off">
-                            </label>
-                            <div class="export-group ua-export">
-                                <a class="analytics-export-button" id="uaExportBtn" href="admin_activity.php?format=xlsx" download title="Formatted Excel report: summary, colours, and columns sized to fit">
-                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-                                    Export Excel
-                                </a>
-                                <a class="export-csv-link" id="uaCsvBtn" href="admin_activity.php?format=csv" download title="Plain CSV for other programs">CSV</a>
+                <div class="ofc-today-cols">
+                    <div class="adm-stack">
+                        <section class="ofc-sec" aria-labelledby="admAttTitle">
+                            <div class="ofc-sec-head"><h2 id="admAttTitle">Needs your attention <span class="ofc-count is-red" data-att-count>0</span></h2></div>
+                            <ul class="adm-alist" id="admAttention"><li class="ofc-empty">Loading…</li></ul>
+                        </section>
+                        <section class="ofc-sec" aria-labelledby="admHomeOfficesTitle">
+                            <div class="ofc-sec-head">
+                                <h2 id="admHomeOfficesTitle">Offices right now</h2>
+                                <button class="ofc-link" type="button" data-adm-go="offices">All offices<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
                             </div>
-                        </div>
-                        <div class="admin-filter-tabs ua-category-tabs" role="group" aria-label="Type of activity">
-                            <button class="is-active" type="button" data-ua-category="all">All <span data-ua-count="all"></span></button>
-                            <button type="button" data-ua-category="signins">Sign-ins <span data-ua-count="signins"></span></button>
-                            <button type="button" data-ua-category="decisions">Approvals &amp; declines <span data-ua-count="decisions"></span></button>
-                            <button type="button" data-ua-category="gate">Gate &amp; visits <span data-ua-count="gate"></span></button>
-                            <button type="button" data-ua-category="schedules">Office schedules <span data-ua-count="schedules"></span></button>
-                            <button type="button" data-ua-category="accounts">Accounts &amp; security <span data-ua-count="accounts"></span></button>
-                            <button type="button" data-ua-category="visitors">Visitor requests <span data-ua-count="visitors"></span></button>
-                            <button type="button" data-ua-category="system">Automatic <span data-ua-count="system"></span></button>
-                        </div>
-                    </section>
-
-                    <p class="admin-message is-error" id="uaError" role="alert" hidden></p>
-
-                    <section class="admin-content-card" aria-labelledby="uaBoardTitle">
-                        <div class="admin-section-header">
-                            <div>
-                                <h2 id="uaBoardTitle">Personnel by Department</h2>
-                                <p>Who uses each account, when they were last active, and what they did in this period. Select a person to see their history.</p>
+                            <ul class="adm-orows" id="admHomeOffices"><li class="ofc-empty">Loading…</li></ul>
+                        </section>
+                    </div>
+                    <div class="adm-stack">
+                        <section class="ofc-card" aria-labelledby="admWeekTitle">
+                            <div class="ofc-sec-head">
+                                <h2 id="admWeekTitle">Last 7 days</h2>
+                                <button class="ofc-link" type="button" data-adm-go="reports">Reports<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
                             </div>
-                        </div>
-                        <div class="ua-board" id="uaBoard"></div>
-                    </section>
-
-                    <section class="admin-content-card" aria-labelledby="uaLogTitle">
-                        <div class="admin-section-header">
-                            <div>
-                                <h2 id="uaLogTitle">Activity Log</h2>
-                                <p id="uaLogSummary">Every recorded action, newest first</p>
+                            <div class="adm-chart is-few" id="admWeekChart"></div>
+                            <p class="ofc-note" id="admWeekNote"></p>
+                        </section>
+                        <section class="ofc-sec" aria-labelledby="admHomeActTitle">
+                            <div class="ofc-sec-head">
+                                <h2 id="admHomeActTitle">Latest activity</h2>
+                                <button class="ofc-link" type="button" data-adm-go="activity">All activity<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
                             </div>
-                        </div>
-                        <div class="ua-log" id="uaLog"></div>
-                        <div class="admin-empty-state is-compact" id="uaLogEmpty" hidden>
-                            <strong>No activity matches these choices</strong>
-                            <span>Try a longer period, another department, or a different type of activity.</span>
-                        </div>
-                        <div class="sec-more">
-                            <button class="admin-text-action" id="uaMoreBtn" type="button" hidden>Load older activity</button>
-                        </div>
-                    </section>
+                            <ul class="adm-tlist" id="admHomeActivity"><li class="ofc-empty">Loading…</li></ul>
+                        </section>
+                    </div>
                 </div>
             </section>
 
-            <section class="admin-view analytics-view" id="analyticsView" data-view-panel="analytics" hidden>
-                <header class="analytics-header">
-                    <div>
-                        <p class="admin-eyebrow">Trends and performance insights</p>
-                        <h1>Visitor Analytics</h1>
-                        <p id="analyticsRangeLabel">Current month</p>
-                    </div>
-                    <div class="analytics-actions">
-                        <div class="analytics-period-tabs" role="group" aria-label="Analytics period">
-                            <button type="button" data-analytics-period="today">Today</button>
-                            <button type="button" data-analytics-period="week">Week</button>
-                            <button class="is-active" type="button" data-analytics-period="month">Month</button>
-                            <button type="button" data-analytics-period="quarter">Quarter</button>
+            <!-- ================= OFFICES ================= -->
+            <section class="admin-view ofc-page ofc-main adm-pane" data-adm-panel="offices" aria-labelledby="admOfficesTitle" hidden>
+                <div class="ofc-sticky">
+                    <div class="adm-bar-row">
+                        <h1 class="ofc-title" id="admOfficesTitle">Offices</h1>
+                        <div class="adm-bar-actions">
+                            <button class="ofc-btn is-small" type="button" data-open="closure"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9.5 13.5l5 5M14.5 13.5l-5 5"/></svg>Close campus</button>
+                            <button class="ofc-btn is-small is-primary" type="button" data-open="wizard"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add office</button>
                         </div>
-                        <div class="export-group">
-                            <a class="analytics-export-button" id="analyticsExportBtn" href="admin_analytics.php?period=month&amp;format=xlsx" download title="Formatted Excel report: summary sheet, colours, and columns sized to fit">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
-                                Export Report
-                            </a>
-                            <a class="export-csv-link" id="analyticsCsvBtn" href="admin_analytics.php?period=month&amp;format=csv" download title="Plain CSV for other programs">CSV</a>
-                        </div>
-                        <button class="analytics-reset-button" id="analyticsResetBtn" type="button" title="Delete visit records and start the analytics from zero">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
-                            Reset data
-                        </button>
                     </div>
-                </header>
-
-                <p class="admin-message is-error" id="analyticsError" role="alert" hidden></p>
-                <p class="admin-message is-success" id="analyticsResetDone" role="status" hidden></p>
-
-                <div class="analytics-summary-grid" aria-label="Visitor analytics summary">
-                    <article class="analytics-summary-card">
-                        <strong class="is-blue" id="analyticsTotalVisitors">0</strong>
-                        <span>Total Visitors</span>
-                        <small id="analyticsTotalVisitorsNote">Checked in during this period</small>
-                    </article>
-                    <article class="analytics-summary-card">
-                        <strong class="is-green" id="analyticsGpsTracked">0</strong>
-                        <span>GPS Tracked Now</span>
-                        <small>Active visitors reporting location</small>
-                    </article>
-                    <article class="analytics-summary-card">
-                        <strong class="is-orange" id="analyticsAverageDuration">—</strong>
-                        <span>Average Visit Duration</span>
-                        <small>Based on completed visits</small>
-                    </article>
-
+                    <div class="ofc-fchips" id="admOfficeChips" role="group" aria-label="Show offices"></div>
                 </div>
+                <div class="adm-closure-host" id="admOfficeClosure"></div>
+                <div id="admRemCard"></div>
+                <div class="adm-ogrid" id="admOfficeGrid"><p class="ofc-empty">Loading…</p></div>
+            </section>
 
-                <div class="analytics-primary-grid">
-                    <article class="analytics-card analytics-trend-card">
-                        <div class="analytics-card-header">
-                            <div>
-                                <h2>Visitor Trend</h2>
-                                <p>Check-ins and check-outs for the selected period</p>
-                            </div>
-                            <div class="analytics-legend" aria-label="Chart legend">
-                                <span><i class="is-checkin"></i>Check-ins</span>
-                                <span><i class="is-checkout"></i>Check-outs</span>
-                            </div>
-                        </div>
-                        <div class="analytics-chart-host">
-                            <svg id="visitorTrendChart" viewBox="0 0 680 270" role="img" aria-labelledby="visitorTrendChartTitle">
-                                <title id="visitorTrendChartTitle">Visitor check-in and check-out trend</title>
-                            </svg>
-                            <div class="analytics-chart-empty" id="visitorTrendEmpty" hidden>
-                                Check-in trends will appear after visitor activity is recorded.
-                            </div>
-                        </div>
-                    </article>
-
-                    <article class="analytics-card analytics-purpose-card">
-                        <div class="analytics-card-header">
-                            <div>
-                                <h2>Visit Purpose</h2>
-                                <p>Breakdown by recorded reason</p>
-                            </div>
-                        </div>
-                        <div class="analytics-purpose-content">
-                            <div class="analytics-donut" id="analyticsPurposeDonut" aria-label="Visit-purpose distribution">
-                                <span id="analyticsPurposeTotal">0</span>
-                                <small>visits</small>
-                            </div>
-                            <div class="analytics-purpose-legend" id="analyticsPurposeLegend"></div>
-                        </div>
-                        <div class="analytics-inline-empty" id="analyticsPurposeEmpty" hidden>
-                            Purpose analytics will activate when a <code>purpose</code> field is collected with appointments.
-                        </div>
-                    </article>
-                </div>
-
-                <article class="analytics-card analytics-heatmap-card">
-                    <div class="analytics-card-header">
-                        <div>
-                            <h2>Hourly Traffic Heatmap</h2>
-                            <p>Visitor check-in density by hour and day of week</p>
-                        </div>
-                        <div class="analytics-heat-legend" aria-label="Heat intensity legend">
-                            <span><i class="is-low"></i>Low</span>
-                            <span><i class="is-medium"></i>Medium</span>
-                            <span><i class="is-high"></i>High</span>
-                        </div>
+            <!-- ================= PEOPLE ================= -->
+            <section class="admin-view ofc-page ofc-main adm-pane" data-adm-panel="people" aria-labelledby="admPeopleTitle" hidden>
+                <div class="ofc-sticky">
+                    <div class="adm-bar-row">
+                        <h1 class="ofc-title" id="admPeopleTitle">People</h1>
+                        <button class="ofc-btn is-small is-primary" type="button" data-open="add"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add person</button>
                     </div>
-                    <div class="analytics-heatmap-wrap" id="analyticsHeatmap"></div>
-                </article>
+                    <label class="ofc-find">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+                        <span class="sr-only">Search people</span>
+                        <input id="admPeopleSearch" type="search" placeholder="Search name, username or office" autocomplete="off">
+                    </label>
+                    <div class="ofc-seg" role="tablist" aria-label="People">
+                        <button type="button" role="tab" data-ptab="staff">Staff <span data-people-count="staff">0</span></button>
+                        <button type="button" role="tab" data-ptab="visitors">Visitors <span data-people-count="visitors">0</span></button>
+                    </div>
+                    <div class="ofc-fchips" id="admPeopleChips" role="group" aria-label="Show"></div>
+                </div>
+                <ul class="adm-plist" id="admPeopleList"><li class="ofc-empty">Loading…</li></ul>
+                <button class="ofc-btn is-quiet adm-more" id="admPeopleMore" type="button" hidden>Show more</button>
+            </section>
 
-                <article class="analytics-card analytics-route-card">
-                    <div class="analytics-card-header">
-                        <div>
-                            <h2>Route Analytics</h2>
-                            <p>Paths visitors walk most often, from consent-based GPS routes</p>
-                        </div>
-                        <label class="admin-select-label" for="routeOfficeFilter">
-                            <span>Destination</span>
-                            <select id="routeOfficeFilter">
-                                <option value="">All destinations</option>
+            <!-- ================= ACTIVITY ================= -->
+            <section class="admin-view ofc-page ofc-main adm-pane" data-adm-panel="activity" aria-labelledby="admActivityTitle" hidden>
+                <div class="ofc-sticky">
+                    <div class="adm-bar-row">
+                        <h1 class="ofc-title" id="admActivityTitle">Activity</h1>
+                        <div class="adm-bar-actions">
+                            <select class="adm-sel" id="admActPeriod" aria-label="How far back">
+                                <option value="1">Today</option>
+                                <option value="7" selected>Last 7 days</option>
+                                <option value="30">Last 30 days</option>
+                                <option value="90">Last 90 days</option>
                             </select>
-                        </label>
-                    </div>
-                    <p class="admin-message is-error" id="routeAnalyticsError" role="alert" hidden></p>
-                    <p class="analytics-inline-empty analytics-route-hint" id="routeCampusHint" hidden>
-                        The campus boundary is not set yet, so routes outside ISATU are included.
-                        Draw it in <a href="#campus" data-open-campus>Campus Map</a> to analyse only the campus.
-                    </p>
-                    <div class="analytics-location-metrics" id="routeAnalyticsMetrics"></div>
-                    <div class="analytics-route-layout">
-                        <div>
-                            <div class="analytics-route-map-wrap">
-                                <div class="analytics-route-map" id="routeAnalyticsMap" aria-label="Map of the paths visitors walk most often"></div>
-                                <div class="analytics-route-empty" id="routeAnalyticsEmpty" hidden>
-                                    No visitor routes were recorded for this period.
-                                </div>
-                            </div>
-                            <div class="analytics-heat-legend analytics-route-legend" aria-label="Path usage legend">
-                                <span>Path usage</span>
-                                <span><i class="is-low"></i>Low</span>
-                                <span><i class="is-medium"></i>Medium</span>
-                                <span><i class="is-high"></i>High</span>
-                            </div>
-                        </div>
-                        <div class="analytics-route-destinations">
-                            <h3>Routes by destination</h3>
-                            <div id="routeDestinationList"></div>
-                            <div class="analytics-inline-empty" id="routeDestinationEmpty" hidden>
-                                Destinations will appear after tracked visitors walk to an office.
-                            </div>
-                            <h3 class="analytics-route-subheading">Entry gates</h3>
-                            <div id="routeGateList"></div>
-                            <div class="analytics-inline-empty" id="routeGateEmpty" hidden>
-                                Add gates in <a href="#campus" data-open-campus>Campus Map</a> to see which entrance visitors prefer.
-                            </div>
+                            <button class="ofc-btn is-small" type="button" data-open="activity-export"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Export</button>
                         </div>
                     </div>
-                </article>
-
-                <div class="analytics-secondary-grid">
-                    <article class="analytics-card analytics-location-card">
-                        <div class="analytics-card-header">
-                            <div>
-                                <h2>GPS &amp; Location Activity Overview</h2>
-                                <p>Consent-based GPS activity from checked-in visitors</p>
-                            </div>
-                            <span class="analytics-live-pill" id="analyticsActiveTracks">0 active tracks</span>
-                        </div>
-                        <div class="analytics-location-metrics" id="analyticsLocationMetrics"></div>
-                        <div class="analytics-zones" id="analyticsZones"></div>
-                        <div class="analytics-inline-empty" id="analyticsZonesEmpty" hidden>
-                            Campus zones are not configured yet. Your backend developer can add a <code>zone_name</code> field or geofence mapping later.
-                        </div>
-                    </article>
-
-                    <article class="analytics-card analytics-insights-card">
-                        <div class="analytics-card-header">
-                            <div>
-                                <h2>Performance Insights</h2>
-                                <p>Automatically generated patterns and exceptions</p>
-                            </div>
-                        </div>
-                        <div class="analytics-insight-list" id="analyticsInsightList"></div>
-                    </article>
+                    <div class="ofc-fchips" id="admActChips" role="group" aria-label="Kind of activity">
+                        <button type="button" data-act-cat="all">Everything</button>
+                        <button type="button" data-act-cat="signins">Sign-ins</button>
+                        <button type="button" data-act-cat="decisions">Approvals &amp; declines</button>
+                        <button type="button" data-act-cat="gate">Gate &amp; visits</button>
+                        <button type="button" data-act-cat="schedules">Office hours</button>
+                        <button type="button" data-act-cat="accounts">Accounts &amp; settings</button>
+                        <button type="button" data-act-cat="visitors">Visitors</button>
+                        <button type="button" data-act-cat="system">Automatic</button>
+                    </div>
+                    <div class="adm-person-filter" id="admActPerson" hidden></div>
                 </div>
+                <section class="ofc-card" id="admSigninCard" aria-labelledby="admSigninTitle">
+                    <div class="ofc-sec-head"><h2 id="admSigninTitle">Sign-in security</h2><span class="ofc-chip" id="admSigninChip"></span></div>
+                    <div class="adm-secstats" id="admSecStats"></div>
+                    <ul class="adm-alist" id="admLockList"></ul>
+                    <details class="adm-attempts">
+                        <summary>Recent sign-in attempts</summary>
+                        <ul class="adm-tlist" id="admAttemptList"></ul>
+                    </details>
+                </section>
+                <div class="ofc-sec" id="admTimeline"><p class="ofc-empty">Loading…</p></div>
+                <button class="ofc-btn is-quiet adm-more" id="admActMore" type="button" hidden>Show older</button>
             </section>
 
-            <section class="admin-view campus-view" id="campusView" data-view-panel="campus" hidden>
-                <header class="analytics-header">
-                    <div>
-                        <p class="admin-eyebrow">Campus setup</p>
-                        <h1>Campus Map</h1>
-                        <p>Draw the ISATU campus boundary, place its gates and offices, record the walking routes visitors should take, and write the directions inside each building. Maps and route analytics stay inside this boundary.</p>
+            <!-- ================= REPORTS ================= -->
+            <section class="admin-view ofc-page ofc-main adm-pane" data-adm-panel="reports" aria-labelledby="admReportsTitle" hidden>
+                <div class="ofc-sticky">
+                    <div class="adm-bar-row">
+                        <h1 class="ofc-title" id="admReportsTitle">Reports</h1>
+                        <button class="ofc-btn is-small" type="button" data-open="export"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>Export</button>
                     </div>
-                </header>
+                    <div class="ofc-seg" id="admPeriodTabs" role="tablist" aria-label="Period">
+                        <button type="button" role="tab" data-period="today">Today</button>
+                        <button type="button" role="tab" data-period="week">This week</button>
+                        <button type="button" role="tab" data-period="month">This month</button>
+                        <button type="button" role="tab" data-period="quarter">This quarter</button>
+                    </div>
+                </div>
+                <p class="ofc-note" id="admPeriodNote">Loading…</p>
+                <div class="adm-kpis" id="admKpis"></div>
+                <section class="ofc-card" aria-labelledby="admInsightsTitle">
+                    <div class="ofc-sec-head"><h2 id="admInsightsTitle">What stands out</h2></div>
+                    <ul class="adm-insights" id="admInsights"></ul>
+                </section>
+                <div class="adm-cols-wide">
+                    <section class="ofc-card" aria-labelledby="admTrendTitle">
+                        <div class="ofc-sec-head">
+                            <h2 id="admTrendTitle">Visits per day</h2>
+                            <button class="ofc-link" type="button" id="admTrendTableBtn" aria-expanded="false">Show as table</button>
+                        </div>
+                        <div class="adm-chart" id="admTrendChart"></div>
+                        <p class="ofc-note" id="admTrendNote"></p>
+                        <div class="adm-table-wrap" id="admTrendTable" hidden></div>
+                    </section>
+                    <section class="ofc-card" aria-labelledby="admOfficeBarsTitle">
+                        <div class="ofc-sec-head"><h2 id="admOfficeBarsTitle">Offices</h2></div>
+                        <p class="ofc-note">Visits in this period, and how long each office takes to answer a request (working hours, Monday to Friday, 8 AM to 5 PM).</p>
+                        <div class="adm-hbars" id="admOfficeBars"></div>
+                    </section>
+                    <section class="ofc-card" aria-labelledby="admPurposeTitle">
+                        <div class="ofc-sec-head"><h2 id="admPurposeTitle">Why people visit</h2></div>
+                        <div class="adm-hbars" id="admPurposeBars"></div>
+                    </section>
+                    <section class="ofc-card" aria-labelledby="admHeatTitle">
+                        <div class="ofc-sec-head"><h2 id="admHeatTitle">Busiest hours</h2></div>
+                        <div class="adm-heat" id="admHeat"></div>
+                        <div class="adm-heat-key" aria-hidden="true"><span>Fewer</span><i class="is-1"></i><i class="is-2"></i><i class="is-3"></i><i class="is-4"></i><span>More check-ins</span></div>
+                    </section>
+                </div>
+                <section class="ofc-card" aria-labelledby="admRoutesTitle">
+                    <div class="ofc-sec-head">
+                        <h2 id="admRoutesTitle">Walking routes</h2>
+                        <button class="ofc-btn is-small" type="button" data-open="routes">Open route map</button>
+                    </div>
+                    <p class="ofc-note">The paths visitors walk most, by destination and entry gate, from consent-based GPS routes.</p>
+                </section>
+            </section>
 
+            <!-- ================= CAMPUS MAP ================= -->
+            <section class="admin-view adm-campus" data-adm-panel="campus" aria-labelledby="admCampusTitle" hidden>
+                <!-- The checklist uses the shared parts; the map editor below keeps its own styles (outside .ofc-main). -->
+                <div class="ofc-page ofc-main adm-pane">
+                <div class="ofc-head-row">
+                    <div><p class="admin-eyebrow">Setup</p><h1 class="ofc-title" id="admCampusTitle">Campus map</h1></div>
+                    <span class="ofc-chip" id="admCampusChip"></span>
+                </div>
+                <section class="ofc-card" aria-labelledby="admChecksTitle">
+                    <div class="ofc-sec-head"><h2 id="admChecksTitle">Setup checklist</h2></div>
+                    <ul class="adm-checks" id="admCampusChecks"></ul>
+                    <div class="adm-table-wrap"><table class="adm-otable" id="admCampusTable"></table></div>
+                </section>
+                <p class="ofc-banner is-blue adm-phone-only"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg><span>On a phone you can look and check. Drawing the boundary and routes works best on a laptop.</span></p>
+                </div>
+                <div class="campus-view adm-legacy" id="campusView">
                 <div class="campus-setup-layout">
                     <div class="campus-setup-map-wrap">
                         <div class="campus-setup-map" id="campusSetupMap" aria-label="Campus map editor"></div>
@@ -913,261 +494,137 @@
                         </div>
                     </aside>
                 </div>
+                </div>
+            </section>
+
+            <!-- ================= MENU ================= -->
+            <section class="admin-view ofc-page ofc-main adm-pane is-narrow" data-adm-panel="menu" aria-label="Menu" hidden>
+                <div class="ofc-card ofc-account">
+                    <span class="ofc-avatar" data-my-initials aria-hidden="true">AD</span>
+                    <div>
+                        <h2 data-my-name>Administrator</h2>
+                        <p class="ofc-note"><span data-my-position>System Administrator</span> · Administration</p>
+                        <p class="ofc-note">Signed in as <span data-my-username>admin</span></p>
+                    </div>
+                </div>
+                <ul class="ofc-menu-list">
+                    <li><button class="ofc-menu-item" type="button" data-adm-go="activity">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
+                        <span><strong>Activity and sign-ins <b class="ofc-badge" data-lock-badge hidden>0</b></strong><small>Who did what, locked sign-ins</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" type="button" data-adm-go="campus">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Zm0 0v14m6-12v14"/></svg></span>
+                        <span><strong>Campus map</strong><small id="admMenuCampus">Boundary, gates, office pins, routes</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" type="button" data-open="closure">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9.5 13.5l5 5M14.5 13.5l-5 5"/></svg></span>
+                        <span><strong>Close the campus to visitors</strong><small id="admMenuClosure">Class suspension, holiday, bad weather</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" type="button" data-open="reminders">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2H4.4z"/><path d="M10 21h4"/></svg></span>
+                        <span><strong>Request reminders</strong><small id="admMenuReminders">Offices are reminded before requests expire</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" type="button" data-open="digest">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>
+                        <span><strong>Morning summary email</strong><small id="admMenuDigest">What needs you, every weekday morning</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" type="button" data-open="staff-reset">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="m11 12 8-8M16 7l3 3"/></svg></span>
+                        <span><strong>Staff who forget their password</strong><small>How "Forgot password?" works on the sign-in page</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li class="adm-laptop-only"><button class="ofc-menu-item" type="button" data-open="keys">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></span>
+                        <span><strong>Keyboard shortcuts</strong><small>/ to search, N to add a person, 1 to 6 for the pages</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" type="button" id="admMenuSecurity">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+                        <span><strong>Account security</strong><small>Password, two-step sign-in, signed-in devices</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item" type="button" id="admMenuRefresh">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 8a7 7 0 0 1 11.8-2L20 8M4 16l2.1 2A7 7 0 0 0 18 16"/></svg></span>
+                        <span><strong>Refresh now</strong><small id="admMenuUpdated">Not updated yet</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                    <li><button class="ofc-menu-item is-danger" type="button" id="openAnalyticsResetBtn">
+                        <span class="ofc-menu-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></span>
+                        <span><strong>Reset visitor data</strong><small>Deletes visit records. Asks you to type a word and give your authenticator code.</small></span>
+                        <svg class="ofc-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+                    </button></li>
+                </ul>
+                <button class="ofc-btn is-decline is-full" id="admSignOut" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/></svg>Sign out
+                </button>
             </section>
         </main>
     </div>
 
-    <dialog class="admin-dialog" id="addUserDialog" aria-labelledby="addUserTitle">
-        <form id="addUserForm">
-            <div class="admin-dialog-header">
-                <div>
-                    <p class="admin-eyebrow">New account</p>
-                    <h2 id="addUserTitle">Add office personnel</h2>
-                </div>
-                <button class="admin-dialog-close" id="closeAddUserBtn" type="button" aria-label="Close">×</button>
-            </div>
+    <nav class="ofc-tabbar" aria-label="Admin menu">
+        <button class="ofc-tab" type="button" data-adm-go="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v10h13V10"/></svg>Home<b class="ofc-badge" data-att-badge hidden>0</b></button>
+        <button class="ofc-tab" type="button" data-adm-go="offices"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V7l8-4 8 4v14M9 21v-5h6v5M8 10h.01M12 10h.01M16 10h.01M8 13h.01M12 13h.01M16 13h.01"/></svg>Offices</button>
+        <button class="ofc-tab" type="button" data-adm-go="people"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/></svg>People</button>
+        <button class="ofc-tab" type="button" data-adm-go="reports"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</button>
+        <button class="ofc-tab" type="button" data-adm-go="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>Menu<b class="ofc-badge" data-lock-badge hidden>0</b></button>
+    </nav>
 
-            <p class="person-form-heading">What will this person do?</p>
-            <input type="hidden" id="newUserRole" value="offices">
-            <div class="role-grid" id="newRoleCards" role="radiogroup" aria-label="Role">
-                <label class="role-card" data-role="offices">
-                    <input type="radio" name="newRoleChoice" value="offices">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5l8-2v18M12 8l8 2v11M2 21h20M7.5 8.5h1M7.5 12h1M7.5 15.5h1M15.5 13h1M15.5 16.5h1"/></svg>
-                    <span><strong>Office Personnel</strong><small>Answers visitors for one office, like the CCI Dean's Office.</small></span>
-                </label>
-                <label class="role-card" data-role="security">
-                    <input type="radio" name="newRoleChoice" value="security">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.5 3 8.4 7 9.5 4-1.1 7-5 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
-                    <span><strong>Security</strong><small>Scans passes at the gate and sees who is on campus.</small></span>
-                </label>
-                <label class="role-card" data-role="admin">
-                    <input type="radio" name="newRoleChoice" value="admin">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.1a2 2 0 1 1-4 0V21a1.7 1.7 0 0 0-2.9-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H3a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 4.3 7.3l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3.3V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.1a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
-                    <span><strong>Administrator</strong><small>Manages users, offices and the campus map.</small></span>
-                </label>
+    <!-- Every panel (office, person, visit, add person, setup...) is built by admin.js in this one sheet
+         pattern; the route map keeps its own, because its map is created once. -->
+    <dialog class="ofc-sheet is-drawer adm-wide-sheet" id="admRoutesSheet" aria-labelledby="admRoutesSheetTitle">
+        <header class="ofc-sheet-head">
+            <div>
+                <h2 id="admRoutesSheetTitle">Walking routes</h2>
+                <p class="ofc-note" id="admRoutesPeriod">The paths visitors walk most often.</p>
             </div>
-            <p class="role-hint">Visitors sign up themselves in the app.</p>
-
-            <p class="person-form-heading">Who is this?</p>
-            <div class="person-name-grid" id="newNameGrid">
-                <label>
-                    <span>First name</span>
-                    <input type="text" id="newFirstName" autocomplete="off" maxlength="60" required>
-                </label>
-                <label>
-                    <span>Last name</span>
-                    <input type="text" id="newLastName" autocomplete="off" maxlength="60" required>
-                </label>
-            </div>
-            <div class="admin-form-grid">
-                <label>
-                    <span>Position <small>(optional)</small></span>
-                    <input type="text" id="newPosition" autocomplete="off" maxlength="100">
-                </label>
-                <label>
-                    <span>Contact number <small>(optional)</small></span>
-                    <input type="tel" id="newContactNumber" autocomplete="off" maxlength="20" placeholder="e.g. 0917 123 4567">
-                </label>
-                <label class="sec-wide-field">
-                    <span>Email <small>(optional)</small></span>
-                    <input type="email" id="newEmail" autocomplete="off" maxlength="190">
-                </label>
-            </div>
-
-            <p class="person-form-heading" data-only="offices">Where do they work?</p>
-            <div class="admin-form-grid" data-only="offices">
-                <label class="sec-wide-field admin-office-field" id="newUserOfficeField">
-                    <span>Office</span>
-                    <select id="newUserOfficeCode"></select>
-                    <small class="person-field-hint">Missing an office? Add it in the Office Directory below the user list.</small>
-                </label>
-            </div>
-
-            <p class="person-form-heading">Sign-in</p>
-            <div class="admin-form-grid">
-                <label class="sec-wide-field">
-                    <span>Username</span>
-                    <input type="text" id="newUsername" autocomplete="off" maxlength="64" required>
-                    <small class="person-field-hint" id="newUsernameHint">Suggested from the name. You can change it.</small>
-                </label>
-            </div>
-            <div class="sec-callout">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-                <p id="newUserCallout"></p>
-            </div>
-            <p class="admin-message is-error" id="adminFormError" role="alert" hidden></p>
-            <div class="admin-dialog-actions">
-                <button class="admin-cancel-button" id="cancelAddUserBtn" type="button">Cancel</button>
-                <button class="admin-primary-button" id="addUserBtn" type="submit">Add office personnel</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog class="admin-dialog sec-temp-dialog" id="tempPasswordDialog" aria-labelledby="tempPasswordTitle">
-        <form method="dialog">
-            <div class="admin-dialog-header">
-                <div>
-                    <p class="admin-eyebrow" id="tempPasswordEyebrow">Account created</p>
-                    <h2 id="tempPasswordTitle">Temporary password</h2>
-                </div>
-                <button class="admin-dialog-close" type="submit" aria-label="Close">×</button>
-            </div>
-            <p class="sec-temp-intro">Give this password to <strong id="tempPasswordName">the user</strong> privately (username <strong id="tempPasswordUsername"></strong>). It is shown only once.</p>
-            <div class="sec-temp-box">
-                <code id="tempPasswordValue"></code>
-                <button class="auth-copy-button" type="button" id="copyTempPasswordBtn">Copy</button>
-            </div>
-            <ul class="sec-temp-facts">
-                <li>Works once and expires <strong id="tempPasswordExpires"></strong>.</li>
-                <li>The user must choose their own password when they sign in.</li>
-                <li id="tempPasswordTwoFactor" hidden>They will also set up two-step verification.</li>
-
-            </ul>
-            <div class="admin-dialog-actions">
-                <button class="admin-primary-button" type="submit">Done</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog class="admin-dialog sec-manage-dialog" id="manageUserDialog" aria-labelledby="manageUserTitle">
-        <div class="sec-manage-shell">
-            <div class="admin-dialog-header">
-                <div>
-                    <p class="admin-eyebrow">Manage account</p>
-                    <h2 id="manageUserTitle">User</h2>
-                </div>
-                <button class="admin-dialog-close" type="button" id="closeManageUserBtn" aria-label="Close">×</button>
-            </div>
-            <dl class="sec-details" id="manageUserDetails"></dl>
-            <form class="person-edit-form" id="manageEditForm" novalidate hidden>
-                <p class="person-form-heading">Edit details</p>
-                <div class="admin-form-grid">
-                    <label>
-                        <span>First name</span>
-                        <input type="text" id="editFirstName" maxlength="60" required>
-                    </label>
-                    <label>
-                        <span>Last name</span>
-                        <input type="text" id="editLastName" maxlength="60" required>
-                    </label>
-                    <label>
-                        <span>Position <small>(optional)</small></span>
-                        <input type="text" id="editPosition" maxlength="100">
-                    </label>
-                    <label>
-                        <span>Contact number <small>(optional)</small></span>
-                        <input type="tel" id="editContactNumber" maxlength="20">
-                    </label>
-                    <label class="sec-wide-field">
-                        <span>Email <small>(optional)</small></span>
-                        <input type="email" id="editEmail" maxlength="190">
-                    </label>
-                    <label class="sec-wide-field" id="editDepartmentField" hidden>
-                        <span>Office</span>
-                        <select id="editDepartment"></select>
-                        <small class="person-field-hint">Moving someone signs them out so the new office takes effect.</small>
-                    </label>
-
-                </div>
-                <div class="admin-dialog-actions">
-                    <button class="admin-cancel-button" type="button" id="cancelEditDetailsBtn">Cancel</button>
-                    <button class="admin-primary-button" type="submit" id="saveEditDetailsBtn">Save details</button>
-                </div>
-            </form>
-            <p class="admin-message is-error" id="manageUserError" role="alert" hidden></p>
-            <p class="admin-message is-success" id="manageUserSuccess" role="status" hidden></p>
-            <div class="sec-manage-actions" id="manageUserActions"></div>
+            <button class="ofc-x" type="button" data-close-sheet aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        </header>
+        <div class="ofc-sheet-body adm-legacy adm-routes">
+            <label class="ofc-field"><span>Destination</span><select id="routeOfficeFilter"><option value="">All destinations</option></select></label>
+                    <p class="admin-message is-error" id="routeAnalyticsError" role="alert" hidden></p>
+                    <p class="analytics-inline-empty analytics-route-hint" id="routeCampusHint" hidden>
+                        The campus boundary is not set yet, so routes outside ISATU are included.
+                        Draw it in <a href="#campus" data-open-campus>Campus Map</a> to analyse only the campus.
+                    </p>
+                    <div class="analytics-location-metrics" id="routeAnalyticsMetrics"></div>
+                    <div class="analytics-route-layout">
+                        <div>
+                            <div class="analytics-route-map-wrap">
+                                <div class="analytics-route-map" id="routeAnalyticsMap" aria-label="Map of the paths visitors walk most often"></div>
+                                <div class="analytics-route-empty" id="routeAnalyticsEmpty" hidden>
+                                    No visitor routes were recorded for this period.
+                                </div>
+                            </div>
+                            <div class="analytics-heat-legend analytics-route-legend" aria-label="Path usage legend">
+                                <span>Path usage</span>
+                                <span><i class="is-low"></i>Low</span>
+                                <span><i class="is-medium"></i>Medium</span>
+                                <span><i class="is-high"></i>High</span>
+                            </div>
+                        </div>
+                        <div class="analytics-route-destinations">
+                            <h3>Routes by destination</h3>
+                            <div id="routeDestinationList"></div>
+                            <div class="analytics-inline-empty" id="routeDestinationEmpty" hidden>
+                                Destinations will appear after tracked visitors walk to an office.
+                            </div>
+                            <h3 class="analytics-route-subheading">Entry gates</h3>
+                            <div id="routeGateList"></div>
+                            <div class="analytics-inline-empty" id="routeGateEmpty" hidden>
+                                Add gates in <a href="#campus" data-open-campus>Campus Map</a> to see which entrance visitors prefer.
+                            </div>
+                        </div>
+                    </div>
         </div>
     </dialog>
 
-    <dialog class="admin-dialog dept-dialog" id="departmentDialog" aria-labelledby="departmentDialogTitle">
-        <form id="departmentForm" novalidate>
-            <div class="admin-dialog-header">
-                <div>
-                    <p class="admin-eyebrow">Office directory</p>
-                    <h2 id="departmentDialogTitle">Add office</h2>
-                </div>
-                <button class="admin-dialog-close" type="button" data-close-dialog="departmentDialog" aria-label="Close">×</button>
-            </div>
-            <div class="admin-form-grid">
-                <label class="sec-wide-field">
-                    <span>Office name</span>
-                    <input type="text" id="departmentName" maxlength="100" placeholder="e.g. Registrar's Office" required>
-                </label>
-                <label>
-                    <span>Short code</span>
-                    <input type="text" id="departmentCode" maxlength="16" placeholder="e.g. REGISTRAR" autocomplete="off" spellcheck="false">
-                    <small class="person-field-hint" id="departmentCodeHint">Used in records and reports. It cannot be changed later.</small>
-                </label>
-                <label>
-                    <span>Location <small>(optional)</small></span>
-                    <input type="text" id="departmentLocation" maxlength="150" placeholder="e.g. Admin Building, 2nd floor">
-                    <small class="person-field-hint" id="departmentLocationHint" hidden>Change it in Campus Map, on the Inside tab.</small>
-                </label>
-                <label class="sec-wide-field">
-                    <span>Description <small>(optional)</small></span>
-                    <input type="text" id="departmentDescription" maxlength="255" placeholder="What visitors come here for">
-                </label>
-            </div>
-            <p class="admin-message is-error" id="departmentFormError" role="alert" hidden></p>
-            <div class="admin-dialog-actions">
-                <button class="admin-cancel-button" type="button" data-close-dialog="departmentDialog">Cancel</button>
-                <button class="admin-primary-button" type="submit" id="saveDepartmentBtn">Add office</button>
-            </div>
-        </form>
-    </dialog>
-
-    <dialog class="admin-dialog ua-dialog" id="personDialog" aria-labelledby="personDialogTitle">
-        <div class="ua-dialog-shell">
-            <div class="admin-dialog-header">
-                <div>
-                    <p class="admin-eyebrow" id="personDialogDepartment">Person</p>
-                    <h2 id="personDialogTitle">Activity</h2>
-                </div>
-                <button class="admin-dialog-close" type="button" data-close-dialog="personDialog" aria-label="Close">×</button>
-            </div>
-            <p class="acct-loading" id="personLoading">Loading…</p>
-            <div id="personBody" hidden>
-                <dl class="sec-details" id="personDetails"></dl>
-                <div class="ua-person-stats" id="personStats"></div>
-                <section class="ua-dialog-section" aria-labelledby="personDevicesTitle">
-                    <h3 id="personDevicesTitle">Devices used in the last 30 days</h3>
-                    <p class="ua-shared-warning" id="personSharedWarning" hidden></p>
-                    <ul class="acct-list" id="personDevices"></ul>
-                </section>
-                <section class="ua-dialog-section" aria-labelledby="personActivityTitle">
-                    <h3 id="personActivityTitle">Recent activity</h3>
-                    <div class="ua-log is-compact" id="personActivity"></div>
-                </section>
-                <div class="admin-dialog-actions">
-                    <button class="admin-cancel-button" type="button" id="personManageBtn">Manage account</button>
-                    <button class="admin-primary-button" type="button" id="personFullLogBtn">Show in activity log</button>
-                </div>
-            </div>
-        </div>
-    </dialog>
-
-    <dialog class="admin-dialog ua-dialog" id="trailDialog" aria-labelledby="trailDialogTitle">
-        <div class="ua-dialog-shell">
-            <div class="admin-dialog-header">
-                <div>
-                    <p class="admin-eyebrow" id="trailDialogEyebrow">Appointment history</p>
-                    <h2 id="trailDialogTitle">Appointment</h2>
-                </div>
-                <button class="admin-dialog-close" type="button" data-close-dialog="trailDialog" aria-label="Close">×</button>
-            </div>
-            <p class="acct-loading" id="trailLoading">Loading…</p>
-            <p class="admin-message is-error" id="trailError" role="alert" hidden></p>
-            <div id="trailBody" hidden>
-                <dl class="sec-details" id="trailDetails"></dl>
-                <div class="ua-handled" id="trailHandled"></div>
-                <section class="ua-dialog-section" aria-labelledby="trailTimelineTitle">
-                    <h3 id="trailTimelineTitle">Everything that happened</h3>
-                    <ol class="ua-timeline" id="trailTimeline"></ol>
-                </section>
-            </div>
-        </div>
-    </dialog>
+    <!-- The printable monthly report and the password slips: filled by admin.js, shown only when printing. -->
+    <div class="adm-print" id="admPrint" aria-hidden="true"></div>
 
     <dialog class="admin-dialog reset-dialog" id="analyticsResetDialog" aria-labelledby="analyticsResetTitle">
         <form id="analyticsResetForm" novalidate>
@@ -1236,20 +693,23 @@
             </div>
         </form>
     </dialog>
+
+    <div class="office-toast" id="admToast" role="status" aria-live="polite" hidden></div>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <!-- Sharp map at every zoom (campus_map.js falls back to OpenStreetMap images without it). -->
+    <!-- Satellite view (campus_map.js): MapLibre draws the same imagery as Google Earth on the GPU. -->
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
     <script src="auth.js?v=20261110-1"></script>
-    <script src="dialogs.js?v=20261107-3"></script>
+    <script src="dialogs.js?v=20261122-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
     <script src="campus_map.js?v=20261005-2"></script>
     <script src="gps_filter.js?v=20261012-1"></script>
     <script src="campus_gps.js?v=20261012-1"></script>
-    <script src="campus_setup.js?v=20261107-3"></script>
+    <script src="campus_setup.js?v=20261122-1"></script>
     <script src="campus_routes_editor.js?v=20261107-3"></script>
     <script src="campus_inside_editor.js?v=20261107-3"></script>
-    <script src="admin.js?v=20261116-1"></script>
+    <script src="admin.js?v=20261122-1"></script>
 </body>
 </html>
