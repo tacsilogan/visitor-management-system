@@ -88,13 +88,24 @@ jobs:
           # finds the text.
           contains() { grep -qiF -- "$2" <<< "$1"; }
 
-          expect "Site address /" "$(status http://localhost:8080/)" 302
+          # The main address is the visitors' page for getting the app, with a link for staff
+          # (GROUP_VISITS.md).
+          expect "Site address /" "$(status http://localhost:8080/)" 200
+          contains "$(curl -s http://localhost:8080/)" 'href="phone_tracker/login.html"' || fail "Site address /: the visitors' page has no Staff sign in link"
           expect "Sign-in page" "$(status $base/login.html)" 200
           # Railway's health check path; Railway does not accept paths with a dot.
           expect "Health check /phone_tracker/api/v1/" "$(status $base/api/v1/)" 200
           for private in config/auth.example.php tools/setup_database.php; do
             expect "Private file $private" "$(status "$base/$private")" 403
           done
+          # Getting the app: nothing is published yet, a laptop's app folder is closed to
+          # browsers, and only a signed-in Admin can publish.
+          expect "App version for the app's update check" "$(status $base/api/v1/app_release.php)" 200
+          expect "Download before a version is published" "$(status $base/download_app.php)" 404
+          expect "Gate poster" "$(status $base/app_poster.php)" 200
+          expect "Private app folder" "$(status $base/private/)" 403
+          publish=$(status "$base/admin_app_release.php")
+          [ "$publish" = 401 ] || [ "$publish" = 403 ] || fail "Publishing the app without signing in: expected 401 or 403, got $publish"
           # No folder listings (403, or 404 where Apache's listing module is off).
           listing=$(status "$base/uploads/profile_pictures/")
           [ "$listing" = 403 ] || [ "$listing" = 404 ] || fail "Uploads folder: expected no listing (403 or 404), got $listing"
