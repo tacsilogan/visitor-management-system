@@ -189,7 +189,7 @@ fun HomeUpdateAndGroup() = ISATUVisitorTheme {
                     versionName = "0.13.0",
                     versionCode = 18,
                     whatsNew = "Add the people coming with you.",
-                    pageUrl = "https://isatu-visitor.up.railway.app/",
+                    pageUrl = "https://isatuvisits.up.railway.app/",
                 ),
             )
         }

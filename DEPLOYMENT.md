@@ -176,7 +176,7 @@ same key.
 1. Add the hosted address to `visitor_app/local.properties`:
 
    ```
-   ISATU_RELEASE_API_BASE_URL=https://isatu-visitor.up.railway.app/phone_tracker/api/v1/
+   ISATU_RELEASE_API_BASE_URL=https://isatuvisits.up.railway.app/phone_tracker/api/v1/
    ```
 
    Keep any `ISATU_API_BASE_URL` line: test builds keep using a laptop on the same Wi-Fi.

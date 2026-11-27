@@ -41,7 +41,7 @@ body { margin: 0; padding: 24px 16px 40px; background: #d9dee6; color: var(--ink
 .scan strong { display: block; font-size: 20pt; line-height: 1.2; }
 .scan span { display: block; margin-top: 1mm; color: #0757b9; font-size: 13pt; font-weight: 600; }
 .steps { display: grid; width: 100%; grid-template-columns: repeat(3, 1fr); gap: 6mm; margin: 2mm 0 0; padding: 0; list-style: none; }
-.steps li { display: grid; justify-items: center; gap: 1.5mm; text-align: center; }
+.steps li { display: grid; align-content: start; justify-items: center; gap: 1.5mm; text-align: center; }
 .steps i { display: grid; width: 12mm; height: 12mm; place-items: center; border-radius: 50%; background: var(--navy); color: var(--gold); font-size: 15pt; font-style: normal; font-weight: 700; }
 .steps b { font-size: 12.5pt; line-height: 1.25; }
 .steps span { color: var(--body); font-size: 10pt; line-height: 1.4; }
