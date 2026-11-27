@@ -25,7 +25,8 @@ try {
     $visit = gate_register_visitor($conn, (int) $_SESSION["user_id"], $input);
     echo json_encode([
         "success" => true,
-        "message" => $visit["visitor_full_name"] . " is checked in for " . $visit["office_label"] . ". This visit is not tracked.",
+        "message" => $visit["visitor_full_name"] . ($visit["people_count"] > 0 ? " and " . $visit["people_count"] . ($visit["people_count"] === 1 ? " other" : " others") . " are" : " is")
+            . " checked in for " . $visit["office_label"] . ". This visit is not tracked.",
         "visit" => $visit,
     ]);
 } catch (InvalidArgumentException $error) {

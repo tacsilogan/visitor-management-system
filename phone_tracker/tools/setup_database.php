@@ -52,6 +52,7 @@ const SETUP_FILES = [
     "gate_registration_migration.sql" => null,
     "visitor_rights_migration.sql" => null,
     "campus_closure_migration.sql" => null,
+    "group_visits_migration.sql" => null,
 ];
 const SETUP_CAMPUS_SEED = "campus_map_isatu_seed.sql";
 const SETUP_PUBLISHED_PASSWORD = "password";

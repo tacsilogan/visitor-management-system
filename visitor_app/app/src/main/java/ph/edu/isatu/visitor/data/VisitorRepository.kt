@@ -144,7 +144,7 @@ class VisitorRepository(
         apiClient.requireData(apiClient.api.cancelAppointment(CancelAppointmentRequest(id, reason)))
     }
 
-    suspend fun createVisit(visitType: String, stops: List<VisitStopRequest>): VisitDto =
+    suspend fun createVisit(visitType: String, stops: List<VisitStopRequest>, people: List<PersonRequest> = emptyList()): VisitDto =
         apiClient.requireData(
             apiClient.api.createVisit(
                 CreateVisitRequest(
@@ -152,6 +152,7 @@ class VisitorRepository(
                     stops = stops,
                     deviceName = installationStore.deviceName,
                     locationConsent = LocationConsentRequest(true, BuildConfig.CONSENT_VERSION),
+                    people = people,
                 ),
             ),
         ).visit
@@ -161,6 +162,13 @@ class VisitorRepository(
     suspend fun cancelVisit(id: Long, reason: String) {
         apiClient.requireData(apiClient.api.cancelVisit(CancelVisitRequest(id, reason)))
     }
+
+    /** Changes who comes with the visitor on a single appointment or a multi-stop visit, until check-in. */
+    suspend fun changePeople(appointmentId: Long?, visitId: Long?, people: List<PersonRequest>): List<PersonDto> =
+        apiClient.requireData(apiClient.api.changePeople(ChangePeopleRequest(appointmentId, visitId, people))).people
+
+    /** The newest app version on the website, for "A new version is ready" on Home. */
+    suspend fun appRelease(): AppReleaseData = apiClient.requireData(apiClient.api.appRelease())
 
     suspend fun respondToReschedule(proposalId: Long, action: String, slotId: Long?): String? =
         apiClient.api.respondToReschedule(RescheduleResponseRequest(proposalId, action, slotId))

@@ -10,6 +10,7 @@ require_once __DIR__ . "/session_bootstrap.php";
 require_once __DIR__ . "/appointment_maintenance.php";
 require_once __DIR__ . "/analytics_period.php";
 require_once __DIR__ . "/admin_service.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 auth_json_exception_guard();
 auth_require_method("GET");
@@ -69,8 +70,35 @@ function report_numbers(mysqli $conn, DateTimeImmutable $from, DateTimeImmutable
     $answered = (int) $stmt->get_result()->fetch_row()[0];
     $stmt->close();
     $expired = (int) $row["expired"];
+    // The people who came with visitors, and everyone turned away at the gate (GROUP_VISITS.md).
+    $people = ["with_visitors" => 0, "under_18" => 0, "group_visits" => 0, "not_let_in" => 0];
+    if (visit_people_schema_ready($conn)) {
+        $stmt = $conn->prepare(
+            "SELECT COUNT(*) AS with_visitors, COALESCE(SUM(is_adult = 0), 0) AS under_18,
+                    COUNT(DISTINCT COALESCE(CONCAT('a', appointment_id), CONCAT('v', visit_id))) AS group_visits
+             FROM visit_people WHERE gate_status = 'in' AND checked_in_at BETWEEN ? AND ?"
+        );
+        $stmt->bind_param("ss", $fromSql, $toSql);
+        $stmt->execute();
+        $people = array_map("intval", $stmt->get_result()->fetch_assoc()) + $people;
+        $stmt->close();
+    }
+    $stmt = $conn->prepare(
+        "SELECT COUNT(*) FROM audit_logs
+         WHERE action IN ('visit_person.refused', 'appointment.pass_refused') AND created_at BETWEEN ? AND ?"
+    );
+    $stmt->bind_param("ss", $fromSql, $toSql);
+    $stmt->execute();
+    $people["not_let_in"] = (int) $stmt->get_result()->fetch_row()[0];
+    $stmt->close();
     return [
         "visits" => (int) $row["visits"],
+        // Everyone who came in: the visitors and the people with them.
+        "people" => (int) $row["visits"] + $people["with_visitors"],
+        "with_visitors" => $people["with_visitors"],
+        "under_18" => $people["under_18"],
+        "group_visits" => $people["group_visits"],
+        "not_let_in" => $people["not_let_in"],
         "at_gate" => (int) $row["at_gate"],
         "average_minutes" => $row["average_minutes"] !== null ? (int) round((float) $row["average_minutes"]) : null,
         "answered" => $answered,
@@ -271,6 +299,17 @@ if ($total >= 5 && $offices) {
         $findings[] = ["icon" => "office", "tone" => "",
             "html" => "<b>" . htmlspecialchars($topPurpose["label"]) . " is the most common reason</b> to visit (" . (int) round($topPurpose["visits"] * 100 / $total) . "%)."];
     }
+}
+if ($total > 0 && $current["with_visitors"] > 0) {
+    $share = $current["group_visits"] / $total;
+    $findings[] = ["icon" => "people", "tone" => "",
+        "html" => "<b>" . ($share >= 0.1 ? "1 in " . max(2, (int) round(1 / $share)) . " visits" : admin_plural($current["group_visits"], "visit", "visits"))
+            . " came as a group.</b> " . admin_plural($current["with_visitors"], "person", "people") . " came along with a visitor"
+            . ($current["under_18"] > 0 ? ", " . $current["under_18"] . " of them under 18." : ".")];
+}
+if ($current["not_let_in"] > 0) {
+    $findings[] = ["icon" => "warn", "tone" => "is-warn",
+        "html" => "<b>" . admin_plural($current["not_let_in"], "person wasn't", "people weren't") . " let in at the gate</b> because the name on their ID didn't match."];
 }
 if ($current["no_shows"] >= 3) {
     $base = max($current["approved"], $current["no_shows"]);

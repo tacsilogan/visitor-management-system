@@ -12,6 +12,7 @@ require_once __DIR__ . "/presence_service.php";
 require_once __DIR__ . "/arrival_service.php";
 require_once __DIR__ . "/personnel.php";
 require_once __DIR__ . "/gate_service.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 // A position older than these is shown as stale / offline.
 const MONITOR_LIVE_SECONDS = 45;
@@ -620,7 +621,13 @@ function gate_scan_on_campus(mysqli $conn, int $appointmentId, array $details): 
         "success" => true,
         "action" => "checkout_ready",
         "checked_in_at" => $visitor["checked_in_at"],
-        "checkout" => gate_checkout_preview($visitor),
+        "checkout" => gate_checkout_preview($visitor) + [
+            // Everyone still with the visitor leaves with them (GROUP_VISITS.md).
+            "people" => array_values(array_filter(
+                visit_people_payloads(visit_people_list($conn, visit_people_pass_for_row($visitor))),
+                fn (array $person): bool => $person["gate_status"] === "in" && $person["left_at"] === null
+            )),
+        ],
         "message" => "This visitor is on campus. Confirm to check them out.",
     ]);
 }

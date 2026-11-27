@@ -8,6 +8,7 @@ require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/appointment_maintenance.php";
 require_once __DIR__ . "/arrival_service.php";
 require_once __DIR__ . "/personnel.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 require_permission_json("office.dashboard");
 refresh_appointment_time_states($conn);
@@ -97,6 +98,12 @@ if ($recentStmt) {
         $recent[] = $row;
     }
     $recentStmt->close();
+}
+
+// The people coming with each visitor (GROUP_VISITS.md).
+$peopleByAppointment = visit_people_for_rows($conn, $recent);
+foreach ($recent as $index => $row) {
+    $recent[$index]["people"] = visit_people_payloads($peopleByAppointment[$row["id"]] ?? []);
 }
 
 $notifications = [];

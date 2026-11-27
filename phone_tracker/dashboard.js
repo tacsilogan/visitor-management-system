@@ -505,7 +505,40 @@
         signal: ["M2 8.8a15 15 0 0 1 20 0", "M5 12.6a10 10 0 0 1 9.5-2.4", "M8.5 16.4a5 5 0 0 1 5.4-1", "M12 20h.01", "M3 3l18 18"],
         exit: ["M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4", "M10 17l5-5-5-5", "M15 12H3"],
         off: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z", "M5.7 5.7l12.6 12.6"],
+        people: ["M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20", "M13 7.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0", "M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"],
     };
+
+    /*
+     * The people with a visitor (GROUP_VISITS.md): before the gate, everyone booked; on campus,
+     * those who came in and haven't left. Each has a name; only the visitor's phone is tracked.
+     */
+    function peopleWith(visitor) {
+        return (Array.isArray(visitor.people) ? visitor.people : []).filter(function (person) {
+            return person.gate_status === "expected" || (person.gate_status === "in" && !person.left_at);
+        });
+    }
+
+    function personLabel(person) {
+        return person.full_name + (person.is_adult ? "" : " (under 18)");
+    }
+
+    function namesText(names) {
+        if (names.length <= 1) {
+            return names.join("");
+        }
+        return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+    }
+
+    /** "With Elena Dela Cruz and Miguel Dela Cruz (under 18)", under the visitor's name. */
+    function namesLine(visitor) {
+        const people = peopleWith(visitor);
+        if (!people.length) {
+            return null;
+        }
+        const line = element("span", "sd-sub grp-names");
+        line.append(svgIcon(ICONS.people), element("span", "", "With " + namesText(people.map(personLabel))));
+        return line;
+    }
 
     function chip(className, text, icon) {
         const node = element("span", "sd-chip " + className);
@@ -545,6 +578,13 @@
         }
         if (visitor.checked_in_without_qr) {
             tags.push(element("span", "sd-type is-note", "Checked in without QR"));
+        }
+        const withThem = peopleWith(visitor).length;
+        if (withThem) {
+            tags.push(element("span", "sd-type is-group", "+" + withThem + " with them"));
+        }
+        if (visitor.no_id_shown) {
+            tags.push(element("span", "sd-type is-noid", "No ID shown"));
         }
         return tags;
     }
@@ -629,13 +669,15 @@
     function whoCell(visitor) {
         const tags = element("span", "sd-sub sd-tags");
         tags.append(element("code", "", visitor.registration_id || ""), ...typeTags(visitor));
-        return cell("sd-who", [element("strong", "", visitor.visitor_full_name || "Visitor"), tags]);
+        return cell("sd-who", [element("strong", "", visitor.visitor_full_name || "Visitor"), tags, namesLine(visitor)]);
     }
 
     function whereText(visitor) {
         const parts = [visitor.purpose, visitor.subject];
-        if (visitor.registration_source === "gate" && visitor.id_type_shown) {
+        if (visitor.id_type_shown) {
             parts.push("ID: " + visitor.id_type_shown);
+        } else if (visitor.no_id_shown && visitor.no_id_reason) {
+            parts.push(visitor.no_id_reason);
         }
         return parts.filter(Boolean).join(" · ");
     }
@@ -920,7 +962,21 @@
         setText("secMenuUpdated", "Updated " + clockText(now) + " · the lists also refresh by themselves");
         const summary = overview.summary || {};
         const items = attentionItems();
-        setText("sdInsideCount", overview.inside.length);
+        // People, not only visitors: in an emergency, everyone inside counts (GROUP_VISITS.md).
+        const withVisitors = overview.inside.reduce(function (sum, visitor) {
+            return sum + peopleWith(visitor).length;
+        }, 0);
+        const people = overview.inside.length + withVisitors;
+        setText("sdInsideCount", people);
+        setText("sdInsideUnit", people === 1 ? "person" : "people");
+        const split = document.getElementById("sdInsideSplit");
+        split.hidden = withVisitors === 0;
+        split.replaceChildren(
+            element("b", "", overview.inside.length),
+            document.createTextNode(overview.inside.length === 1 ? " visitor and the " : " visitors and the "),
+            element("b", "", withVisitors),
+            document.createTextNode((withVisitors === 1 ? " person" : " people") + " with them, each by name")
+        );
         renderBreakdown();
         renderAttention(items);
         setText("sdWalkIns", summary.walk_in_today || 0);
@@ -995,10 +1051,72 @@
         overview.inside.forEach(function (visitor) { add(visitor, "inside"); });
         overview.left.forEach(function (visitor) { add(visitor, "left"); });
         dashboardState.visitors.forEach(function (visitor) { add(visitor, "record"); });
+        // The people with each visitor, by their own name (GROUP_VISITS.md).
+        const seenPeople = new Set();
+        [["inside", overview.inside], ["expected", overview.expected], ["left", overview.left]].forEach(function (list) {
+            list[1].forEach(function (visitor) {
+                (visitor.people || []).forEach(function (person) {
+                    if (seenPeople.has(person.id)) {
+                        return;
+                    }
+                    const haystack = [person.full_name, person.booked_name || ""].join(" ").toLowerCase();
+                    if (haystack.indexOf(needle) === -1) {
+                        return;
+                    }
+                    seenPeople.add(person.id);
+                    matches.push({ person: person, visitor: visitor, where: list[0] });
+                });
+            });
+        });
         return matches.slice(0, 8);
     }
 
+    /** Someone who came with a visitor: where they are, and what the guard can do. */
+    function findPersonItem(match) {
+        const person = match.person;
+        const visitor = match.visitor;
+        const row = element("div", "sd-find-item");
+        const actions = element("div", "sd-acts");
+        let state;
+        if (match.where === "inside" && person.gate_status === "in" && !person.left_at) {
+            state = chip("is-live", "Inside since " + formatTime(person.checked_in_at || visitor.checked_in_at));
+            const left = element("button", "sd-act", "Left early");
+            left.type = "button";
+            left.dataset.sdPerson = "left";
+            left.dataset.personId = String(person.id);
+            left.dataset.id = String(visitor.id);
+            actions.appendChild(left);
+        } else if (person.left_at) {
+            state = chip("is-stale", "Left at " + formatTime(person.left_at));
+        } else if (person.gate_status === "refused") {
+            state = chip("is-danger", "Not let in");
+        } else if (match.where === "inside") {
+            // Missed the group at the gate: check their ID and they join the group now.
+            state = chip("is-stale", "Didn't come at " + formatTime(visitor.checked_in_at));
+            const join = element("button", "sd-act is-primary", "Check in");
+            join.type = "button";
+            join.dataset.sdPerson = "join";
+            join.dataset.personId = String(person.id);
+            join.dataset.id = String(visitor.id);
+            actions.appendChild(join);
+        } else if (match.where === "expected") {
+            state = chip("is-ok", "Comes with the visitor");
+        } else {
+            state = chip("is-stale", person.gate_status === "absent" ? "Didn't come" : "Left with the visitor");
+        }
+        const who = element("div", "sd-find-who");
+        who.append(
+            element("strong", "", personLabel(person)),
+            element("span", "sd-sub", ["With " + (visitor.visitor_full_name || "a visitor"), visitor.registration_id, visitor.office_label].filter(Boolean).join(" · "))
+        );
+        row.append(who, state, actions);
+        return row;
+    }
+
     function findItem(match) {
+        if (match.person) {
+            return findPersonItem(match);
+        }
         const visitor = match.visitor;
         const row = element("div", "sd-find-item");
         const facts = [visitor.registration_id, visitor.office_label];
@@ -1040,8 +1158,10 @@
         matches.forEach(function (match) {
             parts.push(findItem(match));
         });
-        if (matches.some(function (match) { return match.where === "expected" && match.visitor.status === "approved"; })) {
+        if (matches.some(function (match) { return match.where === "expected" && !match.person && match.visitor.status === "approved"; })) {
             parts.push(element("p", "sd-find-foot", "Check the visitor's ID before checking them in without a QR code."));
+        } else if (matches.some(function (match) { return match.person; })) {
+            parts.push(element("p", "sd-find-foot", "Finds the people with a visitor too, by their name."));
         }
         box.replaceChildren(...parts);
         box.hidden = false;
@@ -1060,33 +1180,95 @@
         }) || null;
     }
 
-    /* Check in without the QR code: same rules as a scan (scan_appointment.php, appointment_id). */
+    /*
+     * Check in without the QR code: same rules as a scan (scan_appointment.php, appointment_id),
+     * and the same ID check of everyone on the pass first (id_check.js, GROUP_VISITS.md).
+     */
 
-    async function checkInWithoutQr(visitor, button) {
-        const name = visitor.visitor_full_name || "this visitor";
-        const when = isWalkIn(visitor) ? "walk-in pass until " + formatTime(visitor.scheduled_end_at) : "booked " + timeRange(visitor);
-        if (!(await AppDialog.confirm({
-            eyebrow: "Check in without the QR code",
-            title: "Check in " + name + "?",
-            message: "First check their ID. The name on it must match " + name + ".\n\n" + [visitor.office_label, when].filter(Boolean).join(" · "),
-            confirmLabel: "Check in",
-        }))) {
-            return;
+    function postJson(url, body) {
+        return fetchJson(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+    }
+
+    function reachError(error) {
+        return error instanceof TypeError ? "Couldn't reach the server. Try again." : (error.message || "Please try again.");
+    }
+
+    /** Opens the ID check in its dialog. */
+    function openIdCheckDialog(eyebrow, title, options) {
+        const dialog = document.getElementById("sdIdCheckDialog");
+        setText("sdIdCheckEyebrow", eyebrow);
+        setText("sdIdCheckTitle", title);
+        const card = window.IdCheck.render(document.getElementById("sdIdCheckCard"), options);
+        if (!dialog.open) {
+            dialog.showModal();
         }
-        await sendCheckIn(visitor, button);
+        return card;
+    }
+
+    function checkInWithoutQr(visitor, button) {
+        return sendCheckIn(visitor, button);
     }
 
     async function sendCheckIn(visitor, button) {
         const name = visitor.visitor_full_name || "this visitor";
+        const appointmentId = Number(visitor.id);
         if (button) {
             button.disabled = true;
         }
         try {
-            const data = await fetchJson("scan_appointment.php", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ appointment_id: Number(visitor.id) }),
-            });
+            const data = await postJson("scan_appointment.php", { appointment_id: appointmentId, step: "check" });
+            if (data && data.success && data.action === "check_ids") {
+                const dialog = document.getElementById("sdIdCheckDialog");
+                const card = openIdCheckDialog("Check in without the QR code", (data.people || []).length ? "Check their IDs" : "Check their ID", {
+                    name: data.visitor_full_name || name,
+                    facts: [
+                        ["Going to", data.office_label || visitor.office_label || "—"],
+                        isWalkIn(visitor) ? ["Walk-in", "Pass until " + formatTime(visitor.scheduled_end_at)] : ["Booked", timeRange(visitor) || "—"],
+                        ["Pass", data.registration_code || visitor.registration_id || "—"],
+                    ],
+                    people: data.people || [],
+                    idTypes: data.id_types,
+                    maxPeople: data.max_people,
+                    onCheckIn: async function (answer) {
+                        try {
+                            const result = await postJson("scan_appointment.php", { appointment_id: appointmentId, step: "confirm", holder: answer.holder, people: answer.people });
+                            if (result && result.success && result.action === "checked_in") {
+                                dialog.close();
+                                const inside = (result.people || []).filter(function (person) { return person.gate_status === "in"; }).length;
+                                showNotice(name + (inside ? " and " + inside + (inside === 1 ? " other" : " others") + " are" : " is")
+                                    + " checked in for " + (visitor.office_label || "their office") + ", without the QR code.");
+                                closeFind();
+                                selectListTab("inside");
+                                await loadSecurityDashboard();
+                                return;
+                            }
+                            card.showError((result && result.message) || "Could not check them in. Try again.");
+                        } catch (error) {
+                            if (error.message !== "Not authenticated") {
+                                card.showError(reachError(error));
+                            }
+                        }
+                    },
+                    onRefuse: async function () {
+                        try {
+                            const result = await postJson("scan_appointment.php", { appointment_id: appointmentId, step: "refuse" });
+                            dialog.close();
+                            showNotice(result && result.success
+                                ? "Not checked in. The pass still works for " + name + ". Written in the activity log."
+                                : (result && result.message) || "Not checked in.");
+                        } catch (error) {
+                            if (error.message !== "Not authenticated") {
+                                card.showError(reachError(error));
+                            }
+                        }
+                    },
+                });
+                return;
+            }
             if (data && data.success && data.action === "checked_in") {
                 showNotice(name + " is checked in for " + (visitor.office_label || "their office") + ", without the QR code.");
                 closeFind();
@@ -1111,6 +1293,125 @@
             }
         }
     }
+
+    /** The visitor and person behind a "Left early" or "Check in" button in the search results. */
+    function findPerson(button) {
+        const visitor = findOverviewVisitor(button.dataset.id);
+        const person = visitor && (visitor.people || []).find(function (entry) {
+            return String(entry.id) === button.dataset.personId;
+        });
+        return person ? { visitor: visitor, person: person } : null;
+    }
+
+    /** Someone leaves before the rest of the group; the others stay checked in. */
+    async function personLeftEarly(found, button) {
+        const name = found.person.full_name;
+        const visitorName = found.visitor.visitor_full_name || "the visitor";
+        if (!(await AppDialog.confirm({
+            eyebrow: "Left early",
+            title: "Mark " + name + " as left?",
+            message: visitorName + " and the others with them stay checked in.\n\nThis is written in the activity log.",
+            confirmLabel: "Mark as left",
+            cancelLabel: "Back",
+        }))) {
+            return;
+        }
+        button.disabled = true;
+        try {
+            const result = await postJson("security_visit_person.php", { person_id: found.person.id, action: "left" });
+            if (!result || !result.success) {
+                await AppDialog.alert({ title: "Couldn't mark " + name + " as left", message: (result && result.message) || "Please try again." });
+                return;
+            }
+            showNotice(result.message);
+            await loadSecurityDashboard();
+        } catch (error) {
+            if (error.message !== "Not authenticated") {
+                await AppDialog.alert({ title: "Couldn't mark " + name + " as left", message: reachError(error) });
+            }
+        } finally {
+            button.disabled = false;
+        }
+    }
+
+    /** Someone on the list missed the group at the gate: check their ID, and they join it now. */
+    function personJoins(found) {
+        const person = found.person;
+        const visitor = found.visitor;
+        const dialog = document.getElementById("sdIdCheckDialog");
+        const withThem = peopleWith(visitor).length;
+        const card = openIdCheckDialog("Joining a group that's inside", "Check their ID", {
+            name: person.full_name,
+            sub: "Came after " + (visitor.visitor_full_name || "the visitor") + "'s group",
+            holderGroupName: visitor.visitor_full_name,
+            holderRole: "joining",
+            holderAdult: person.is_adult,
+            listLabel: "Coming in now",
+            canAdd: false,
+            facts: [
+                ["Going to", visitor.office_label || "—"],
+                ["Group", (visitor.visitor_full_name || "Visitor") + (withThem ? " + " + withThem : "") + ", inside since " + formatTime(visitor.checked_in_at)],
+                ["Pass", visitor.registration_id || "—"],
+            ],
+            people: [],
+            onCheckIn: async function (answer) {
+                try {
+                    const result = await postJson("security_visit_person.php", {
+                        person_id: person.id, action: "check_in", id_type: answer.holder.id_type, no_id_reason: answer.holder.no_id_reason,
+                    });
+                    if (result && result.success) {
+                        dialog.close();
+                        showNotice(result.message);
+                        closeFind();
+                        await loadSecurityDashboard();
+                        return;
+                    }
+                    card.showError((result && result.message) || "Could not check them in. Try again.");
+                } catch (error) {
+                    if (error.message !== "Not authenticated") {
+                        card.showError(reachError(error));
+                    }
+                }
+            },
+            onRefuse: async function () {
+                try {
+                    const result = await postJson("security_visit_person.php", { person_id: person.id, action: "refuse" });
+                    dialog.close();
+                    showNotice((result && result.message) || "Not let in.");
+                    await loadSecurityDashboard();
+                } catch (error) {
+                    if (error.message !== "Not authenticated") {
+                        card.showError(reachError(error));
+                    }
+                }
+            },
+        });
+    }
+
+    document.addEventListener("click", function (event) {
+        const button = event.target.closest("button[data-sd-person]");
+        if (!button) {
+            return;
+        }
+        const found = findPerson(button);
+        if (!found) {
+            return;
+        }
+        if (button.dataset.sdPerson === "left") {
+            personLeftEarly(found, button);
+        } else {
+            personJoins(found);
+        }
+    });
+
+    document.querySelectorAll("[data-idcheck-close]").forEach(function (button) {
+        button.addEventListener("click", function () {
+            document.getElementById("sdIdCheckDialog").close();
+        });
+    });
+    document.getElementById("sdIdCheckForm").addEventListener("submit", function (event) {
+        event.preventDefault();
+    });
 
     function openOverride(visitor, data) {
         pendingOverride = { visitor: visitor, appointmentId: Number(data.appointment_id || visitor.id) };
@@ -2311,7 +2612,9 @@
             onRegistered: function (visit) {
                 // The confirmation (with the reference to give the visitor) is on Home.
                 switchSecurityView("dashboard", { history: "push" });
-                showNotice(visit.visitor_full_name + " is checked in for " + visit.office_label + ". This visit is not tracked.", visit.registration_code);
+                const others = Number(visit.people_count) || 0;
+                showNotice(visit.visitor_full_name + (others ? " and " + others + (others === 1 ? " other are" : " others are") : " is")
+                    + " checked in for " + visit.office_label + ". This visit is not tracked.", visit.registration_code);
                 selectListTab("inside");
                 loadSecurityDashboard();
             },

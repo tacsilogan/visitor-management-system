@@ -78,6 +78,12 @@ interface VisitorApi {
     @POST("visit_cancel.php")
     suspend fun cancelVisit(@Body request: CancelVisitRequest): Response<ApiEnvelope<VisitActionData>>
 
+    @POST("visit_people.php")
+    suspend fun changePeople(@Body request: ChangePeopleRequest): Response<ApiEnvelope<PeopleData>>
+
+    @GET("app_release.php")
+    suspend fun appRelease(): Response<ApiEnvelope<AppReleaseData>>
+
     @POST("reschedule_response.php")
     suspend fun respondToReschedule(@Body request: RescheduleResponseRequest): Response<ApiEnvelope<AppointmentActionData>>
 

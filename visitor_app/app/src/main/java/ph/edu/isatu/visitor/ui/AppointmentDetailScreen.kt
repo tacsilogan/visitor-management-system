@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -70,10 +71,18 @@ fun AppointmentDetailScreen(
     viewModel: AppViewModel,
     campusMap: CampusMapData? = null,
     notice: String? = null,
+    savingPeople: Boolean = false,
+    peopleError: String? = null,
 ) {
     BackHandler(onBack = viewModel::closeAppointment)
     val context = LocalContext.current
     var showCancel by remember { mutableStateOf(false) }
+    // Who's coming, until the guard checks the visitor in (GROUP_VISITS.md).
+    var changingPeople by remember(appointment.id) { mutableStateOf(false) }
+    val openChangePeople = {
+        viewModel.clearPeopleError()
+        changingPeople = true
+    }
     var showDeclineProposal by remember { mutableStateOf(false) }
     val pendingProposal = appointment.rescheduleProposal?.takeIf { it.status == "pending" }
     // With a single suggested time there is nothing to choose: accept is one tap.
@@ -198,6 +207,7 @@ fun AppointmentDetailScreen(
 
     val pass = appointment.qrPass
     val canCancel = appointment.status in listOf("pending_approval", "approved", "reschedule_proposed")
+    Box(Modifier.fillMaxSize()) {
     DetailScaffold(
         if (pass != null) "Your pass" else "Visit details",
         viewModel::closeAppointment,
@@ -210,7 +220,11 @@ fun AppointmentDetailScreen(
             // With a pass the screen is for the gate: the QR code first, everything else once.
             // It needs no refresh button, since it checks for the check-in scan every 3 seconds.
             if (pass != null) {
-                passItems(appointment, pass, busy, directions, { showDirections = true }, onCancel = if (canCancel) ({ showCancel = true }) else null)
+                passItems(
+                    appointment, pass, busy, directions, { showDirections = true },
+                    onCancel = if (canCancel) ({ showCancel = true }) else null,
+                    onChangePeople = if (appointment.peopleEditable) openChangePeople else null,
+                )
                 return@LazyColumn
             }
             item {
@@ -280,6 +294,9 @@ fun AppointmentDetailScreen(
                     DetailLine("Subject", appointment.subject)
                     if (appointment.additionalDetails.isNotBlank()) DetailLine("Details", appointment.additionalDetails)
                 }
+            }
+            if (appointment.people.isNotEmpty() || appointment.peopleEditable) {
+                item { PeopleDetailsCard(appointment.people, appointment.peopleEditable, openChangePeople) }
             }
             if (appointment.rejectionReason.isNotBlank()) {
                 item {
@@ -355,6 +372,16 @@ fun AppointmentDetailScreen(
             item { Spacer(Modifier.height(18.dp)) }
         }
     }
+    if (changingPeople) {
+        ChangePeopleSheet(
+            initial = appointment.people,
+            saving = savingPeople,
+            error = peopleError,
+            onSave = { people -> viewModel.changePeople(appointment.id, null, people) { changingPeople = false } },
+            onDismiss = { changingPeople = false },
+        )
+    }
+    }
 
     if (showCancel) {
         CancelAppointmentDialog(
@@ -397,6 +424,7 @@ internal fun LazyListScope.passItems(
     directions: OfficeDirections?,
     onHowToFind: () -> Unit,
     onCancel: (() -> Unit)?,
+    onChangePeople: (() -> Unit)? = null,
 ) {
     item {
         PassCard(
@@ -404,6 +432,8 @@ internal fun LazyListScope.passItems(
             visitorName = appointment.visitor?.fullName.orEmpty().ifBlank { "Registered visitor" },
             reference = appointment.registrationCode,
             pass = pass,
+            people = appointment.people,
+            onChangePeople = onChangePeople,
         )
     }
     item { PassSummaryCard(appointment.office.name, visitTimeText(appointment), directions?.where.orEmpty(), onHowToFind.takeIf { directions?.hasSteps == true || directions?.message?.isNotBlank() == true }) }

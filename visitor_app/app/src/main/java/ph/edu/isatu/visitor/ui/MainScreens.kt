@@ -1,33 +1,36 @@
 package ph.edu.isatu.visitor.ui
 
-import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.Manifest
+import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.ChevronRight
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
@@ -44,6 +47,8 @@ import androidx.compose.material.icons.rounded.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,17 +67,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
@@ -80,19 +85,21 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import java.text.SimpleDateFormat
+import java.time.format.DateTimeFormatter
+import java.time.LocalDateTime
+import java.util.Locale
 import kotlinx.coroutines.delay
 import ph.edu.isatu.visitor.BuildConfig
 import ph.edu.isatu.visitor.data.AppointmentDto
+import ph.edu.isatu.visitor.data.AppReleaseData
 import ph.edu.isatu.visitor.data.NotificationDto
+import ph.edu.isatu.visitor.data.PersonRequest
 import ph.edu.isatu.visitor.data.UserDto
 import ph.edu.isatu.visitor.data.VisitSummaryDto
-import java.text.SimpleDateFormat
-import java.time.LocalDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
 
 private data class MainTab(val label: String, val icon: ImageVector)
 
@@ -110,6 +117,8 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var headerScreen by remember { mutableStateOf<HeaderScreen?>(null) }
     var noticeOpen by remember { mutableStateOf(false) }
+    // Book › Add a person: the sheet over the whole screen hands the person to the form's list.
+    var addPerson by remember { mutableStateOf<((PersonRequest) -> Unit)?>(null) }
     // Office decisions and suggested times arrive as notifications. Check whenever the
     // app returns to the foreground and every 30 seconds while it stays open.
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -129,11 +138,11 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
         }
     }
     state.selectedAppointment?.let { appointment ->
-        AppointmentDetailScreen(appointment, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message)
+        AppointmentDetailScreen(appointment, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message, state.savingPeople, state.peopleError)
         return
     }
     state.selectedVisit?.let { visit ->
-        VisitDetailScreen(visit, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message)
+        VisitDetailScreen(visit, state.tracking, state.busy, viewModel, state.campusMap, state.error ?: state.message, state.savingPeople, state.peopleError)
         return
     }
     if (noticeOpen) {
@@ -144,8 +153,8 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
     val deletion = state.accountDeletion
     Box(Modifier.fillMaxSize()) {
         Scaffold(
-            // While Delete my account is over the screen, TalkBack reads only that.
-            modifier = if (deletion != null) Modifier.clearAndSetSemantics {} else Modifier,
+            // While Delete my account or Add a person is over the screen, TalkBack reads only that.
+            modifier = if (deletion != null || addPerson != null) Modifier.clearAndSetSemantics {} else Modifier,
             containerColor = AppBackground,
             topBar = {
                 MainTopBar(
@@ -187,12 +196,22 @@ fun MainShell(state: VisitorUiState, viewModel: AppViewModel) {
                             onOpenAppointment = viewModel::openAppointment,
                             onOpenVisit = viewModel::openVisit,
                             onBook = { selectedTab = 2 },
+                            appUpdate = state.appUpdate,
                         )
                         1 -> AppointmentsScreen(state.appointments, viewModel::openAppointment, viewModel::openVisit, viewModel::refreshAll)
-                        else -> BookingScreen(state, viewModel)
+                        else -> BookingScreen(state, viewModel, onAddPerson = { addPerson = it })
                     }
                 }
             }
+        }
+        addPerson?.let { add ->
+            AddPersonSheet(
+                onAdd = { person ->
+                    add(person)
+                    addPerson = null
+                },
+                onDismiss = { addPerson = null },
+            )
         }
         when {
             deletion == null -> Unit
@@ -276,6 +295,7 @@ internal fun HomeScreen(
     onOpenAppointment: (Long) -> Unit,
     onOpenVisit: (Long) -> Unit,
     onBook: () -> Unit,
+    appUpdate: AppReleaseData? = null,
 ) {
     val context = LocalContext.current
     var notificationsAllowed by remember {
@@ -307,6 +327,16 @@ internal fun HomeScreen(
                         null -> NoVisitCard(onBook)
                         is VisitListItem.Single -> NextVisitCard(homeCard(upcoming)) { onOpenAppointment(upcoming.appointment.id) }
                         is VisitListItem.MultiStop -> NextVisitCard(homeCard(upcoming)) { onOpenVisit(upcoming.summary.id) }
+                    }
+                }
+            }
+        }
+        // The Admin published a newer app on the website (GROUP_VISITS.md): Update opens its page.
+        appUpdate?.let { release ->
+            item {
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    UpdateCard(release) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(release.pageUrl))) }
                     }
                 }
             }
@@ -392,9 +422,19 @@ private data class HomeCard(
     val note: String,
     val action: String? = null,
     val actionIcon: ImageVector? = null,
+    /** How many people come with the visitor (GROUP_VISITS.md). */
+    val withYou: Int = 0,
 )
 
-private fun homeCard(item: VisitListItem): HomeCard = when (item) {
+private fun homeCard(item: VisitListItem): HomeCard {
+    val people = when (item) {
+        is VisitListItem.Single -> item.appointment.people
+        is VisitListItem.MultiStop -> item.stops.firstOrNull()?.people.orEmpty()
+    }
+    return homeCardFor(item).copy(withYou = peopleWithVisitor(people).size)
+}
+
+private fun homeCardFor(item: VisitListItem): HomeCard = when (item) {
     is VisitListItem.Single -> {
         val appointment = item.appointment
         val office = appointment.office.name
@@ -475,17 +515,71 @@ private fun NextVisitCard(card: HomeCard, onOpen: () -> Unit) {
                 Icon(card.timeIcon, contentDescription = null, tint = MutedInk, modifier = Modifier.size(18.dp))
                 Text(card.time)
             }
-            if (card.note.isNotBlank()) {
-                Text(
-                    card.note,
-                    color = MutedInk,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            // The note, then "You + 2" for the people coming with the visitor (GROUP_VISITS.md).
+            if (card.note.isNotBlank() || card.withYou > 0) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (card.note.isNotBlank()) {
+                        Text(
+                            card.note,
+                            color = MutedInk,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                    if (card.withYou > 0) {
+                        Text(
+                            "You + ${card.withYou}",
+                            color = IsatuBlueDark,
+                            fontWeight = FontWeight.SemiBold,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
             card.action?.let { action ->
                 PrimaryButton(action, onOpen, Modifier.fillMaxWidth().padding(top = 4.dp), icon = card.actionIcon)
+            }
+        }
+    }
+}
+
+/** "A new version is ready": the version the Admin published, and Update, which opens the website. */
+@Composable
+internal fun UpdateCard(release: AppReleaseData, onUpdate: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = YellowSurface),
+        border = BorderStroke(1.dp, Color(0xFFF2D98A)),
+        shape = RoundedCornerShape(18.dp),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(Modifier.size(42.dp).background(IsatuYellow, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Download, contentDescription = null, tint = IsatuBlueDark)
+            }
+            Column(Modifier.weight(1f)) {
+                Text("A new version is ready", fontWeight = FontWeight.SemiBold, color = Ink)
+                // Only the version: what's new is on the download page that Update opens.
+                Text(
+                    "ISATU Visits ${release.versionName.orEmpty()}",
+                    color = Color(0xFF6B5A1E),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Button(
+                onClick = onUpdate,
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = IsatuBlueDark),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+            ) {
+                Text("Update", fontWeight = FontWeight.SemiBold)
             }
         }
     }

@@ -17970,3 +17970,1319 @@ table.adm-otable {
     line-height: 1.5;
     text-align: center;
 }
+
+
+/* ==========================================================================
+   People with a visitor, the ID check at the gate, and the visitor app
+   (GROUP_VISITS.md; id_check.js, security_scan.js, dashboard.js, gate_register.js,
+   offices.js, admin.js)
+   ========================================================================== */
+
+/* ---------- Check their ID: after a scan, and Check in without QR ---------- */
+.security-result-icon .security-result-confirm-icon {
+    display: none;
+}
+
+.security-scan-result.is-confirm .security-result-confirm-icon {
+    display: block;
+}
+
+.security-scan-result.is-confirm {
+    border-color: #a9c4ea;
+    background: #f8fbff;
+}
+
+.security-scan-result.is-confirm .security-result-icon {
+    background: #e3eefb;
+    color: #0755b5;
+}
+
+.idc {
+    display: grid;
+    gap: 16px;
+    margin-top: 2px;
+}
+
+.idc[hidden] {
+    display: none;
+}
+
+.idc-name {
+    margin: 0;
+    color: #142033;
+    font-size: 23px;
+    font-weight: 800;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.idc-must {
+    display: flex;
+    margin: 6px 0 0;
+    align-items: center;
+    gap: 6px;
+    color: #0755b5;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.idc-must svg {
+    flex: none;
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.idc-facts {
+    display: grid;
+    gap: 7px;
+    margin: 0;
+    padding: 12px 14px;
+    border: 1px solid #e1e6ee;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.idc-facts div {
+    display: grid;
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.idc-facts dt {
+    color: #667085;
+}
+
+.idc-facts dd {
+    margin: 0;
+    color: #1c2735;
+    font-weight: 600;
+}
+
+.idc-label {
+    margin: 0 0 9px;
+    color: #1c2735;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.idc-chips {
+    display: flex;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    flex-wrap: wrap;
+    gap: 8px;
+    border: 0;
+}
+
+.idc-chip {
+    position: relative;
+    display: inline-flex;
+    margin: 0;
+    font-weight: 400;
+}
+
+.admin-page .idc-chip input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.idc-chip span {
+    display: inline-flex;
+    min-height: 42px;
+    align-items: center;
+    gap: 6px;
+    padding: 0 14px;
+    border: 1.5px solid #cdd5df;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #25303d;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.idc-chip span::before {
+    content: "";
+    display: none;
+    width: 15px;
+    height: 15px;
+    background: currentColor;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+.idc-chip:hover span {
+    border-color: #8fb1dc;
+}
+
+.idc-chip input:checked + span {
+    border-color: #0755b5;
+    background: #e8f0fb;
+    color: #0755b5;
+}
+
+.idc-chip input:checked + span::before {
+    display: block;
+}
+
+.idc-chip input:focus-visible + span {
+    outline: 3px solid rgba(7, 85, 181, 0.35);
+    outline-offset: 2px;
+}
+
+.idc-chip.is-none input:checked + span {
+    border-color: #b54708;
+    background: #fff4e5;
+    color: #93370d;
+}
+
+.idc-note {
+    display: grid;
+    gap: 6px;
+    margin: 10px 0 0;
+    font-weight: 400;
+}
+
+.idc-note[hidden] {
+    display: none;
+}
+
+.idc-note > span {
+    color: #344054;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.admin-page .idc-note input {
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid #cdd5df;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #1c2735;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.idc-actions {
+    display: grid;
+    gap: 6px;
+}
+
+.admin-page .idc-checkin {
+    width: 100%;
+}
+
+.admin-page .idc-checkin:disabled {
+    opacity: 0.42;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.idc-hint {
+    margin: 0;
+    color: #667085;
+    font-size: 12px;
+    text-align: center;
+}
+
+.idc-hint[hidden] {
+    display: none;
+}
+
+/* The ID check's heading stays readable on a phone. */
+.security-scan-result.is-confirm h2 {
+    font-size: 19px;
+}
+
+/* Check in without QR: the same card in a dialog. */
+.admin-dialog.idc-dialog {
+    width: min(540px, calc(100vw - 24px));
+}
+
+.idc-dialog .idc {
+    margin-top: 0;
+}
+
+.idc-dialog .admin-dialog-header {
+    margin-bottom: 12px;
+}
+
+/* ---------- People on a pass: one row per person (scan card, Check in without QR) ---------- */
+.idc-with {
+    display: flex;
+    margin: 4px 0 0;
+    align-items: center;
+    gap: 6px;
+    color: #475467;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.idc-with svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.gp {
+    display: grid;
+    gap: 10px;
+}
+
+.gp-head {
+    display: grid;
+    gap: 5px;
+}
+
+.gp-head .idc-label {
+    display: flex;
+    margin: 0;
+    align-items: center;
+    gap: 8px;
+}
+
+.gp-head .idc-must {
+    margin: 0;
+    align-items: flex-start;
+}
+
+.gp-head .idc-must svg {
+    margin-top: 1px;
+}
+
+.gp-count {
+    display: inline-grid;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 7px;
+    place-items: center;
+    border-radius: 999px;
+    background: #e8f0fb;
+    color: #0755b5;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.admin-page .gp-same {
+    display: flex;
+    width: 100%;
+    min-height: 50px;
+    margin: 0;
+    padding: 8px 14px;
+    align-items: center;
+    gap: 10px;
+    border: 1.5px solid #0755b5;
+    border-radius: 12px;
+    background: #e8f0fb;
+    color: #0755b5;
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.admin-page .gp-same:hover {
+    background: #dbe8f8;
+}
+
+.gp-same svg {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.gp-same span {
+    min-width: 0;
+}
+
+.gp-same b {
+    font-weight: 800;
+}
+
+.gp-same small {
+    display: block;
+    color: #475467;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.gp-list {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    border: 1px solid #e1e6ee;
+    border-radius: 14px;
+    background: #ffffff;
+    list-style: none;
+}
+
+.gp-person + .gp-person {
+    border-top: 1px solid #e9edf3;
+}
+
+.admin-page .gp-sum {
+    display: grid;
+    width: 100%;
+    margin: 0;
+    padding: 12px 14px;
+    grid-template-columns: 34px minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 12px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.admin-page .gp-sum:hover:not(:disabled) {
+    background: #f6f9fd;
+}
+
+.admin-page .gp-sum:disabled {
+    grid-template-columns: 34px minmax(0, 1fr);
+    cursor: default;
+    opacity: 1;
+}
+
+.admin-page .gp-person.is-open .gp-sum {
+    background: #f3f7fd;
+}
+
+.gp-mark {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    place-items: center;
+    border: 2px solid #a9c4ea;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #0755b5;
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.gp-mark svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3;
+}
+
+.gp-person[data-state="id"] .gp-mark,
+.gp-person[data-state="here"] .gp-mark,
+.gp-done [data-state="id"] .gp-mark,
+.gp-done [data-state="here"] .gp-mark {
+    border-color: #15803d;
+    background: #15803d;
+    color: #ffffff;
+}
+
+.gp-person[data-state="noid"] .gp-mark,
+.gp-done [data-state="noid"] .gp-mark {
+    border-color: #b54708;
+    background: #b54708;
+    color: #ffffff;
+}
+
+.gp-person[data-state="absent"] .gp-mark,
+.gp-done [data-state="absent"] .gp-mark {
+    border-color: #d0d5dd;
+    background: #f2f4f7;
+    color: #98a2b3;
+}
+
+.gp-person[data-state="refused"] .gp-mark,
+.gp-done [data-state="refused"] .gp-mark {
+    border-color: #b42318;
+    background: #b42318;
+    color: #ffffff;
+}
+
+.gp-who {
+    min-width: 0;
+}
+
+.gp-who strong {
+    display: block;
+    color: #142033;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.gp-who small {
+    display: block;
+    margin-top: 2px;
+    color: #667085;
+    font-size: 12.5px;
+    font-weight: 500;
+    line-height: 1.4;
+}
+
+.gp-status {
+    color: #0755b5;
+    font-weight: 700;
+}
+
+.gp-person[data-state="id"] .gp-status,
+.gp-person[data-state="here"] .gp-status {
+    color: #127a43;
+}
+
+.gp-person[data-state="noid"] .gp-status {
+    color: #93370d;
+}
+
+.gp-person[data-state="absent"] .gp-status {
+    color: #667085;
+}
+
+.gp-person[data-state="refused"] .gp-status {
+    color: #b42318;
+}
+
+.gp-person[data-state="absent"] .gp-who strong,
+.gp-person[data-state="refused"] .gp-who strong {
+    color: #667085;
+}
+
+.gp-person[data-state="refused"] .gp-who strong {
+    text-decoration: line-through;
+    text-decoration-color: rgba(180, 35, 24, 0.55);
+}
+
+.gp-chev {
+    width: 20px;
+    height: 20px;
+    fill: none;
+    stroke: #98a2b3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.2;
+    transition: transform 0.15s;
+}
+
+.gp-person.is-open .gp-chev {
+    transform: rotate(180deg);
+}
+
+.gp-body {
+    display: grid;
+    gap: 12px;
+    padding: 2px 14px 12px;
+    background: #f3f7fd;
+}
+
+/* Indent under the name only where the card itself is wide (not in the laptop scan page's side panel). */
+.gp {
+    container-type: inline-size;
+}
+
+@container (min-width: 440px) {
+    .gp-body {
+        padding-left: 60px;
+    }
+}
+
+.gp .idc-chips {
+    gap: 7px;
+}
+
+.gp .idc-chip span {
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 12.5px;
+}
+
+.gp .idc-note {
+    margin: 0;
+}
+
+.gp-note {
+    margin: 0;
+    color: #475467;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.gp-acts {
+    display: flex;
+    margin: -4px 0 -4px -10px;
+    flex-wrap: wrap;
+    gap: 2px 4px;
+}
+
+.admin-page .gp-acts button {
+    min-height: 40px;
+    margin: 0;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 10px;
+    background: none;
+    color: #0755b5;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.admin-page .gp-acts button:hover {
+    background: #e3edfa;
+}
+
+.admin-page .gp-acts button.is-red {
+    color: #b42318;
+}
+
+.admin-page .gp-acts button.is-red:hover {
+    background: #fdeceb;
+}
+
+.gp-rename,
+.gp-add-form {
+    display: grid;
+    gap: 10px;
+}
+
+.gp-rename {
+    padding: 12px;
+    border: 1px solid #cdd9ea;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.gp-add-form {
+    padding: 14px;
+    border: 1.5px solid #a9c4ea;
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.gp-add-title {
+    margin: 0;
+    color: #142033;
+    font-size: 14.5px;
+    font-weight: 700;
+}
+
+.gp-add-sub {
+    margin: 2px 0 0;
+    color: #667085;
+    font-size: 12.5px;
+}
+
+.gp-field {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    font-weight: 400;
+}
+
+.gp-field > span {
+    color: #344054;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.admin-page .gp-field input {
+    width: 100%;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid #cdd5df;
+    border-radius: 10px;
+    background: #ffffff;
+    color: #1c2735;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.gp-age {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.gp-add-error {
+    margin: 0;
+    color: #b42318;
+    font-size: 12.5px;
+}
+
+.gp-add-error[hidden] {
+    display: none;
+}
+
+.gp-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.admin-page .gp-form-actions button {
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.admin-page .gp-add-btn {
+    display: flex;
+    width: 100%;
+    min-height: 46px;
+    margin: 0;
+    padding: 0 14px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1.5px dashed #a9c4ea;
+    border-radius: 12px;
+    background: #ffffff;
+    color: #0755b5;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.admin-page .gp-add-btn:hover {
+    border-color: #0755b5;
+    background: #f3f7fd;
+}
+
+.gp-add-btn svg,
+.gp-form-actions svg {
+    width: 17px;
+    height: 17px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-width: 2.4;
+}
+
+.gp-max {
+    margin: 0;
+    color: #667085;
+    font-size: 12.5px;
+    text-align: center;
+}
+
+/* After the check-in: who came in, and who didn't. */
+.gp-done {
+    display: grid;
+    gap: 9px;
+    margin: 12px 0 2px;
+    padding: 0;
+    list-style: none;
+}
+
+.gp-done li {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+
+.gp-done .gp-mark {
+    width: 28px;
+    height: 28px;
+}
+
+.gp-done .gp-mark svg {
+    width: 15px;
+    height: 15px;
+}
+
+.gp-done b {
+    display: block;
+    color: #142033;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.gp-done small {
+    display: block;
+    color: #667085;
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.gp-done [data-state="refused"] small {
+    color: #b42318;
+    font-weight: 600;
+}
+
+.gp-done [data-state="absent"] b,
+.gp-done [data-state="refused"] b {
+    color: #667085;
+}
+
+/* ---------- Scan page: the ID check sits under the result's heading, full width ---------- */
+.scan-idcheck-host {
+    grid-column: 1 / -1;
+}
+
+.scan-idcheck-host[hidden],
+#scanResultText[hidden] {
+    display: none;
+}
+
+.idc-hint.is-error {
+    color: #b42318;
+    font-weight: 600;
+}
+
+.admin-page .gp-sum:focus-visible,
+.admin-page .gp-acts button:focus-visible,
+.admin-page .gp-same:focus-visible,
+.admin-page .gp-add-btn:focus-visible {
+    outline: 3px solid rgba(7, 85, 181, 0.35);
+    outline-offset: 2px;
+}
+
+/* ---------- Security Home ---------- */
+.grp-big {
+    display: flex;
+    margin: 2px 0 6px;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.grp-big .sd-big {
+    margin: 0;
+}
+
+.grp-big span {
+    color: #475467;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.grp-split {
+    margin: 0 0 12px;
+    color: #475467;
+    font-size: 13px;
+}
+
+.grp-split b {
+    color: #142033;
+}
+
+.sd-type.is-group {
+    background: #e8f0fb;
+    color: #0755b5;
+}
+
+.sd-type.is-noid {
+    background: #fff4e5;
+    color: #93370d;
+}
+
+.sd-who .grp-names {
+    display: flex;
+    margin-top: 6px;
+    align-items: flex-start;
+    gap: 6px;
+    color: #344054;
+    font-size: 12.5px;
+    line-height: 1.4;
+}
+
+.sd-who .grp-names svg {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    margin-top: 1px;
+    fill: none;
+    stroke: #0755b5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+/* ---------- Office ---------- */
+.ofc-rgroup,
+.ofc-tbody > .grp-tnames {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    color: #0755b5;
+    font-size: 12.5px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+
+.ofc-rgroup svg,
+.ofc-tbody > .grp-tnames svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    margin-top: 1px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.ofc-chip.grp-chip {
+    gap: 4px;
+}
+
+.ofc-chip.grp-chip svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.2;
+}
+
+/* ---------- Register at the gate: the people with them ---------- */
+.gate-dialog .gate-people {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 4px;
+}
+
+.gate-person {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px 14px;
+    border: 1px solid #d8dee6;
+    border-radius: 10px;
+    background: #f7f9fc;
+}
+
+.gate-person-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.gate-person-head strong {
+    color: #1c2735;
+    font-size: 13px;
+}
+
+.admin-page .gate-person-x {
+    min-height: 32px;
+    margin: 0 -6px 0 0;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: #b42318;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.admin-page .gate-person-x:hover {
+    background: #fdeceb;
+}
+
+.gate-dialog .gate-person .admin-form-grid {
+    gap: 12px;
+}
+
+/* The same look as the form's other labels (12px bold), which are <label> elements. */
+.gate-dialog .gate-age-label {
+    display: block;
+    margin-bottom: 6px;
+    color: #3e4855;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.gate-dialog .gp-age label.idc-chip > span {
+    display: inline-flex;
+    min-height: 42px;
+    margin: 0;
+}
+
+.gate-dialog .gate-nid {
+    display: flex;
+    min-height: 42px;
+    margin: 0;
+    align-items: center;
+    color: #127a43;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.gate-dialog .gate-people-note {
+    margin: 0;
+    color: #5b6673;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+/* ---------- Admin: Visitor app ---------- */
+.app-file {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid #e1e6ee;
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.app-file-ico {
+    display: grid;
+    width: 48px;
+    height: 48px;
+    place-items: center;
+    border-radius: 13px;
+    background: #e7f6ee;
+    color: #127a43;
+}
+
+.app-file-ico svg,
+.app-copy svg,
+.app-drop svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.9;
+}
+
+.app-file strong {
+    display: block;
+    color: #142033;
+    font-size: 15px;
+}
+
+.app-file small {
+    display: block;
+    margin-top: 2px;
+    color: #667085;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.app-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.app-stats div {
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #f4f7fb;
+}
+
+.app-stats strong {
+    display: block;
+    color: #142033;
+    font-size: 19px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+.app-stats span {
+    display: block;
+    color: #667085;
+    font-size: 11.5px;
+    line-height: 1.35;
+}
+
+.app-link {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 6px 6px 12px;
+    border: 1px solid #e1e6ee;
+    border-radius: 12px;
+    background: #ffffff;
+}
+
+.app-link code {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    color: #0755b5;
+    font: 600 13px/1.4 var(--font-ui);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.app-section-title {
+    margin: 6px 0 0;
+    color: #1c2735;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.app-drop {
+    display: grid;
+    min-height: 112px;
+    padding: 14px;
+    place-items: center;
+    align-content: center;
+    gap: 6px;
+    border: 1.5px dashed #a9c4ea;
+    border-radius: 14px;
+    background: #f8fbff;
+    color: #0755b5;
+    text-align: center;
+    cursor: pointer;
+}
+
+.app-drop strong {
+    font-size: 14px;
+}
+
+.app-drop small {
+    color: #667085;
+    font-size: 12px;
+}
+
+.app-picked {
+    display: grid;
+    gap: 12px;
+}
+
+.app-picked[hidden] {
+    display: none;
+}
+
+.app-check {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #e7f6ee;
+    color: #0f5132;
+    font-size: 13px;
+    list-style: none;
+}
+
+.app-check li {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+
+.app-check svg {
+    flex: none;
+    width: 17px;
+    height: 17px;
+    margin-top: 1px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2.4;
+}
+
+.poster-card {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr);
+    gap: 14px;
+    align-items: center;
+    padding: 14px;
+    border: 1px solid #e1e6ee;
+    border-radius: 14px;
+    background: #ffffff;
+}
+
+.poster-card p {
+    margin: 2px 0 10px;
+    color: #667085;
+    font-size: 12.5px;
+    line-height: 1.45;
+}
+
+.poster-card strong {
+    color: #142033;
+    font-size: 14.5px;
+}
+
+.poster-thumb {
+    position: relative;
+    width: 84px;
+    aspect-ratio: 210 / 297;
+    overflow: hidden;
+    border-radius: 5px;
+    background: linear-gradient(#003b82 0 30%, #ffffff 30% 84%, #ffcb2f 84%);
+    box-shadow: 0 4px 14px rgba(16, 24, 40, 0.18);
+}
+
+.poster-thumb::before {
+    content: "";
+    position: absolute;
+    top: 9%;
+    left: 50%;
+    width: 22%;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: #ffcb2f;
+    transform: translateX(-50%);
+}
+
+.poster-thumb-qr {
+    position: absolute;
+    top: 37%;
+    left: 50%;
+    width: 52%;
+    padding: 2px;
+    border: 2px solid #ffcb2f;
+    border-radius: 3px;
+    background: #ffffff;
+    transform: translateX(-50%);
+}
+
+.poster-thumb-qr img,
+.poster-thumb-qr canvas {
+    display: block;
+    width: 100% !important;
+    height: auto !important;
+}
+
+.app-foot-note {
+    margin: 0;
+    color: #667085;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.app-older {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.app-older li {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: #f4f7fb;
+    color: #344054;
+    font-size: 12.5px;
+}
+
+.adm-kpi .grp-kpi-people {
+    display: block;
+    margin-top: 2px;
+    color: #0755b5;
+    font-size: 11.5px;
+    font-style: normal;
+    font-weight: 700;
+}
+
+
+.gate-dialog .gate-people + .gate-section {
+    margin-top: 16px;
+}
+
+/* Office: the people with a visitor, in a visit's details (offices.js). */
+.ofc-people {
+    display: grid;
+    gap: 8px;
+    margin: 0 0 14px;
+    padding: 0;
+    list-style: none;
+}
+
+.ofc-people li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.ofc-people svg {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    fill: none;
+    stroke: #0755b5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+}
+
+.ofc-people strong {
+    display: block;
+    color: #142033;
+    font-size: 14px;
+}
+
+.ofc-people small {
+    display: block;
+    color: #667085;
+    font-size: 12.5px;
+}
+
+/* Admin › Visitor app: the buttons under a checked upload, and an upload in progress. */
+.app-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.app-drop.is-busy {
+    cursor: progress;
+}
+
+.app-older li .ofc-btn {
+    flex: none;
+}

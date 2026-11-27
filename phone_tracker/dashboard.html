@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#0755b5">
     <title>ISATU Security Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261118-1">
+    <link rel="stylesheet" href="style.css?v=20261128-1">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -102,7 +102,7 @@
                         <label for="sdFind">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
                             <span class="sr-only">Find a visitor</span>
-                            <input id="sdFind" type="search" autocomplete="off" spellcheck="false" placeholder="Find a visitor by name or reference (V-2026-…)" aria-controls="sdFindResults">
+                            <input id="sdFind" type="search" autocomplete="off" spellcheck="false" placeholder="Find anyone by name or reference (V-2026-…)" aria-controls="sdFindResults">
                             <kbd aria-hidden="true">/</kbd>
                         </label>
                         <div class="sd-find-results" id="sdFindResults" hidden></div>
@@ -111,7 +111,8 @@
                     <section class="sd-summary">
                         <article class="sd-card sd-inside">
                             <p class="sd-label">Inside campus now</p>
-                            <p class="sd-big" id="sdInsideCount">0</p>
+                            <div class="grp-big"><p class="sd-big" id="sdInsideCount">0</p><span id="sdInsideUnit">people</span></div>
+                            <p class="grp-split" id="sdInsideSplit" hidden></p>
                             <ul class="sd-breakdown" id="sdBreakdown"></ul>
                             <button class="sd-link" type="button" id="sdOpenMap">Open the live map →</button>
                         </article>
@@ -434,15 +435,27 @@
         </form>
     </dialog>
 
+    <!-- The ID check before Check in without QR, and for someone who came after their group (id_check.js). -->
+    <dialog class="admin-dialog idc-dialog" id="sdIdCheckDialog" aria-labelledby="sdIdCheckTitle">
+        <form id="sdIdCheckForm" novalidate>
+            <header class="admin-dialog-header">
+                <div><p class="admin-eyebrow" id="sdIdCheckEyebrow">Check in without the QR code</p><h2 id="sdIdCheckTitle">Check their ID</h2></div>
+                <button class="admin-dialog-close" type="button" data-idcheck-close aria-label="Close">×</button>
+            </header>
+            <div id="sdIdCheckCard"></div>
+        </form>
+    </dialog>
+
     <script src="auth.js?v=20261110-1"></script>
     <script src="dialogs.js?v=20261107-3"></script>
-    <script src="gate_register.js?v=20261116-1"></script>
+    <script src="gate_register.js?v=20261128-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
     <!-- Sharp map at every zoom (campus_map.js falls back to OpenStreetMap images without it). -->
     <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
     <script src="https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"></script>
     <script src="campus_map.js?v=20261005-2"></script>
-    <script src="dashboard.js?v=20261118-2"></script>
+    <script src="id_check.js?v=20261128-1"></script>
+    <script src="dashboard.js?v=20261128-1"></script>
 </body>
 </html>

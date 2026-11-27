@@ -24,6 +24,7 @@ import kotlinx.coroutines.launch
 import ph.edu.isatu.visitor.BuildConfig
 import ph.edu.isatu.visitor.VisitorApplication
 import ph.edu.isatu.visitor.data.ApiException
+import ph.edu.isatu.visitor.data.AppReleaseData
 import ph.edu.isatu.visitor.data.AppointmentDto
 import ph.edu.isatu.visitor.data.ArrivalRequest
 import ph.edu.isatu.visitor.data.AvailabilityData
@@ -32,6 +33,7 @@ import ph.edu.isatu.visitor.data.CreateAppointmentRequest
 import ph.edu.isatu.visitor.data.LocationConsentRequest
 import ph.edu.isatu.visitor.data.NotificationDto
 import ph.edu.isatu.visitor.data.OfficeDto
+import ph.edu.isatu.visitor.data.PersonRequest
 import ph.edu.isatu.visitor.data.RegisterRequest
 import ph.edu.isatu.visitor.data.SignupCodeData
 import ph.edu.isatu.visitor.data.TrackingData
@@ -79,6 +81,11 @@ data class VisitorUiState(
     val message: String? = null,
     /** Profile → Delete my account is open: sending, or why it didn't work. */
     val accountDeletion: AccountDeletion? = null,
+    /** A newer app on the website than this one (app_release.php): Home offers "Update". */
+    val appUpdate: AppReleaseData? = null,
+    /** Saving a changed list of the people coming with the visitor, and why it didn't work. */
+    val savingPeople: Boolean = false,
+    val peopleError: String? = null,
 )
 
 /**
@@ -279,8 +286,56 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     it.copy(initializing = false, busy = false, error = readableError(error))
                 }
             }
+            checkAppUpdate()
         }
     }
+
+    /**
+     * Whether the website has a newer version of this app (GROUP_VISITS.md). Quiet: without a
+     * connection, or on a server that doesn't publish the app yet, Home simply shows nothing.
+     */
+    private fun checkAppUpdate() {
+        viewModelScope.launch {
+            val release = runCatching { repository.appRelease() }.getOrNull() ?: return@launch
+            _state.update {
+                it.copy(appUpdate = release.takeIf { newest -> newest.versionCode > BuildConfig.VERSION_CODE && newest.pageUrl.isNotBlank() })
+            }
+        }
+    }
+
+    /**
+     * Changes who comes with the visitor, until the guard checks them in: on a single appointment
+     * ([appointmentId]) or a visit to several offices ([visitId]). The office sees the new list.
+     */
+    fun changePeople(appointmentId: Long?, visitId: Long?, people: List<PersonRequest>, onSaved: () -> Unit = {}) {
+        if (_state.value.savingPeople) return
+        _state.update { it.copy(savingPeople = true, peopleError = null, error = null, message = null) }
+        viewModelScope.launch {
+            try {
+                val saved = repository.changePeople(appointmentId, visitId, people)
+                _state.update { current ->
+                    current.copy(
+                        savingPeople = false,
+                        message = if (saved.isEmpty()) "Saved: you're coming alone." else "Saved: ${peopleCountText(saved.size)} coming with you.",
+                        selectedAppointment = current.selectedAppointment?.let { appointment ->
+                            if (appointment.id == appointmentId) appointment.copy(people = saved) else appointment
+                        },
+                        selectedVisit = current.selectedVisit?.let { visit ->
+                            if (visit.id == visitId) visit.copy(people = saved, stops = visit.stops.map { it.copy(people = saved) }) else visit
+                        },
+                    )
+                }
+                onSaved()
+                refreshAppointments()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _state.update { it.copy(savingPeople = false, peopleError = readableError(error)) }
+            }
+        }
+    }
+
+    fun clearPeopleError() = _state.update { it.copy(peopleError = null) }
 
     fun loadAvailability(officeCode: String, date: String) = launchTask {
         val result = repository.availability(officeCode, date)
@@ -297,6 +352,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         details: String,
         start: String,
         end: String,
+        people: List<PersonRequest> = emptyList(),
     ) = launchTask {
         val appointment = repository.createAppointment(
             CreateAppointmentRequest(
@@ -309,6 +365,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 scheduledEndAt = end,
                 deviceName = repository.installationStore.deviceName,
                 locationConsent = LocationConsentRequest(true, BuildConfig.CONSENT_VERSION),
+                people = people,
             ),
         )
         _state.update {
@@ -441,8 +498,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _state.update { it.copy(stopAvailability = it.stopAvailability + (stopAvailabilityKey(officeCode, date) to result)) }
     }
 
-    fun createVisit(visitType: String, stops: List<VisitStopRequest>) = launchTask {
-        val visit = repository.createVisit(visitType, stops)
+    fun createVisit(visitType: String, stops: List<VisitStopRequest>, people: List<PersonRequest> = emptyList()) = launchTask {
+        val visit = repository.createVisit(visitType, stops, people)
         _state.update {
             it.copy(
                 selectedVisit = visit,

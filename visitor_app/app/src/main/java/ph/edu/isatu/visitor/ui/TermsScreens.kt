@@ -2,6 +2,7 @@ package ph.edu.isatu.visitor.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -115,8 +116,34 @@ fun TermsAgreementScreen(busy: Boolean, onAgree: () -> Unit, onSignOut: () -> Un
                         modifier = Modifier.padding(bottom = 12.dp),
                     )
                 }
+                item { WhatChanged() }
             },
         )
+    }
+}
+
+/** The changes in this version, so nobody has to find them in the whole notice. */
+@Composable
+private fun WhatChanged() {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 14.dp)
+            .background(YellowSurface, RoundedCornerShape(16.dp))
+            .border(1.dp, Color(0xFFF2D98A), RoundedCornerShape(16.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("What changed", style = MaterialTheme.typography.titleMedium, color = IsatuBlueDark)
+        TermsNotice.WHAT_CHANGED.forEach { (change, part) ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("•", style = MaterialTheme.typography.bodyMedium, color = Ink)
+                Column {
+                    Text(change, style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp), color = Ink)
+                    Text(part, style = MaterialTheme.typography.bodySmall, color = MutedInk)
+                }
+            }
+        }
     }
 }
 

@@ -7,12 +7,15 @@
 
 require_once __DIR__ . "/personnel.php";
 require_once __DIR__ . "/auth_security.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 const ACTIVITY_SIGNIN_ACTIONS = ["auth.signed_in", "auth.signed_out", "mobile.signed_in", "mobile.signed_out"];
 const ACTIVITY_DECISION_ACTIONS = ["appointment.approved", "appointment.rejected", "appointment.reschedule_proposed", "appointment.stop_completed"];
 const ACTIVITY_GATE_ACTIONS = [
     "appointment.checked_in", "appointment.completed", "appointment.qr_override_created", "visit.checked_in", "visit.completed",
     "presence.left_campus", "presence.returned_to_campus", "visit.arrived", "visit.help_requested",
+    // The ID check at the gate and the people with a visitor (GROUP_VISITS.md).
+    "appointment.pass_refused", "visit_person.refused", "visit_person.left", "visit_person.checked_in",
 ];
 const ACTIVITY_SCHEDULE_ACTIONS = [
     "office.availability_updated", "office.availability_exception_added", "office.availability_exception_removed",
@@ -191,28 +194,70 @@ function activity_describe(array $row): array
             return ["Marked a meeting done", "Finished " . $possessive . " meeting" . ($office !== "" ? " at " . $office : ""), "good"];
 
         case "appointment.checked_in":
+            // Who came in with the visitor and the ID each showed (visit_people_record_check()).
+            $group = visit_people_activity_text($visitor !== "" ? $visitor : "the visitor", $details);
+            $who = !empty($details["people"]) ? $possessive . " group" : $visitorName;
             if (!empty($details["registered_at_gate"])) {
                 return [
-                    "Registered a visitor at the gate",
-                    "Registered " . $visitorName . " at the gate" . ($office !== "" ? " for " . $office : "") . " after an ID check. This visit is not tracked",
+                    !empty($details["people"]) ? "Registered a group at the gate" : "Registered a visitor at the gate",
+                    "Registered " . $who . " at the gate" . ($office !== "" ? " for " . $office : "") . " after an ID check" . $group . ". This visit is not tracked",
                     "good",
                 ];
             }
             if (!empty($details["without_qr"])) {
                 return [
                     "Checked in without the QR code",
-                    "Checked in " . $visitorName . " without the QR code, after an ID check" . ($office !== "" ? ", for " . $office : ""),
+                    "Checked in " . $who . " without the QR code, after an ID check" . ($office !== "" ? ", for " . $office : "") . $group,
                     "good",
                 ];
             }
-            return ["Checked in a visitor", "Checked in " . $visitorName . " at the gate" . ($office !== "" ? " for " . $office : ""), "good"];
+            return [
+                !empty($details["people"]) ? "Checked in a group" : "Checked in a visitor",
+                "Checked in " . $who . " at the gate" . ($office !== "" ? " for " . $office : "") . $group,
+                "good",
+            ];
+        case "appointment.pass_refused":
+            return [
+                "Didn't let someone in",
+                "Didn't let in someone using " . $possessive . " pass: the name on their ID didn't match. The pass still works for " . $visitorName,
+                "danger",
+            ];
+        case "visit_person.refused":
+            $person = (string) ($details["name"] ?? "someone");
+            return [
+                "Didn't let someone in",
+                "Didn't let " . $person . " in with " . $possessive . " group: the name on the ID didn't match"
+                    . (!empty($details["late"]) ? "" : ". The others came in"),
+                "danger",
+            ];
+        case "visit_person.left":
+            return [
+                "Someone left early",
+                (string) ($details["name"] ?? "Someone") . ", with " . $possessive . " group, left before the others",
+                "muted",
+            ];
+        case "visit_person.checked_in":
+            $idType = (string) ($details["id_type"] ?? "");
+            $shown = empty($details["adult"]) ? ". Under 18, no ID needed"
+                : ($idType !== "" ? ". ID: " . ($idType === "PhilSys national ID" ? "PhilSys ID" : lcfirst($idType))
+                    : ". No ID shown" . (($details["no_id_reason"] ?? "") !== "" ? ": " . $details["no_id_reason"] : ""));
+            return [
+                "Checked in someone who came later",
+                "Checked in " . (string) ($details["name"] ?? "someone") . ", who came after " . $possessive . " group" . $shown,
+                "good",
+            ];
         case "appointment.completed":
             return activity_visit_ended((string) ($details["method"] ?? ""), $visitorName, $possessive, "visit", $details);
         case "appointment.qr_override_created":
             $until = activity_when($details["valid_until"] ?? null);
             return ["Allowed a pass outside its time", "Let " . $possessive . " QR pass work" . ($until !== "" ? " until " . $until : "") . $because, "warn"];
         case "visit.checked_in":
-            return ["Checked in a multi-office visit", "Checked in " . $visitorName . " for a visit to several offices", "good"];
+            return [
+                "Checked in a multi-office visit",
+                "Checked in " . (!empty($details["people"]) ? $possessive . " group" : $visitorName) . " for a visit to several offices"
+                    . visit_people_activity_text($visitor !== "" ? $visitor : "the visitor", $details),
+                "good",
+            ];
         case "visit.completed":
             if (empty($details["method"])) {
                 return ["Ended a multi-office visit", "Ended " . $possessive . " visit to several offices", "muted"];
@@ -281,6 +326,33 @@ function activity_describe(array $row): array
             return ["Requested a multi-office visit", "Requested a visit to several offices", "info"];
         case "mobile.visit_cancelled":
             return ["Cancelled a multi-office visit", "Cancelled a visit to several offices", "muted"];
+        case "app_release.published":
+            return [
+                "Published the visitor app",
+                "Published ISATU Visits " . (string) ($details["version_name"] ?? "") . " on the download page"
+                    . (!empty($details["previous_version"]) ? ", after " . $details["previous_version"] : ""),
+                "info",
+            ];
+        case "app_release.went_back":
+            // The same button swaps the two kept versions, so a second press goes forward again.
+            $version = (string) ($details["version_name"] ?? "");
+            $from = (string) ($details["from_version"] ?? "");
+            $forward = $version !== "" && $from !== "" && version_compare($version, $from, ">");
+            return [
+                $forward ? "Used the newer app again" : "Went back to an earlier app",
+                ($forward ? "Brought back ISATU Visits {$version}" : "Went back to ISATU Visits {$version}")
+                    . " on the download page" . ($from !== "" ? ", instead of {$from}" : ""),
+                $forward ? "info" : "warn",
+            ];
+        case "mobile.visit_people_changed":
+            $names = array_map(function ($person): array {
+                return ["full_name" => (string) ($person["name"] ?? ""), "is_adult" => !empty($person["adult"])];
+            }, is_array($details["people"] ?? null) ? $details["people"] : []);
+            return [
+                "Changed who is coming",
+                $names ? "Changed the people coming with them: " . visit_people_names_text($names) : "Now coming alone, with nobody else",
+                "info",
+            ];
         case "mobile.account_registered":
             return ["Registered", "Created a visitor account in the app", "info"];
         case "mobile.location_consent_granted":

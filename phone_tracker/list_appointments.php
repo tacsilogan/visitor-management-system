@@ -7,6 +7,7 @@ require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/appointment_maintenance.php";
 require_once __DIR__ . "/arrival_service.php";
 require_once __DIR__ . "/gate_service.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 require_permission_json("appointments.list");
 refresh_appointment_time_states($conn);
@@ -123,6 +124,11 @@ if ($isOfficeUser) {
             $rows[$index]["offer"]["times"][] = $offer["scheduled_start_at"];
         }
     }
+}
+// The people coming with each visitor (GROUP_VISITS.md).
+$peopleByAppointment = visit_people_for_rows($conn, $rows);
+foreach ($rows as $index => $row) {
+    $rows[$index]["people"] = visit_people_payloads($peopleByAppointment[$row["id"]] ?? []);
 }
 $conn->close();
 

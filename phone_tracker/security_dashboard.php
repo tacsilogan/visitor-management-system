@@ -7,9 +7,11 @@ require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/appointment_maintenance.php";
 require_once __DIR__ . "/monitoring_service.php";
 require_once __DIR__ . "/gate_service.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 // The Security dashboard: who is inside now (with how their location is reporting), who is still
-// expected today, who left today, and the latest records for "All records and filters".
+// expected today, who left today, and the latest records for "All records and filters". Each
+// visit lists the people with the visitor (GROUP_VISITS.md), so Find can search them too.
 
 require_permission_json("visits.monitor");
 refresh_appointment_time_states($conn);
@@ -122,6 +124,35 @@ function security_visit_row(mysqli $conn, int $visitId): ?array
     ];
 }
 
+/**
+ * Adds the people with each visitor, and the ID the visitor showed at the gate, to dashboard
+ * entries (anything with "id" and, for a visit to several offices, "visit_id").
+ */
+function security_with_people(mysqli $conn, array $entries): array
+{
+    if (!$entries) {
+        return $entries;
+    }
+    $people = visit_people_for_rows($conn, $entries);
+    $ids = [];
+    if (gate_schema_ready($conn)) {
+        $list = implode(",", array_map(fn (array $entry): int => (int) $entry["id"], $entries));
+        $reason = visit_people_schema_ready($conn) ? "no_id_shown, no_id_reason" : "0 AS no_id_shown, '' AS no_id_reason";
+        foreach ($conn->query("SELECT id, id_type_shown, {$reason} FROM appointments WHERE id IN ({$list})") as $row) {
+            $ids[(int) $row["id"]] = $row;
+        }
+    }
+    foreach ($entries as $index => $entry) {
+        $id = (int) $entry["id"];
+        $entries[$index]["people"] = visit_people_payloads($people[$id] ?? []);
+        $entries[$index]["id_type_shown"] = (string) ($ids[$id]["id_type_shown"] ?? "");
+        // The guard let the visitor in without an ID (GROUP_VISITS.md); older check-ins have neither.
+        $entries[$index]["no_id_shown"] = !empty($ids[$id]["no_id_shown"]);
+        $entries[$index]["no_id_reason"] = (string) ($ids[$id]["no_id_reason"] ?? "");
+    }
+    return $entries;
+}
+
 function security_appointment_column_exists(mysqli $conn, string $column): bool
 {
     $stmt = $conn->prepare(
@@ -192,6 +223,11 @@ if ($summaryResult) {
         $summary[$key] = (int) ($row[$key] ?? 0);
     }
 }
+// People, not only visitors: everyone who came in with a visitor and hasn't left (GROUP_VISITS.md).
+$withVisitors = visit_people_inside_counts($conn);
+$summary["inside_with_visitors"] = $withVisitors["people"];
+$summary["inside_under_18"] = $withVisitors["under_18"];
+$summary["inside_people"] = $summary["inside_campus"] + $withVisitors["people"];
 
 $rows = [];
 $officeMap = appointment_office_map();
@@ -237,9 +273,10 @@ if ($result) {
     }
 }
 
-$inside = array_map("security_list_entry", monitor_visitors($conn, "active"));
-$left = array_map("security_list_entry", monitor_visitors($conn, "finished"));
-$expected = security_expected_today($conn);
+$inside = security_with_people($conn, array_map("security_list_entry", monitor_visitors($conn, "active")));
+$left = security_with_people($conn, array_map("security_list_entry", monitor_visitors($conn, "finished")));
+$expected = security_with_people($conn, security_expected_today($conn));
+$rows = security_with_people($conn, $rows);
 
 $conn->close();
 

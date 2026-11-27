@@ -89,10 +89,15 @@
     const checkoutStay = document.getElementById("checkoutStay");
     const checkoutWarnings = document.getElementById("checkoutWarnings");
     const confirmCheckoutBtn = document.getElementById("confirmCheckoutBtn");
+    // The ID check before a check-in, and who came in after it (id_check.js, GROUP_VISITS.md).
+    const idCheckHost = document.getElementById("scanIdCheck");
+    const scanDoneList = document.getElementById("scanDoneList");
 
     let scanner = null;
     // The pass waiting for the guard to confirm its check-out (second scan).
     let pendingCheckout = null;
+    // The pass whose IDs the guard is checking.
+    let pendingIdCheck = null;
     let scannerRunning = false;
     let scannerPaused = false;
     let scanLocked = false;
@@ -159,6 +164,111 @@
         checkoutStay.hidden = true;
         checkoutWarnings.hidden = true;
         checkoutWarnings.replaceChildren();
+        // Every state starts without the ID check and the list of who came in.
+        pendingIdCheck = null;
+        idCheckHost.hidden = true;
+        idCheckHost.replaceChildren();
+        scanDoneList.replaceChildren();
+        scanResultText.hidden = false;
+    }
+
+    /** "Today, 2:00 – 2:30 PM", or for a walk-in "Pass until 2:45 PM". */
+    function passTimes(data) {
+        const start = data.scheduled_start_at ? new Date(String(data.scheduled_start_at).replace(" ", "T")) : null;
+        const end = data.scheduled_end_at ? new Date(String(data.scheduled_end_at).replace(" ", "T")) : null;
+        const time = function (date) {
+            return new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit" }).format(date);
+        };
+        if (data.visit_type === "walk_in" && end && !Number.isNaN(end.getTime())) {
+            return ["Walk-in", "Pass until " + time(end)];
+        }
+        if (!start || Number.isNaN(start.getTime())) {
+            return ["Booked", "Schedule unavailable"];
+        }
+        const today = new Date();
+        const day = start.toDateString() === today.toDateString()
+            ? "Today"
+            : new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric" }).format(start);
+        return ["Booked", day + ", " + time(start) + (end && !Number.isNaN(end.getTime()) ? " – " + time(end) : "")];
+    }
+
+    function postScan(body) {
+        return fetch("scan_appointment.php", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        }).then(function (response) {
+            return response.json().catch(function () {
+                throw new Error("The check-in service returned an invalid response. Please try again.");
+            });
+        });
+    }
+
+    /** The pass can be checked in: everyone on it, and an ID for each adult first. */
+    function showIdCheck(data) {
+        hideCheckout();
+        const group = (data.people || []).length > 0;
+        const token = lastSentToken;
+        pendingIdCheck = { token: token, data: data };
+        scanResult.className = "security-scan-result is-confirm";
+        scanResultLabel.textContent = "Pass scanned";
+        scanResultTitle.textContent = group ? "Check their IDs" : "Check their ID";
+        scanResultText.hidden = true;
+        scanResultDetails.hidden = true;
+        openOverrideBtn.hidden = true;
+        scanNextBtn.textContent = "Scan another pass";
+        scanNextBtn.hidden = false;
+        idCheckHost.hidden = false;
+        const card = window.IdCheck.render(idCheckHost, {
+            name: data.visitor_full_name || "Visitor",
+            facts: [["Going to", data.office_label || "Not specified"], passTimes(data), ["Pass", data.registration_code || "-"]],
+            people: data.people || [],
+            idTypes: data.id_types,
+            maxPeople: data.max_people,
+            onCheckIn: function (answer) {
+                return postScan({ token: token, step: "confirm", holder: answer.holder, people: answer.people })
+                    .then(function (result) {
+                        if (result && result.success && result.action === "checked_in") {
+                            showSuccessResult(result, answer);
+                        } else if (result && result.success) {
+                            showSuccessResult(result);
+                        } else {
+                            card.showError((result && result.message) || "Could not check them in. Try again.");
+                        }
+                    })
+                    .catch(function (error) {
+                        card.showError(error.message || "Could not reach the server. Try again.");
+                    });
+            },
+            onRefuse: function () {
+                return postScan({ token: token, step: "refuse" })
+                    .then(function (result) {
+                        showRefusedResult(data, result);
+                    })
+                    .catch(function (error) {
+                        card.showError(error.message || "Could not reach the server. Try again.");
+                    });
+            },
+        });
+        revealScanResult();
+    }
+
+    /** The pass holder's name didn't match their ID: nobody came in. */
+    function showRefusedResult(data, result) {
+        hideCheckout();
+        const name = data.visitor_full_name || "its owner";
+        scanResult.className = "security-scan-result is-error";
+        scanResultLabel.textContent = "Not checked in";
+        scanResultTitle.textContent = "The name didn't match the pass";
+        scanResultText.textContent = ((data.people || []).length ? "Nobody on this pass was checked in." : "Nobody was checked in.")
+            + " The pass still works for " + name + ". "
+            + (result && result.success ? "Written in the activity log." : "It couldn't be written in the activity log: " + ((result && result.message) || "no answer from the server") + ".");
+        scanResultDetails.hidden = true;
+        openOverrideBtn.hidden = true;
+        scanNextBtn.textContent = "Scan next visitor";
+        scanNextBtn.hidden = false;
+        revealScanResult();
     }
 
     /** "45 seconds", "12 minutes", "1 hour 5 min". */
@@ -313,15 +423,27 @@
         revealScanResult();
     }
 
-    function showSuccessResult(data) {
+    function showSuccessResult(data, answer) {
         hideCheckout();
         const alreadyCheckedIn = Boolean(data.already_checked_in);
+        const name = data.visitor_full_name || "Visitor";
+        const first = window.IdCheck.firstName(name);
+        const inside = (data.people || []).filter(function (person) { return person.gate_status === "in"; }).length;
         scanResult.className = "security-scan-result is-success";
         scanResultLabel.textContent = alreadyCheckedIn ? "Already checked in" : "Check-in complete";
-        scanResultTitle.textContent = alreadyCheckedIn ? "This visitor was just checked in" : "Visitor checked in successfully";
-        scanResultText.textContent = alreadyCheckedIn
-            ? (data.message || "No duplicate check-in was created.")
-            : "Status: Active. Time in was recorded and the visitor app can now start campus tracking. Scan this pass again when they leave.";
+        if (alreadyCheckedIn) {
+            scanResultTitle.textContent = "This visitor was just checked in";
+            scanResultText.textContent = data.message || "No duplicate check-in was created.";
+        } else {
+            scanResultTitle.textContent = name + (inside ? " + " + inside : "") + " checked in";
+            scanResultText.textContent = inside
+                ? "Time in was recorded for all " + (inside + 1) + ". Only " + first + "'s phone is tracked. When this pass is scanned on the way out, everyone still with " + first + " is checked out too."
+                : "Status: Active. Time in was recorded and the visitor app can now start campus tracking. Scan this pass again when they leave.";
+            if (answer) {
+                const holderType = answer.holder.id_type === "none" ? "" : answer.holder.id_type;
+                scanDoneList.innerHTML = window.IdCheck.doneListHtml(name, holderType, answer.holder.no_id_reason, data.people || []);
+            }
+        }
         updateResultDetails(data);
         openOverrideBtn.hidden = true;
         scanNextBtn.textContent = "Scan next visitor";
@@ -335,11 +457,16 @@
         hideCheckout();
         const info = data.checkout || {};
         const name = info.visitor_full_name || data.visitor_full_name || "this visitor";
+        // Everyone still with the visitor leaves with them (GROUP_VISITS.md).
+        const withThem = info.people || [];
         scanResult.className = "security-scan-result is-checkout";
         scanResultLabel.textContent = "Ready to check out";
-        scanResultTitle.textContent = "Check out " + name + "?";
+        scanResultTitle.textContent = "Check out " + name + (withThem.length ? " + " + withThem.length : "") + "?";
         scanResultText.textContent = "On campus for " + formatDuration(info.seconds_on_campus)
-            + (info.checked_in_by ? ". Checked in by " + info.checked_in_by : "") + ".";
+            + (info.checked_in_by ? ". Checked in by " + info.checked_in_by : "") + "."
+            + (withThem.length ? " Leaving with them: " + window.IdCheck.listNames(withThem.map(function (person) {
+                return person.full_name + (person.is_adult ? "" : " (under 18)");
+            })) + "." : "");
         updateResultDetails(Object.assign({}, data, {
             appointment_id: info.appointment_id || data.appointment_id,
             office_label: info.office_label || data.office_label,
@@ -510,6 +637,10 @@
                 pauseScanner();
                 if (data.action === "checkout_ready") {
                     showCheckoutResult(data);
+                    return;
+                }
+                if (data.action === "check_ids") {
+                    showIdCheck(data);
                     return;
                 }
                 showSuccessResult(data);
@@ -967,9 +1098,10 @@
     document.getElementById("gateRegisterBtn").addEventListener("click", function () {
         GateRegister.open({
             onRegistered: function (visit) {
+                const others = Number(visit.people_count) || 0;
                 AppDialog.alert({
                     eyebrow: "Registered at the gate",
-                    title: visit.visitor_full_name + " is checked in",
+                    title: visit.visitor_full_name + (others ? " and " + others + (others === 1 ? " other are" : " others are") : " is") + " checked in",
                     message: "Office: " + visit.office_label + ". This visit is not tracked."
                         + "\n\nGive the visitor this reference: " + visit.registration_code
                         + "\n\nWhen they leave, end their visit on the Security dashboard.",

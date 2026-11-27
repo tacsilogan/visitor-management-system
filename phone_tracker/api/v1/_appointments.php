@@ -4,6 +4,10 @@ declare(strict_types=1);
 require_once dirname(__DIR__, 2) . "/appointment_offices.php";
 require_once dirname(__DIR__, 2) . "/office_availability_service.php";
 require_once dirname(__DIR__, 2) . "/appointment_maintenance.php";
+require_once dirname(__DIR__, 2) . "/visit_people_service.php";
+
+/** Statuses in which the visitor can still change who comes with them (until the guard checks them in). */
+const MOBILE_PEOPLE_EDITABLE_STATUSES = ["pending_approval", "approved", "reschedule_proposed"];
 
 function mobile_parse_datetime(string $value): ?DateTime
 {
@@ -117,6 +121,11 @@ function mobile_appointment_payload(mysqli $conn, array $row, bool $withDetails 
         "created_at" => $row["created_at"],
         "qr_pass" => null,
         "visit" => $visitId > 0 ? mobile_visit_summary($conn, $visitId, (int) ($row["stop_number"] ?? 0)) : null,
+        // The people coming with the visitor (GROUP_VISITS.md). A stop of a visit to several
+        // offices shows the visit's list, which the visitor changes on the visit.
+        "people" => visit_people_payloads(visit_people_list($conn, visit_people_pass_for_row($row))),
+        "people_editable" => $visitId === 0 && in_array($status, MOBILE_PEOPLE_EDITABLE_STATUSES, true)
+            && visit_people_schema_ready($conn),
     ];
     // A stop of a multi-stop visit is checked in with the visit pass, not its own token.
     if ($visitId === 0 && in_array($status, ["approved", "checked_in"], true) && !empty($row["public_token"])) {
@@ -198,6 +207,13 @@ function mobile_create_appointment(mysqli $conn, array $user, array $input): arr
     if ($visitType === "appointment" && (!$start || $start <= new DateTime("now"))) {
         $errors["scheduled_start_at"] = "Choose a valid future appointment time";
     }
+    // The people coming with the visitor. Today's app sends none: the guard adds them at the gate.
+    $people = [];
+    try {
+        $people = visit_people_clean_booking($input["people"] ?? null);
+    } catch (InvalidArgumentException $error) {
+        $errors += (array) json_decode($error->getMessage(), true);
+    }
     if ($errors) {
         throw new InvalidArgumentException(json_encode($errors));
     }
@@ -242,6 +258,7 @@ function mobile_create_appointment(mysqli $conn, array $user, array $input): arr
         $deviceName = trim((string) ($user["device_name"] ?? "Android phone")) ?: "Android phone";
     }
     $initialStatus = $visitType === "walk_in" ? "approved" : "pending_approval";
+    $forPeople = mobile_people_phrase($people);
 
     $conn->begin_transaction();
     try {
@@ -262,15 +279,19 @@ function mobile_create_appointment(mysqli $conn, array $user, array $input): arr
             "notification_type" => $visitType === "walk_in" ? "walk_in_created" : "appointment_request",
             "notification_title" => $visitType === "walk_in" ? "Walk-in visitor arriving" : "New appointment request",
             "notification_text" => $visitType === "walk_in"
-                ? $visitorName . " created a walk-in pass for " . $offices[$officeCode] . "."
-                : $visitorName . " requested " . $start->format("M j, Y g:i A") . ".",
+                ? $visitorName . " created a walk-in pass for " . $offices[$officeCode] . $forPeople . "."
+                : $visitorName . " requested " . $start->format("M j, Y g:i A") . $forPeople . ".",
         ]);
+        if ($people && visit_people_schema_ready($conn)) {
+            visit_people_insert($conn, ["appointment_id" => $appointmentId, "visit_id" => null], $people);
+        }
         api_audit($conn, $visitorUserId, "mobile.appointment_created", "appointment", (string) $appointmentId, [
             "office_code" => $officeCode,
             "visit_type" => $visitType,
             "scheduled_start_at" => $start->format("Y-m-d H:i:s"),
             "scheduled_end_at" => $end->format("Y-m-d H:i:s"),
             "consent_version" => $consentVersion,
+            "people_count" => count($people),
         ], $appointmentId);
         $conn->commit();
     } catch (Throwable $error) {
@@ -279,6 +300,67 @@ function mobile_create_appointment(mysqli $conn, array $user, array $input): arr
     }
     $created = mobile_owned_appointment($conn, $appointmentId, $visitorUserId);
     return mobile_appointment_payload($conn, $created, true);
+}
+
+/** ", for 3 people" in an office's notification, or "" for a visitor coming alone. */
+function mobile_people_phrase(array $people): string
+{
+    return $people ? ", for " . (count($people) + 1) . " people" : "";
+}
+
+/**
+ * Replaces the people coming with the visitor, until the guard checks them in (api/v1/visit_people.php).
+ * The office sees the latest list; no message is sent (GROUP_VISITS.md).
+ *
+ * @return list<array> the new list
+ * @throws DomainException when the pass can't be changed any more
+ */
+function mobile_change_people(mysqli $conn, int $visitorUserId, ?int $appointmentId, ?int $visitId, array $people): array
+{
+    if (!visit_people_schema_ready($conn)) {
+        throw new DomainException("The server needs an update before people can be added.");
+    }
+    $conn->begin_transaction();
+    try {
+        if ($visitId) {
+            $visit = $conn->prepare("SELECT id, status FROM visits WHERE id = ? AND visitor_user_id = ? LIMIT 1 FOR UPDATE");
+            $visit->bind_param("ii", $visitId, $visitorUserId);
+            $visit->execute();
+            $row = $visit->get_result()->fetch_assoc();
+            $visit->close();
+            if (!$row) {
+                throw new DomainException("Visit not found");
+            }
+            if ($row["status"] !== "open") {
+                throw new DomainException("The guard has checked this visit, so the list can't change now.");
+            }
+            $pass = ["appointment_id" => null, "visit_id" => $visitId];
+            $auditAppointment = null;
+        } else {
+            $row = mobile_owned_appointment($conn, (int) $appointmentId, $visitorUserId, true);
+            if (!$row) {
+                throw new DomainException("Appointment not found");
+            }
+            if (!empty($row["visit_id"])) {
+                throw new DomainException("Change the people on the whole visit, not on one office.");
+            }
+            if (!in_array((string) $row["status"], MOBILE_PEOPLE_EDITABLE_STATUSES, true)) {
+                throw new DomainException("The list can only change until the guard checks you in.");
+            }
+            $pass = ["appointment_id" => (int) $row["id"], "visit_id" => null];
+            $auditAppointment = (int) $row["id"];
+        }
+        visit_people_replace($conn, $pass, $people);
+        api_audit($conn, $visitorUserId, "mobile.visit_people_changed", $visitId ? "visit" : "appointment",
+            (string) ($visitId ?: $appointmentId), [
+                "people" => array_map(fn (array $person): array => ["name" => $person["full_name"], "adult" => $person["is_adult"]], $people),
+            ], $auditAppointment);
+        $conn->commit();
+    } catch (Throwable $error) {
+        $conn->rollback();
+        throw $error;
+    }
+    return visit_people_payloads(visit_people_list($conn, $pass));
 }
 
 /**

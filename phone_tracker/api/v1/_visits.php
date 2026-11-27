@@ -59,6 +59,9 @@ function mobile_visit_payload(mysqli $conn, array $visit, bool $withDetails = tr
         "tracking_appointment_id" => !empty($visit["tracking_appointment_id"]) ? (int) $visit["tracking_appointment_id"] : null,
         "current_stop_id" => $currentStopId,
         "qr_pass" => $qrPass,
+        // The people coming with the visitor, on the visit's one pass (GROUP_VISITS.md).
+        "people" => visit_people_payloads(visit_people_list($conn, ["appointment_id" => null, "visit_id" => $visitId])),
+        "people_editable" => $status === "open" && visit_people_schema_ready($conn),
         "stops" => array_map(function (array $stop) use ($conn, $withDetails): array {
             return mobile_appointment_payload($conn, $stop, $withDetails);
         }, $stops),
@@ -89,6 +92,14 @@ function mobile_create_visit(mysqli $conn, array $user, array $input): array
     if (empty($consentInput["granted"]) || $consentVersion === "") {
         $errors["location_consent"] = "Location consent and its displayed policy version are required";
     }
+    // The people coming with the visitor, on the one pass for every stop.
+    $people = [];
+    try {
+        $people = visit_people_clean_booking($input["people"] ?? null);
+    } catch (InvalidArgumentException $error) {
+        $errors += (array) json_decode($error->getMessage(), true);
+    }
+    $forPeople = mobile_people_phrase($people);
 
     // Only offices with someone to answer (appointment_office_bookable_map()).
     $offices = appointment_office_bookable_map();
@@ -228,9 +239,12 @@ function mobile_create_visit(mysqli $conn, array $user, array $input): array
                 "notification_type" => $isWalkIn ? "walk_in_created" : "appointment_request",
                 "notification_title" => $isWalkIn ? "Walk-in visitor arriving" : "New appointment request",
                 "notification_text" => $isWalkIn
-                    ? "{$visitorName} created a walk-in pass for {$officeLabel} ({$stopText})."
-                    : "{$visitorName} requested " . $stop["start"]->format("M j, Y g:i A") . " ({$stopText}).",
+                    ? "{$visitorName} created a walk-in pass for {$officeLabel}{$forPeople} ({$stopText})."
+                    : "{$visitorName} requested " . $stop["start"]->format("M j, Y g:i A") . "{$forPeople} ({$stopText}).",
             ]);
+        }
+        if ($people && visit_people_schema_ready($conn)) {
+            visit_people_insert($conn, ["appointment_id" => null, "visit_id" => $visitId], $people);
         }
         api_audit($conn, $visitorUserId, "mobile.visit_created", "visit", (string) $visitId, [
             "visit_code" => $visitCode,
@@ -238,6 +252,7 @@ function mobile_create_visit(mysqli $conn, array $user, array $input): array
             "visit_date" => $visitDate,
             "appointment_ids" => $appointmentIds,
             "consent_version" => $consentVersion,
+            "people_count" => count($people),
         ], $appointmentIds[0]);
         $conn->commit();
     } catch (Throwable $error) {

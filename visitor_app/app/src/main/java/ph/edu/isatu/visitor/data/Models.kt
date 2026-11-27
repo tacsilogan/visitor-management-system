@@ -177,6 +177,46 @@ data class VisitSummaryDto(
     val stopCount: Int = 0,
 )
 
+/**
+ * Someone who comes with the visitor (GROUP_VISITS.md): named by the visitor when booking, and
+ * checked at the gate. [gateStatus]: "expected" before the gate, then "in", "absent" (didn't come)
+ * or "refused" (the name on their ID didn't match). They have no account and are never tracked.
+ */
+data class PersonDto(
+    val id: Long = 0,
+    val fullName: String = "",
+    val isAdult: Boolean = true,
+    val addedAtGate: Boolean = false,
+    /** The name as booked, when the guard fixed it to match the ID. */
+    val bookedName: String? = null,
+    val gateStatus: String = "expected",
+    val idTypeShown: String = "",
+    val noIdReason: String = "",
+    val checkedInAt: String? = null,
+    /** Set when they left before the rest of the group. */
+    val leftAt: String? = null,
+)
+
+/** One person the visitor adds when booking: the name as on their ID, and 18 or older or not. */
+data class PersonRequest(val fullName: String, val isAdult: Boolean)
+
+data class ChangePeopleRequest(
+    val appointmentId: Long? = null,
+    val visitId: Long? = null,
+    val people: List<PersonRequest>,
+)
+
+data class PeopleData(val people: List<PersonDto> = emptyList())
+
+/** The newest visitor app on the website (app_release.php); versionCode 0 when none is published. */
+data class AppReleaseData(
+    val versionName: String? = null,
+    val versionCode: Int = 0,
+    val whatsNew: String = "",
+    val publishedAt: String? = null,
+    val pageUrl: String = "",
+)
+
 data class AppointmentDto(
     val id: Long = 0,
     val registrationCode: String? = null,
@@ -199,6 +239,10 @@ data class AppointmentDto(
     val visitor: VisitorSummaryDto? = null,
     val additionalDetails: String = "",
     val rescheduleProposal: RescheduleProposalDto? = null,
+    /** The people coming with the visitor. A stop of a multi-stop visit shows the visit's list. */
+    val people: List<PersonDto> = emptyList(),
+    /** Whether the visitor can still change [people] here (until the guard checks them in). */
+    val peopleEditable: Boolean = false,
 )
 
 /**
@@ -218,6 +262,9 @@ data class VisitDto(
     val currentStopId: Long? = null,
     val qrPass: QrPassDto? = null,
     val stops: List<AppointmentDto> = emptyList(),
+    /** The people coming with the visitor, on the visit's one pass. */
+    val people: List<PersonDto> = emptyList(),
+    val peopleEditable: Boolean = false,
 )
 
 data class VisitData(val visit: VisitDto = VisitDto())
@@ -237,6 +284,7 @@ data class CreateVisitRequest(
     val stops: List<VisitStopRequest>,
     val deviceName: String,
     val locationConsent: LocationConsentRequest,
+    val people: List<PersonRequest> = emptyList(),
 )
 
 data class CancelVisitRequest(val visitId: Long, val reason: String)
@@ -262,6 +310,7 @@ data class CreateAppointmentRequest(
     val scheduledEndAt: String,
     val deviceName: String,
     val locationConsent: LocationConsentRequest,
+    val people: List<PersonRequest> = emptyList(),
 )
 
 data class CancelAppointmentRequest(val appointmentId: Long, val reason: String)

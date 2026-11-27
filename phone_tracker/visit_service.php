@@ -15,6 +15,7 @@
  */
 
 require_once __DIR__ . "/appointment_offices.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 const VISIT_MIN_STOPS = 2;
 const VISIT_MAX_STOPS = 3;
@@ -573,8 +574,12 @@ function visit_scan_details(array $visit, array $stops): array
 /**
  * Checks in a visit pass. Every approved stop is checked in at once and the first one
  * becomes the owner of the visit's tracking session.
+ *
+ * [$step] "check" stops before anything changes and returns everyone on the pass for the ID check
+ * (visit_people_check_response()); "confirm" checks in and records the guard's [$answer]
+ * (visit_people_clean_check()) in the same transaction.
  */
-function visit_handle_scan(mysqli $conn, int $visitId, int $securityUserId): array
+function visit_handle_scan(mysqli $conn, int $visitId, int $securityUserId, string $step = "confirm", ?array $answer = null): array
 {
     $visit = visit_load($conn, $visitId);
     if (!$visit) {
@@ -662,6 +667,9 @@ function visit_handle_scan(mysqli $conn, int $visitId, int $securityUserId): arr
             "appointment_id" => (int) $last["id"],
         ]);
     }
+    if ($step === "check") {
+        return visit_people_check_response($conn, $details, ["appointment_id" => null, "visit_id" => $visitId]);
+    }
 
     $conn->begin_transaction();
     try {
@@ -717,11 +725,15 @@ function visit_handle_scan(mysqli $conn, int $visitId, int $securityUserId): arr
         $update->bind_param("iii", $securityUserId, $trackingAppointmentId, $visitId);
         $update->execute();
         $update->close();
+        // The visitor's ID and each person's result, written with the check-in (GROUP_VISITS.md).
+        $recorded = $answer !== null
+            ? visit_people_record_check($conn, ["appointment_id" => null, "visit_id" => $visitId], $checkedIn, $answer, $securityUserId)
+            : [];
         visit_audit($conn, $securityUserId, $trackingAppointmentId, "visit.checked_in", $visitId, [
             "checked_in_appointment_ids" => $checkedIn,
             "used_time_override" => (bool) $overrideRow,
             "override_id" => $overrideId ?: null,
-        ]);
+        ] + $recorded);
         $conn->commit();
     } catch (Throwable $error) {
         $conn->rollback();

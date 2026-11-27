@@ -6,10 +6,16 @@ require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/visit_service.php";
 require_once __DIR__ . "/monitoring_service.php";
 require_once __DIR__ . "/gate_service.php";
+require_once __DIR__ . "/visit_people_service.php";
 
-// First scan of a pass checks the visitor in. A later scan of the same pass offers a
-// one-tap check-out (scan_checkout.php), except within GATE_RESCAN_GRACE_SECONDS of
-// check-in, when it is treated as an accidental repeat.
+// A first scan of a pass shows whose it is and everyone on it; the guard checks each adult's ID,
+// then checks them in (GROUP_VISITS.md). "step" says which part this request is:
+//   "check" (the default): look the pass up and return the people on it. Nothing changes.
+//   "confirm": check in, with the guard's answers ("holder" and "people", visit_people_clean_check()).
+//   "refuse": the pass holder's name didn't match their ID. Nobody is checked in, the pass stays
+//             valid, and the activity log says so.
+// A later scan of a pass that is checked in offers a one-tap check-out (scan_checkout.php),
+// except within GATE_RESCAN_GRACE_SECONDS of check-in, when it is treated as an accidental repeat.
 //
 // {"appointment_id": n} instead of {"token": …} checks a booked visitor in without their QR
 // code (GATE_REGISTRATION.md): the guard found the booking on the Security dashboard by name
@@ -37,6 +43,10 @@ if ($token === "" && isset($input["appointment_id"])) {
 if (strlen($token) !== 64) {
     echo json_encode(["success" => false, "message" => "Invalid QR code"]);
     exit;
+}
+$step = (string) ($input["step"] ?? "check");
+if (!in_array($step, ["check", "confirm", "refuse"], true)) {
+    $step = "check";
 }
 
 $securityUserId = (int) $_SESSION["user_id"];
@@ -72,13 +82,29 @@ if ($visitId > 0) {
         $response = $visit["status"] === "checked_in"
             ? gate_scan_on_campus($conn, $trackingId, $details)
             : gate_scan_completed($conn, $trackingId, $details);
+    } elseif ($step === "refuse" && $visit) {
+        $details = visit_scan_details($visit, visit_stops($conn, $visitId));
+        $response = visit_people_refuse_pass($conn, $securityUserId, (int) $details["appointment_id"], $visitId, $withoutQr, $details);
     } else {
-        $response = visit_handle_scan($conn, $visitId, $securityUserId);
+        $answer = null;
+        if ($step === "confirm") {
+            try {
+                $answer = visit_people_clean_check($input, visit_people_list($conn, ["appointment_id" => null, "visit_id" => $visitId]));
+            } catch (InvalidArgumentException $error) {
+                $conn->close();
+                echo json_encode(["success" => false, "message" => $error->getMessage()]);
+                exit;
+            }
+        }
+        $response = visit_handle_scan($conn, $visitId, $securityUserId, $step, $answer);
         if ($withoutQr && !empty($response["success"]) && ($response["action"] ?? "") === "checked_in" && gate_schema_ready($conn)) {
             $mark = $conn->prepare("UPDATE appointments SET checked_in_without_qr = 1 WHERE visit_id = ? AND status = 'checked_in'");
             $mark->bind_param("i", $visitId);
             $mark->execute();
             $mark->close();
+        }
+        if (($response["action"] ?? "") === "checked_in") {
+            $response["people"] = visit_people_payloads(visit_people_list($conn, ["appointment_id" => null, "visit_id" => $visitId]));
         }
     }
     $conn->close();
@@ -228,6 +254,28 @@ if (!$hasOverride && $now > $scheduledEnd) {
     exit;
 }
 
+// The pass can be checked in now. First the guard checks the IDs (GROUP_VISITS.md).
+$pass = ["appointment_id" => $appointmentId, "visit_id" => null];
+if ($step === "check") {
+    $response = visit_people_check_response($conn, $details, $pass);
+    $conn->close();
+    echo json_encode($response);
+    exit;
+}
+if ($step === "refuse") {
+    $response = visit_people_refuse_pass($conn, $securityUserId, $appointmentId, null, $withoutQr, $details);
+    $conn->close();
+    echo json_encode($response);
+    exit;
+}
+try {
+    $answer = visit_people_clean_check($input, visit_people_list($conn, $pass));
+} catch (InvalidArgumentException $error) {
+    $conn->close();
+    echo json_encode(["success" => false, "message" => $error->getMessage()]);
+    exit;
+}
+
 $conn->begin_transaction();
 try {
     $updateSql =
@@ -280,6 +328,9 @@ try {
         $used->close();
     }
 
+    // The visitor's ID and each person's result, written with the check-in.
+    $recorded = visit_people_record_check($conn, $pass, [$appointmentId], $answer, $securityUserId);
+
     $audit = $conn->prepare(
         "INSERT INTO audit_logs
          (actor_user_id, appointment_id, action, entity_type, entity_id, details_json, ip_address)
@@ -292,7 +343,7 @@ try {
             "override_id" => $overrideId ?: null,
             "effective_visit_end" => $hasOverride ? $overrideValidUntil : $appt["scheduled_end_at"],
             "without_qr" => $withoutQr,
-        ]);
+        ] + $recorded);
         $ipAddress = isset($_SERVER["REMOTE_ADDR"]) ? substr((string) $_SERVER["REMOTE_ADDR"], 0, 45) : "";
         $audit->bind_param("iisss", $securityUserId, $appointmentId, $entityId, $auditDetails, $ipAddress);
         $audit->execute();
@@ -306,6 +357,7 @@ try {
     exit;
 }
 
+$people = visit_people_payloads(visit_people_list($conn, $pass));
 $conn->close();
 echo json_encode(array_merge($details, [
     "success" => true,
@@ -314,4 +366,5 @@ echo json_encode(array_merge($details, [
     "status" => "checked_in",
     "checked_in_at" => date("Y-m-d H:i:s"),
     "used_time_override" => $hasOverride,
+    "people" => $people,
 ]));

@@ -90,6 +90,9 @@
         dot: icon('<path d="M12 8v5M12 16v.5"/>'),
         calendar: icon('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16M9.5 13.5l5 5M14.5 13.5l-5 5"/>'),
         bell: icon('<path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2H4.4z"/><path d="M10 21h4"/>'),
+        group: icon('<path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/>'),
+        phone: icon('<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10.5 18.5h3M12 7v6M9.5 10.5 12 13l2.5-2.5"/>'),
+        upload: icon('<path d="M12 16V4M7 9l5-5 5 5M5 20h14"/>'),
         file: icon('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>'),
         table: icon('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 10v9M15 10v9"/>'),
         plus: icon('<path d="M12 5v14M5 12h14"/>'),
@@ -1097,10 +1100,15 @@
         const now = data.current;
         const before = data.previous;
         const visitDelta = before.visits > 0 ? percentChange(now.visits, before.visits) : null;
+        let visitsKpi = kpi("Visits", now.visits.toLocaleString(),
+            visitDelta === null ? (now.visits ? "none before to compare" : "—") : (visitDelta === 0 ? "same as before" : (visitDelta > 0 ? "▲ " : "▼ ") + Math.abs(visitDelta) + "% (" + before.visits + " before)"),
+            visitDelta === null || visitDelta === 0 ? "flat" : (visitDelta > 0 ? "up" : "down"));
+        // Everyone who came in: the visitors and the people with them (GROUP_VISITS.md).
+        if (Number(now.with_visitors) > 0) {
+            visitsKpi = visitsKpi.replace("</strong>", '</strong><small class="grp-kpi-people">' + esc(plural(now.people, "person", "people")) + " in all</small>");
+        }
         const kpis = [
-            kpi("Visits", now.visits.toLocaleString(),
-                visitDelta === null ? (now.visits ? "none before to compare" : "—") : (visitDelta === 0 ? "same as before" : (visitDelta > 0 ? "▲ " : "▼ ") + Math.abs(visitDelta) + "% (" + before.visits + " before)"),
-                visitDelta === null || visitDelta === 0 ? "flat" : (visitDelta > 0 ? "up" : "down")),
+            visitsKpi,
             kpi("Average visit", now.average_minutes !== null ? durationText(now.average_minutes) : "—",
                 now.average_minutes !== null && before.average_minutes !== null ? (now.average_minutes === before.average_minutes ? "same as before"
                     : (now.average_minutes > before.average_minutes ? "▲ " : "▼ ") + durationText(Math.abs(now.average_minutes - before.average_minutes))) : "—", "flat"),
@@ -1113,7 +1121,7 @@
                 now.no_shows > before.no_shows ? "down" : "flat"),
         ];
         byId("admKpis").innerHTML = kpis.join("");
-        const iconFor = { trend: ICON.trend, clock: ICON.clock, office: ICON.office, warn: ICON.warn, map: ICON.map };
+        const iconFor = { trend: ICON.trend, clock: ICON.clock, office: ICON.office, warn: ICON.warn, map: ICON.map, people: ICON.group };
         byId("admInsights").innerHTML = data.findings.length
             ? data.findings.map(function (finding) {
                 return '<li class="' + esc(finding.tone) + '"><span class="adm-ico">' + (iconFor[finding.icon] || ICON.trend) + "</span><span>" + finding.html + "</span></li>";
@@ -2721,6 +2729,192 @@
         });
     }
 
+    /* ---------- Menu › Visitor app (GROUP_VISITS.md, admin_app_release.php) ---------- */
+
+    function sizeText(bytes) {
+        return (Number(bytes || 0) / 1024 / 1024).toFixed(1) + " MB";
+    }
+
+    function appReleaseBody(data, state) {
+        if (!data.ready) {
+            return '<p class="ofc-note">The database needs an update first: import phone_tracker/group_visits_migration.sql.</p>';
+        }
+        const current = data.current;
+        const stats = data.stats || {};
+        const page = data.page_url || "";
+        const parts = [];
+        parts.push(current
+            ? '<div class="app-file"><span class="app-file-ico">' + ICON.phone + "</span><div><strong>ISATU Visits " + esc(current.version_name) + "</strong><small>Android · "
+                + esc(sizeText(current.file_size)) + " · published " + esc(whenText(current.published_at)) + (current.published_by ? " by " + esc(current.published_by) : "") + "</small></div></div>"
+            : '<div class="app-file"><span class="app-file-ico">' + ICON.phone + "</span><div><strong>No version on the website yet</strong><small>Visitors who open the page are told to ask the guard. Publish the first version below.</small></div></div>");
+        if (current) {
+            parts.push('<div class="app-stats"><div><strong>' + esc(Number(stats.downloads || 0).toLocaleString()) + "</strong><span>downloads in all</span></div>"
+                + "<div><strong>" + esc(Number(stats.downloads_week || 0).toLocaleString()) + "</strong><span>this week</span></div>"
+                + "<div><strong>" + esc(Number(stats.older_phones || 0).toLocaleString()) + "</strong><span>phones on an older version</span></div></div>");
+        }
+        parts.push('<p class="app-section-title">Download page</p><div class="app-link"><code>' + esc(page) + "</code>"
+            + '<button class="ofc-btn is-small" type="button" data-copy="' + esc(page) + '">Copy</button>'
+            + '<a class="ofc-btn is-small" href="' + esc(page) + '" target="_blank" rel="noopener">Open</a></div>');
+        parts.push('<p class="app-section-title">Gate poster</p><div class="poster-card"><span class="poster-thumb" aria-hidden="true"></span>'
+            + "<div><strong>A4 poster with a QR code</strong><p>The code opens the download page. Print it for the gate and the offices.</p>"
+            + '<a class="ofc-btn is-small" href="app_poster.php" target="_blank" rel="noopener">Print the poster</a></div></div>');
+
+        parts.push('<p class="app-section-title">Publish a new version</p>');
+        if (data.checked) {
+            const checked = data.checked;
+            parts.push('<div class="app-picked"><ul class="app-check">' + (state.checks || ["Checked: ISATU Visits " + checked.version_name]).map(function (line) {
+                return "<li>" + ICON.check + "<span>" + esc(line) + "</span></li>";
+            }).join("") + "</ul>"
+                + '<label class="ofc-field"><span>What\'s new (optional, shown on the download page)</span><input type="text" id="appWhatsNew" maxlength="160" value="' + esc(state.whatsNew || "") + '"></label>'
+                + '<div class="app-actions"><button class="ofc-btn" type="button" data-app-discard="' + Number(checked.id) + '">Cancel</button>'
+                + '<button class="ofc-btn is-approve" type="button" data-app-publish="' + Number(checked.id) + '">' + ICON.check + "Publish " + esc(checked.version_name) + "</button></div></div>");
+        } else if (state.uploading) {
+            parts.push('<div class="app-drop is-busy" role="status"><strong>Uploading and checking… ' + esc(state.uploading) + "</strong><small>Keep this page open.</small></div>");
+        } else {
+            parts.push('<label class="app-drop" for="appFile">' + ICON.upload + "<strong>Choose the new app file (.apk)</strong>"
+                + "<small>The signed release build. Up to " + esc(data.max_mb || 100) + " MB.</small></label>"
+                + '<input type="file" id="appFile" accept=".apk,application/vnd.android.package-archive" hidden>');
+        }
+        if (state.error) {
+            parts.push('<p class="admin-message is-error" role="alert">' + esc(state.error) + "</p>");
+        }
+        if (data.previous) {
+            // After going back, the kept version is the newer one, and the same button brings it back.
+            const newer = keptIsNewer(data);
+            parts.push('<p class="app-section-title">' + (newer ? "Newer version" : "Earlier version") + '</p><ul class="app-older"><li><span>' + esc(data.previous.version_name) + "</span>"
+                + '<button class="ofc-btn is-small" type="button" data-app-go-back>' + (newer ? "Use " + esc(data.previous.version_name) + " again" : "Go back to " + esc(data.previous.version_name)) + "</button></li></ul>");
+        }
+        parts.push('<p class="app-foot-note">The server checks every file: an Android app, ISATU Visits, newer than the current version, and signed with the same key. From version 0.13.0, the app tells visitors when a newer version is here.</p>');
+        return parts.join("");
+    }
+
+    /** Whether the kept version is newer than the one visitors get (after going back). */
+    function keptIsNewer(data) {
+        return Boolean(data.previous && data.current && Number(data.previous.version_code) > Number(data.current.version_code));
+    }
+
+    async function openAppRelease() {
+        const state = { checks: null, whatsNew: "", uploading: "", error: "" };
+        let data = await api("admin_app_release.php");
+        if (!data.success) {
+            await AppDialog.alert({ title: "Couldn't open the visitor app page", message: data.message || "Please try again." });
+            return;
+        }
+        const sheet = openSheet({
+            title: "Visitor app",
+            sub: "What visitors download from the website, and the poster for the gate.",
+            body: appReleaseBody(data, state),
+            drawer: true,
+        });
+        function redraw() {
+            sheet.set({ body: appReleaseBody(data, state) });
+            const menu = byId("admMenuApp");
+            if (menu && data.current) {
+                menu.textContent = "Version " + data.current.version_name + " · download page and gate poster";
+            }
+        }
+        function upload(file) {
+            state.error = "";
+            state.uploading = "0%";
+            redraw();
+            const form = new FormData();
+            form.append("action", "check");
+            form.append("apk", file);
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "admin_app_release.php");
+            xhr.withCredentials = true;
+            const token = window.PhoneTrackerAuth && window.PhoneTrackerAuth.csrfToken ? window.PhoneTrackerAuth.csrfToken() : "";
+            if (token) {
+                xhr.setRequestHeader("X-CSRF-Token", token);
+            }
+            xhr.upload.addEventListener("progress", function (event) {
+                if (event.lengthComputable) {
+                    state.uploading = Math.round(event.loaded * 100 / event.total) + "%";
+                    const busy = sheet.querySelector(".app-drop.is-busy strong");
+                    if (busy) {
+                        busy.textContent = "Uploading and checking… " + state.uploading;
+                    }
+                }
+            });
+            xhr.addEventListener("load", function () {
+                let result = null;
+                try {
+                    result = JSON.parse(xhr.responseText);
+                } catch (error) {
+                    result = { success: false, message: xhr.status === 413 ? "The file is too big for the server." : "The server sent an answer this page can't read." };
+                }
+                state.uploading = "";
+                if (result && result.success) {
+                    data = result;
+                    state.checks = result.checks || null;
+                    state.whatsNew = "";
+                } else {
+                    state.error = (result && result.message) || "The upload failed. Try again.";
+                }
+                redraw();
+            });
+            xhr.addEventListener("error", function () {
+                state.uploading = "";
+                state.error = NO_CONNECTION;
+                redraw();
+            });
+            xhr.send(form);
+        }
+        sheet.addEventListener("change", function (event) {
+            if (event.target.id === "appFile" && event.target.files && event.target.files[0]) {
+                upload(event.target.files[0]);
+            }
+        });
+        sheet.addEventListener("input", function (event) {
+            if (event.target.id === "appWhatsNew") {
+                state.whatsNew = event.target.value;
+            }
+        });
+        sheet.addEventListener("click", async function (event) {
+            const publish = event.target.closest("[data-app-publish]");
+            const discard = event.target.closest("[data-app-discard]");
+            const back = event.target.closest("[data-app-go-back]");
+            if (publish) {
+                setBusy(publish, true, "Publishing…");
+                const result = await act("admin_app_release.php", { action: "publish", release_id: Number(publish.dataset.appPublish), whats_new: state.whatsNew }, "Couldn't publish the app", { stepUp: true });
+                if (result.success) {
+                    data = result;
+                    state.checks = null;
+                    toast(result.message, "success");
+                }
+                redraw();
+            } else if (discard) {
+                const result = await act("admin_app_release.php", { action: "discard", release_id: Number(discard.dataset.appDiscard) }, "Couldn't cancel the upload");
+                if (result.success) {
+                    data = result;
+                    state.checks = null;
+                }
+                redraw();
+            } else if (back) {
+                const version = data.previous ? data.previous.version_name : "";
+                const newer = keptIsNewer(data);
+                if (!(await AppDialog.confirm({
+                    eyebrow: "Visitor app",
+                    title: newer ? "Use version " + version + " again?" : "Go back to version " + version + "?",
+                    message: newer
+                        ? "New downloads get " + version + " again, and phones with an older version are told to update."
+                        : "New downloads get " + version + " again. Phones that already installed " + (data.current ? data.current.version_name : "the newer version")
+                            + " keep it: Android can't go back to an older version on a phone.",
+                    confirmLabel: newer ? "Use " + version + " again" : "Go back to " + version,
+                    cancelLabel: "Keep " + (data.current ? data.current.version_name : "it"),
+                }))) {
+                    return;
+                }
+                const result = await act("admin_app_release.php", { action: "go_back" }, "Couldn't go back", { stepUp: true });
+                if (result.success) {
+                    data = result;
+                    toast(result.message, "success");
+                }
+                redraw();
+            }
+        });
+    }
+
     async function openDigest() {
         const sheet = openSheet({ title: "Morning summary email", sub: "What needs you and the last day's numbers, before you open the dashboard.", body: '<p class="ofc-empty">Loading…</p>' });
         const data = await api("admin_settings.php");
@@ -3450,6 +3644,8 @@
                 openStaffReset();
             } else if (what === "routes") {
                 openRoutes();
+            } else if (what === "app") {
+                openAppRelease();
             }
         }],
     ];

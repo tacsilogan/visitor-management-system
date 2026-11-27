@@ -5,6 +5,7 @@ require_once __DIR__ . "/db.php";
 require_once __DIR__ . "/visit_service.php";
 require_once __DIR__ . "/arrival_service.php";
 require_once __DIR__ . "/gate_service.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 require_permission_json("office.appointments");
 $appointmentId = isset($_GET["id"]) ? (int) $_GET["id"] : 0;
@@ -124,6 +125,9 @@ if ($proposalStmt) {
         }
     }
 }
+
+// The people coming with the visitor: the whole visit's list for a stop of a visit to several offices.
+$appointment["people"] = visit_people_payloads(visit_people_list($conn, visit_people_pass_for_row($appointment)));
 
 $conn->close();
 echo json_encode([

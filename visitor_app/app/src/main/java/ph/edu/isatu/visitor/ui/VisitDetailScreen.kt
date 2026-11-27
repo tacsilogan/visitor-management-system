@@ -73,10 +73,18 @@ fun VisitDetailScreen(
     viewModel: AppViewModel,
     campusMap: CampusMapData? = null,
     notice: String? = null,
+    savingPeople: Boolean = false,
+    peopleError: String? = null,
 ) {
     BackHandler(onBack = viewModel::closeVisit)
     val context = LocalContext.current
     var showCancel by remember { mutableStateOf(false) }
+    // Who's coming, on the visit's one pass, until the guard checks the visitor in (GROUP_VISITS.md).
+    var changingPeople by remember(visit.id) { mutableStateOf(false) }
+    val openChangePeople = {
+        viewModel.clearPeopleError()
+        changingPeople = true
+    }
     val trackingAppointmentId = visit.trackingAppointmentId
     var resumingShare by remember(visit.id) { mutableStateOf(false) }
     var locationPermissionMissing by remember(visit.id) { mutableStateOf(false) }
@@ -193,6 +201,7 @@ fun VisitDetailScreen(
     }
 
     val pass = visit.qrPass
+    Box(Modifier.fillMaxSize()) {
     DetailScaffold(if (pass != null) "Your pass" else "Visit details", viewModel::closeVisit) { outerModifier ->
         LazyColumn(
             modifier = outerModifier.fillMaxSize(),
@@ -208,6 +217,8 @@ fun VisitDetailScreen(
                         visitorName = visit.stops.firstOrNull()?.visitor?.fullName.orEmpty().ifBlank { "Registered visitor" },
                         reference = visit.visitCode,
                         pass = pass,
+                        people = visit.people,
+                        onChangePeople = if (visit.peopleEditable) openChangePeople else null,
                     )
                 }
             } else {
@@ -244,6 +255,9 @@ fun VisitDetailScreen(
                     )
                 }
             }
+            if (pass == null && (visit.people.isNotEmpty() || visit.peopleEditable)) {
+                item { PeopleDetailsCard(visit.people, visit.peopleEditable, openChangePeople) }
+            }
             item { Text("Office stops", style = MaterialTheme.typography.titleLarge, color = IsatuBlueDark) }
             itemsIndexed(visit.stops, key = { _, stop -> stop.id }) { index, stop ->
                 val place = places.firstOrNull { it.appointmentId == stop.id }?.toDirections()
@@ -277,6 +291,16 @@ fun VisitDetailScreen(
             }
             item { Spacer(Modifier.height(18.dp)) }
         }
+    }
+    if (changingPeople) {
+        ChangePeopleSheet(
+            initial = visit.people,
+            saving = savingPeople,
+            error = peopleError,
+            onSave = { people -> viewModel.changePeople(null, visit.id, people) { changingPeople = false } },
+            onDismiss = { changingPeople = false },
+        )
+    }
     }
 
     if (showCancel) {

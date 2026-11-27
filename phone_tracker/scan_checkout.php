@@ -44,6 +44,11 @@ if ($appointmentId === 0) {
 }
 
 $visitor = monitor_visitor($conn, $appointmentId);
+// The people still with the visitor leave with them (GROUP_VISITS.md).
+$withThem = $visitor ? count(array_filter(
+    visit_people_list($conn, visit_people_pass_for_row($visitor)),
+    fn (array $person): bool => $person["gate_status"] === "in" && $person["left_at"] === null
+)) : 0;
 if (!$visitor) {
     $conn->close();
     echo json_encode(["success" => false, "message" => "This visitor was never checked in."]);
@@ -76,7 +81,10 @@ $seconds = max(0, strtotime($ended["completed_at"]) - strtotime((string) $visito
 echo json_encode([
     "success" => true,
     "action" => "checked_out",
-    "message" => "Checked out after " . gate_duration_text($seconds) . " on campus. Location tracking has stopped.",
+    "message" => "Checked out after " . gate_duration_text($seconds) . " on campus"
+        . ($withThem > 0 ? ", with the " . ($withThem === 1 ? "person" : $withThem . " people") . " still with them" : "")
+        . ". Location tracking has stopped.",
+    "people_checked_out" => $withThem,
     "appointment_id" => $ended["appointment_id"],
     "visitor_full_name" => $visitor["visitor_full_name"],
     "registration_id" => $visitor["registration_id"],

@@ -22,3 +22,13 @@
 <FilesMatch "\.(sql|ya?ml)$">
     Require all denied
 </FilesMatch>
+
+# Admin › Menu › Visitor app uploads the visitor app (admin_app_release.php, GROUP_VISITS.md).
+# Only that script takes files this big; everything else keeps the server's own limits.
+<Files "admin_app_release.php">
+    <IfModule php_module>
+        php_value upload_max_filesize 110M
+        php_value post_max_size 112M
+        php_value max_input_time 300
+    </IfModule>
+</Files>

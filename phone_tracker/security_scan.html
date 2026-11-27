@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#0755b5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Scan Visitor Pass | ISATU Security Dashboard</title>
-    <link rel="stylesheet" href="style.css?v=20261118-1">
+    <link rel="stylesheet" href="style.css?v=20261128-1">
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body class="admin-page security-page security-scan-page">
@@ -69,7 +69,7 @@
                 <div>
                     <p class="admin-eyebrow">Visitor check-in</p>
                     <h1>Scan visitor pass</h1>
-                    <p>Place the visitor's QR code inside the frame. The first scan checks the visitor in; scan the same pass again when they leave to check them out.</p>
+                    <p>Place the visitor's QR code inside the frame, then check the ID of each adult on the pass before checking them in. Scan the same pass again when they leave to check them out.</p>
                 </div>
                 <a class="security-scan-back" href="dashboard.html">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
@@ -133,11 +133,13 @@
                             <svg class="security-result-success-icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
                             <svg class="security-result-error-icon" viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01M10.3 3.8 2.7 17a2 2 0 0 0 1.73 3h15.14a2 2 0 0 0 1.73-3L13.7 3.8a2 2 0 0 0-3.4 0Z"/></svg>
                             <svg class="security-result-checkout-icon" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+                            <svg class="security-result-confirm-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.6-1.4 1.7-2 3-2s2.4.6 3 2M15 10h3M15 13h3"/></svg>
                         </span>
                         <div>
                             <p class="security-result-label" id="scanResultLabel">Scanner ready</p>
                             <h2 id="scanResultTitle">Waiting for a visitor pass</h2>
                             <p id="scanResultText">A successful scan will show the visitor details here.</p>
+                            <div id="scanDoneList"></div>
                             <dl class="security-result-details" id="scanResultDetails" hidden>
                                 <div><dt>Visitor</dt><dd id="scanVisitorName">-</dd></div>
                                 <div><dt>Destination</dt><dd id="scanDestination">-</dd></div>
@@ -156,6 +158,8 @@
                             <button class="security-override-button" id="openQrOverrideBtn" type="button" hidden>Authorize time override</button>
                             <button class="security-scan-next" id="scanNextBtn" type="button" hidden>Scan next visitor</button>
                         </div>
+                        <!-- The ID check of everyone on the pass before the check-in (id_check.js). -->
+                        <div class="scan-idcheck-host" id="scanIdCheck" hidden></div>
                     </section>
 
                     <details class="security-manual-entry" id="manualEntry">
@@ -170,7 +174,7 @@
                             <label for="tokenInput">Visitor pass code</label>
                             <p>You can paste the code or the complete pass link shown on the visitor's screen.</p>
                             <input type="text" id="tokenInput" autocomplete="off" spellcheck="false" placeholder="Paste visitor pass code">
-                            <button class="admin-primary-button" id="submitTokenBtn" type="submit">Check in visitor</button>
+                            <button class="admin-primary-button" id="submitTokenBtn" type="submit">Find the pass</button>
                         </form>
                     </details>
 
@@ -239,9 +243,10 @@
 
     <script src="auth.js?v=20261110-1"></script>
     <script src="dialogs.js?v=20261107-3"></script>
-    <script src="gate_register.js?v=20261116-1"></script>
+    <script src="gate_register.js?v=20261128-1"></script>
     <script src="auth_ui.js?v=20261003-1"></script>
     <script src="account_security.js?v=20261107-3"></script>
-    <script src="security_scan.js?v=20261118-1"></script>
+    <script src="id_check.js?v=20261128-1"></script>
+    <script src="security_scan.js?v=20261128-1"></script>
 </body>
 </html>

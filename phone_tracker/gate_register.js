@@ -4,18 +4,31 @@
  * Scan visitor pass page. The guard checks the visitor's ID, fills the form and reads the notice
  * to them; the visitor is then checked in at once and their location is not tracked.
  *
+ * The people with the visitor (GROUP_VISITS.md) are added one by one: each person's name as on
+ * their ID, whether they are 18 or older, and for adults the ID they showed.
+ *
  *   GateRegister.open({ onRegistered: function (visit) { … } });
  *
- * visit: appointment_id, registration_code, visitor_full_name, office_code, office_label, checked_in_at.
+ * visit: appointment_id, registration_code, visitor_full_name, office_code, office_label, checked_in_at,
+ * people_count.
  * Needs dialogs.js and auth.js (which adds the sign-in safety token to the request).
  */
 (function () {
     "use strict";
 
+    const MAX_PEOPLE = 10;
     let dialog = null;
     let offices = [];
+    let idTypes = [];
+    let people = [];
     let onRegistered = null;
     let busy = false;
+
+    function esc(text) {
+        return String(text == null ? "" : text).replace(/[&<>"']/g, function (c) {
+            return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+        });
+    }
 
     const FIELDS = {
         full_name: "gateFullName",
@@ -56,6 +69,8 @@
             field('ID shown <span class="gate-req" aria-hidden="true">*</span>', '<select id="gateIdType" required></select>') +
             field("Contact number (optional)", '<input type="tel" id="gateContact" maxlength="32" inputmode="tel" autocomplete="off">') +
             "</div>" +
+            '<p class="gate-section">People with them</p>' +
+            '<div class="gate-people" id="gatePeople"></div>' +
             '<p class="gate-section">Visit</p>' +
             '<div class="admin-form-grid">' +
             field('Office <span class="gate-req" aria-hidden="true">*</span>', '<select id="gateOffice" required></select>') +
@@ -93,6 +108,40 @@
         });
         element.querySelector("#gateForm").addEventListener("submit", submit);
         element.querySelector("#gateOffice").addEventListener("change", showOfficeState);
+        const box = element.querySelector("#gatePeople");
+        box.addEventListener("click", function (event) {
+            const remove = event.target.closest("[data-gate-remove]");
+            if (remove) {
+                people.splice(Number(remove.dataset.gateRemove), 1);
+                renderPeople();
+                return;
+            }
+            if (event.target.closest("[data-gate-add]")) {
+                people.push({ full_name: "", is_adult: true, id_type: "", errors: {} });
+                renderPeople();
+                const names = box.querySelectorAll("[data-gate-name]");
+                names[names.length - 1].focus();
+            }
+        });
+        box.addEventListener("change", function (event) {
+            const target = event.target;
+            if (target.matches("[data-gate-age]")) {
+                const person = people[Number(target.dataset.gateAge)];
+                person.is_adult = target.value === "adult";
+                person.errors = {};
+                renderPeople();
+            } else if (target.matches("[data-gate-id]")) {
+                const person = people[Number(target.dataset.gateId)];
+                person.id_type = target.value;
+                delete person.errors.id_type;
+                renderPeople();
+            }
+        });
+        box.addEventListener("input", function (event) {
+            if (event.target.matches("[data-gate-name]")) {
+                people[Number(event.target.dataset.gateName)].full_name = event.target.value;
+            }
+        });
         Object.keys(FIELDS).forEach(function (name) {
             const control = element.querySelector("#" + FIELDS[name]);
             control.addEventListener(control.type === "checkbox" || control.tagName === "SELECT" ? "change" : "input", function () {
@@ -100,6 +149,59 @@
             });
         });
         return element;
+    }
+
+    /** The people with the visitor: one block each, then "Add a person". */
+    function renderPeople() {
+        const box = byId("gatePeople");
+        const error = function (message) {
+            return message ? '<small class="gate-field-error">' + esc(message) + "</small>" : "";
+        };
+        box.innerHTML = people.map(function (person, index) {
+            const age = "gateAge" + index;
+            const errors = person.errors || {};
+            return '<div class="gate-person">' +
+                '<div class="gate-person-head"><strong>Person ' + (index + 1) + "</strong>" +
+                '<button class="gate-person-x" type="button" data-gate-remove="' + index + '">Remove</button></div>' +
+                '<div class="admin-form-grid">' +
+                '<label class="gate-field admin-office-field"><span>Full name, as on their ID <span class="gate-req" aria-hidden="true">*</span></span>' +
+                '<input type="text" maxlength="150" autocomplete="off" spellcheck="false" data-gate-name="' + index + '" value="' + esc(person.full_name) + '"' +
+                (errors.full_name ? ' aria-invalid="true"' : "") + ">" + error(errors.full_name) + "</label>" +
+                '<div class="gate-field"><span class="gate-age-label">Age</span><div class="gp-age" role="radiogroup" aria-label="Age of person ' + (index + 1) + '">' +
+                '<label class="idc-chip"><input type="radio" name="' + age + '" value="adult" data-gate-age="' + index + '"' + (person.is_adult ? " checked" : "") + "><span>18 or older</span></label>" +
+                '<label class="idc-chip"><input type="radio" name="' + age + '" value="child" data-gate-age="' + index + '"' + (person.is_adult ? "" : " checked") + "><span>Under 18</span></label>" +
+                "</div></div>" +
+                (person.is_adult
+                    ? '<label class="gate-field"><span>ID shown <span class="gate-req" aria-hidden="true">*</span></span>' +
+                      '<select data-gate-id="' + index + '"' + (errors.id_type ? ' aria-invalid="true"' : "") + '><option value="">Choose the ID</option>' +
+                      idTypes.map(function (type) {
+                          return "<option" + (person.id_type === type ? " selected" : "") + ">" + esc(type) + "</option>";
+                      }).join("") + "</select>" + error(errors.id_type) + "</label>"
+                    : '<div class="gate-field"><span class="gate-age-label">ID shown</span><p class="gate-nid">Not needed under 18</p></div>') +
+                "</div></div>";
+        }).join("") +
+            (people.length < MAX_PEOPLE ? '<button class="gp-add-btn" type="button" data-gate-add>' +
+                '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add a person</button>' : "") +
+            '<p class="gate-people-note">' + (people.length
+                ? "Family or friends who came with them, up to " + MAX_PEOPLE + ". Check the ID of each adult: the name must match."
+                : "Anyone who came with the visitor? Add each one with their name as on their ID.") + "</p>";
+    }
+
+    /** The people's mistakes, from this page or from the server ("people.0.id_type": "…"). */
+    function showPeopleErrors(errors) {
+        let any = false;
+        people.forEach(function (person) {
+            person.errors = {};
+        });
+        Object.keys(errors).forEach(function (key) {
+            const match = /^people\.(\d+)\.(full_name|id_type)$/.exec(key);
+            if (match && people[Number(match[1])]) {
+                people[Number(match[1])].errors[match[2]] = errors[key];
+                any = true;
+            }
+        });
+        renderPeople();
+        return any;
     }
 
     function setFieldError(name, message) {
@@ -174,6 +276,8 @@
         byId("gateOfficeState").hidden = true;
         byId("gateSubmitBtn").disabled = false;
         byId("gateSubmitBtn").textContent = "Register and check in";
+        people = [];
+        renderPeople();
     }
 
     async function open(options) {
@@ -187,6 +291,8 @@
         try {
             const data = await loadOptions();
             offices = Array.isArray(data.offices) ? data.offices : [];
+            idTypes = Array.isArray(data.id_types) ? data.id_types : [];
+            renderPeople();
             fillSelect(byId("gateIdType"), data.id_types || [], "Choose the ID");
             fillSelect(byId("gatePurpose"), data.purposes || [], "Choose the purpose");
             fillSelect(byId("gateOffice"), offices.map(function (office) {
@@ -214,6 +320,9 @@
             purpose: byId("gatePurpose").value,
             concern: byId("gateConcern").value.trim(),
             consent: byId("gateConsent").checked,
+            people: people.map(function (person) {
+                return { full_name: person.full_name.trim(), is_adult: person.is_adult, id_type: person.is_adult ? person.id_type : "" };
+            }),
         };
     }
 
@@ -235,15 +344,29 @@
         if (!values.consent) {
             errors.consent = "Read the notice to the visitor, then tick that they agreed.";
         }
+        values.people.forEach(function (person, index) {
+            if (person.full_name.length < 2) {
+                errors["people." + index + ".full_name"] = "Person " + (index + 1) + ": enter their full name as it appears on their ID.";
+            }
+            if (person.is_adult && !person.id_type) {
+                errors["people." + index + ".id_type"] = "Person " + (index + 1) + ": choose the type of ID they showed.";
+            }
+        });
         return errors;
     }
 
     function showErrors(errors) {
         let first = null;
+        const peopleWrong = showPeopleErrors(errors);
         Object.keys(errors).forEach(function (name) {
-            setFieldError(name, errors[name]);
-            first = first || byId(FIELDS[name]);
+            if (FIELDS[name]) {
+                setFieldError(name, errors[name]);
+                first = first || byId(FIELDS[name]);
+            }
         });
+        if (!first && peopleWrong) {
+            first = byId("gatePeople").querySelector('[aria-invalid="true"]');
+        }
         if (first) {
             first.focus();
         }

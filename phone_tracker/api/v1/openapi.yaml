@@ -333,6 +333,42 @@ paths:
         "200": { $ref: "#/components/responses/Success" }
         "404": { $ref: "#/components/responses/Error" }
         "409": { $ref: "#/components/responses/Error" }
+  /visit_people.php:
+    post:
+      summary: Change who comes with the visitor, until the guard checks them in
+      description: >
+        Replaces the list on one pass: appointment_id for a visit to one office, or visit_id
+        for a visit to several offices (its stops share the list). Allowed while the visit is
+        pending, approved or has a new time offered (a visit to several offices: while open).
+        The office sees the latest list; no message is sent. An empty list means nobody.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [people]
+              properties:
+                appointment_id: { type: integer, minimum: 1 }
+                visit_id: { type: integer, minimum: 1 }
+                people:
+                  type: array
+                  maxItems: 10
+                  items: { $ref: "#/components/schemas/PersonRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
+        "404": { $ref: "#/components/responses/Error" }
+        "409": { $ref: "#/components/responses/Error" }
+        "422": { $ref: "#/components/responses/Error" }
+  /app_release.php:
+    get:
+      security: []
+      summary: The newest visitor app version on the website
+      description: >
+        The version the Admin published in Admin › Menu › Visitor app (version_code 0 when
+        none). An app with a lower versionCode offers "Update", which opens page_url.
+      responses:
+        "200": { $ref: "#/components/responses/Success" }
   /notifications.php:
     get:
       summary: List visitor notifications
@@ -631,12 +667,37 @@ components:
         scheduled_start_at: { type: string, description: Required for appointments; ignored for walk-ins, example: "2026-09-21 09:00:00" }
         scheduled_end_at: { type: string, description: Optional slot end for appointments; ignored for walk-ins, example: "2026-09-21 09:30:00" }
         device_name: { type: string, maxLength: 100 }
+        people:
+          type: array
+          maxItems: 10
+          description: Who comes with the visitor, by name. Optional; the guard can add people at the gate.
+          items: { $ref: "#/components/schemas/PersonRequest" }
         location_consent:
           type: object
           required: [granted, version]
           properties:
             granted: { type: boolean, enum: [true] }
             version: { type: string, maxLength: 32 }
+    PersonRequest:
+      type: object
+      required: [full_name, is_adult]
+      properties:
+        full_name: { type: string, minLength: 2, maxLength: 150, description: As it appears on their ID }
+        is_adult: { type: boolean, description: 18 or older. Adults show an ID at the gate; children need none. }
+    Person:
+      type: object
+      description: Someone with the visitor. Appointments and visits carry people (a list) and people_editable.
+      properties:
+        id: { type: integer }
+        full_name: { type: string }
+        is_adult: { type: boolean }
+        added_at_gate: { type: boolean, description: Not on the booking; the guard added them }
+        booked_name: { type: string, nullable: true, description: The name as booked, when the guard fixed it to match the ID }
+        gate_status: { type: string, enum: [expected, in, absent, refused] }
+        id_type_shown: { type: string, description: The type of ID only, never its number }
+        no_id_reason: { type: string }
+        checked_in_at: { type: string, nullable: true }
+        left_at: { type: string, nullable: true, description: Set when they left before the rest of the group }
     VisitStop:
       type: object
       required: [office_code, purpose, subject]
@@ -665,6 +726,11 @@ components:
           description: Different offices on the same day
           items: { $ref: "#/components/schemas/VisitStop" }
         device_name: { type: string, maxLength: 100 }
+        people:
+          type: array
+          maxItems: 10
+          description: Who comes with the visitor, on the visit's one pass
+          items: { $ref: "#/components/schemas/PersonRequest" }
         location_consent:
           type: object
           required: [granted, version]
@@ -709,6 +775,8 @@ components:
           nullable: true
           description: Valid from 30 minutes before the first approved stop until the end of the last approved stop
         stops: { type: array, items: { type: object, additionalProperties: true } }
+        people: { type: array, items: { $ref: "#/components/schemas/Person" } }
+        people_editable: { type: boolean, description: True while the list can still change (visit_people.php) }
     DeviceRegistration:
       type: object
       required: [installation_id, fcm_token]

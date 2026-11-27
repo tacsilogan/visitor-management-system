@@ -12,8 +12,8 @@ report. Plan about an hour for the first deployment.
 |---|---|
 | **Web service** | This repository's `Dockerfile`: Apache and PHP 8.2 serving `phone_tracker`, plus the background jobs (emails, push notifications, visit timing, location-history cleanup, and the daily 1-year cleanup the Terms and Privacy Notice promises: `record_retention_service.php`). |
 | **MariaDB service** | The database. It must be MariaDB, not MySQL: the database files use MariaDB syntax that MySQL rejects. |
-| **Two volumes** | `/var/lib/mysql` on MariaDB (the data) and `/data` on the web service (sign-in sessions and staff photos). Without them, every deploy loses that data. |
-| **Android app** | Built on your laptop with the HTTPS address inside, then shared as an APK. |
+| **Two volumes** | `/var/lib/mysql` on MariaDB (the data) and `/data` on the web service (sign-in sessions, staff photos, and the published visitor app). Without them, every deploy loses that data. |
+| **Android app** | Built on your laptop with the HTTPS address inside, then published on the website, where visitors download it from the main address. |
 
 HTTPS comes from Railway, which also makes the iPhone camera and the browser location
 work on the Security pages (they are blocked on plain `http://` addresses).
@@ -193,11 +193,17 @@ same key.
 
    The build stops with an explanation if the address is not `https://` or the signing
    key is missing.
-4. Share `visitor_app\app\build\outputs\apk\release\app-release.apk` (Google Drive works).
+4. Publish it: sign in as the admin, open **Menu › Visitor app**, choose
+   `visitor_app\app\build\outputs\apk\release\app-release.apk`, and **Publish**. The server
+   checks the file first ([GROUP_VISITS.md](GROUP_VISITS.md), "Publishing a new version").
+   Visitors download it from the site's main address, and the same sheet prints the gate
+   poster with its QR code. From version 0.13.0, the app tells visitors when a newer version
+   is published.
 5. A phone that has an app signed with another key (a test version, or a build from another
    laptop) must uninstall it first.
 6. For every new version, raise `versionCode` and `versionName` in
-   `visitor_app/app/build.gradle.kts`.
+   `visitor_app/app/build.gradle.kts`. When the Terms and Privacy Notice changes, set its
+   effective date (`TermsNotice.EFFECTIVE_DATE`) to the day you publish.
 
 **Back up the signing folder** (`isatu-visitor-signing`, which holds the key and a copy of
 its passwords) somewhere private, such as a private Google Drive folder and a USB stick.
@@ -269,6 +275,7 @@ The app works without them; visitors see updates when they open it. To turn them
 | `ISATU_ADMIN_PASSWORD` | no | The admin's temporary password on the very first start. |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | no | Push notifications (step 7). |
 | `PUBLIC_BASE_URL` | no | The address of `phone_tracker`, for the ISATU seal in the app's emails. Without it, the address the request came in on is used, or Railway's own. |
+| `ISATU_APP_SIGNING_SHA256` | recommended | The SHA-256 fingerprint of the app's release key (the `SHA256:` line of `keytool -list -v -keystore isatu-visitor-release.jks`). The website then refuses any app file signed with another key. Without it, the first version published sets the key. |
 | `ISATU_TRUST_PROXY` | set by the image | `1`: read the visitor's address and HTTPS from Railway's proxy. Use `0` on a server without a proxy in front. |
 | `VISITOR_APP_ENV` | set by the image | `production`. Never `development` online: it shows reset codes in API replies. |
 
@@ -280,10 +287,11 @@ Do this once with two phones before telling visitors about the app:
 2. Admin sign-in, new password, and two-step verification work.
 3. A new Security account signs in on a phone, including an iPhone, and the QR scanner
    opens the camera.
-4. On an Android phone, the release app installs, registers a visitor, and requests an
-   appointment; the department approves it.
-5. Security scans the pass: the visitor's **Campus visit** map opens and Security sees the
-   live trail.
+4. On an Android phone, the main address shows the visitors' page, and **Download** gives the
+   release app you published. It installs, registers a visitor, and requests an appointment
+   with one person added; the department approves it.
+5. Security scans the pass and checks the IDs on the card: the visitor's **Campus visit** map
+   opens and Security sees the live trail.
 6. At the office pin the visitor is told they arrived and the office sees **Arrived**.
 7. A second scan checks the visitor out.
 8. **Forgot password?** in the app sends an email whose code resets the password.
@@ -295,6 +303,9 @@ The same code runs on any Apache with PHP 8.1 or newer and MariaDB 10.4 or newer
 
 - Apache needs `AllowOverride All` for the site folder and `mod_headers`. The `.htaccess`
   files hold the security headers and keep configuration and tools private.
+- Publishing the visitor app uploads a file of about 40 MB. `phone_tracker/.htaccess` allows
+  that when PHP runs inside Apache (mod_php). With PHP-FPM, set `upload_max_filesize = 110M`
+  and `post_max_size = 112M` in `php.ini` instead.
 - The site needs an HTTPS certificate. Phones block the camera and location on `http://`.
 - Create the tables with `php phone_tracker/tools/setup_database.php --secure-default-accounts`.
 - Set the variables above as system environment variables, so both Apache and the

@@ -12,6 +12,7 @@
 
 require_once __DIR__ . "/appointment_offices.php";
 require_once __DIR__ . "/office_availability_service.php";
+require_once __DIR__ . "/visit_people_service.php";
 
 /** The IDs a guard can record. Only the type is kept, never the ID number. */
 const GATE_ID_TYPES = [
@@ -33,10 +34,14 @@ const GATE_PURPOSES = [
     "Other",
 ];
 
-/** What the guard reads to the visitor before registering them. Change the version with the text. */
-const GATE_NOTICE_VERSION = "gate-notice-1";
-const GATE_NOTICE_TEXT = "We'll record your name, the type of ID you showed, your contact number if you give one, "
-    . "the office you visit, and your time in and out. It's kept for one year, and your location is not tracked.";
+/**
+ * What the guard reads to the visitor, and anyone with them, before registering them. Change the
+ * version with the text. Version 2 covers the people with the visitor (GROUP_VISITS.md).
+ */
+const GATE_NOTICE_VERSION = "gate-notice-2";
+const GATE_NOTICE_TEXT = "We'll record your name and the names of anyone with you, the type of ID each adult showed, "
+    . "your contact number if you give one, the office you visit, and your time in and out. It's kept for one year, "
+    . "and no one's location is tracked.";
 
 /** A gate visit has no booked slot. As with an app walk-in after check-in, "Overstay" starts after this. */
 const GATE_VISIT_HOURS = 4;
@@ -111,10 +116,11 @@ function gate_clean_text(mixed $value): string
  * Registers a visitor at the gate and checks them in, in one transaction.
  *
  * [$input]: full_name, id_type, contact_number (optional), office_code, purpose, concern
- * (optional) and consent (true once the guard has read GATE_NOTICE_TEXT to the visitor).
+ * (optional), people (optional: the people with them, [{full_name, is_adult, id_type}], the ID
+ * only for adults) and consent (true once the guard has read GATE_NOTICE_TEXT to the visitor).
  *
  * @return array{appointment_id:int, registration_code:string, visitor_full_name:string,
- *     office_code:string, office_label:string, checked_in_at:string}
+ *     office_code:string, office_label:string, checked_in_at:string, people_count:int}
  * @throws InvalidArgumentException with a JSON object of field => message
  * @throws DomainException when the office can't take visitors now
  */
@@ -157,6 +163,27 @@ function gate_register_visitor(mysqli $conn, int $guardUserId, array $input, ?Da
     }
     if (!$consent) {
         $errors["consent"] = "Read the notice to the visitor, then tick that they agreed.";
+    }
+    // The people with them: each named, and each adult's ID checked like the visitor's.
+    $rawPeople = $input["people"] ?? [];
+    $people = [];
+    try {
+        $people = visit_people_clean_booking($rawPeople);
+    } catch (InvalidArgumentException $error) {
+        $errors += (array) json_decode($error->getMessage(), true);
+    }
+    foreach ($people as $index => $person) {
+        $people[$index]["id_type"] = "";
+        if ($person["is_adult"]) {
+            $type = gate_clean_text($rawPeople[$index]["id_type"] ?? "");
+            if (!in_array($type, GATE_ID_TYPES, true)) {
+                $errors["people.{$index}.id_type"] = "Person " . ($index + 1) . ": choose the type of ID they showed.";
+            }
+            $people[$index]["id_type"] = $type;
+        }
+    }
+    if ($people && !visit_people_schema_ready($conn)) {
+        $errors["people"] = "Database update required: import phone_tracker/group_visits_migration.sql.";
     }
     if ($errors) {
         throw new InvalidArgumentException((string) json_encode($errors));
@@ -205,13 +232,16 @@ function gate_register_visitor(mysqli $conn, int $guardUserId, array $input, ?Da
         $history->execute();
         $history->close();
 
+        visit_people_insert($conn, ["appointment_id" => $appointmentId, "visit_id" => null], $people, $guardUserId);
+
         // The office hears about it the same way as an app walk-in.
         $notice = $conn->prepare(
             "INSERT INTO app_notifications (recipient_user_id, appointment_id, notification_type, title, message)
              SELECT id, ?, 'walk_in_created', 'Walk-in visitor arriving', ?
              FROM app_users WHERE role = 'offices' AND office_code = ? AND is_active = 1"
         );
-        $noticeText = "{$name} was registered at the gate by Security and is on the way. This visit is not tracked.";
+        $noticeText = "{$name} was registered at the gate by Security" . ($people ? ", with " . visit_people_names_text($people) . "," : "")
+            . " and is on the way. This visit is not tracked.";
         $notice->bind_param("iss", $appointmentId, $noticeText, $officeCode);
         $notice->execute();
         $notice->close();
@@ -229,6 +259,19 @@ function gate_register_visitor(mysqli $conn, int $guardUserId, array $input, ?Da
             "id_type" => $idType,
             "notice_version" => GATE_NOTICE_VERSION,
             "visitor_agreed" => true,
+            // The same shape as a check-in's (visit_people_record_check()), for the activity log.
+            "people" => array_map(function (array $person): array {
+                return [
+                    "name" => $person["full_name"],
+                    "adult" => $person["is_adult"],
+                    "result" => "in",
+                    "id_type" => $person["id_type"],
+                    "no_id" => false,
+                    "no_id_reason" => "",
+                    "added" => false,
+                    "booked_as" => null,
+                ];
+            }, $people),
         ]);
         $ip = isset($_SERVER["REMOTE_ADDR"]) ? substr((string) $_SERVER["REMOTE_ADDR"], 0, 45) : "";
         $audit->bind_param("iisss", $guardUserId, $appointmentId, $entityId, $details, $ip);
@@ -248,6 +291,7 @@ function gate_register_visitor(mysqli $conn, int $guardUserId, array $input, ?Da
         "office_code" => $officeCode,
         "office_label" => $officeLabel,
         "checked_in_at" => $nowSql,
+        "people_count" => count($people),
     ];
 }
 

@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
+import ph.edu.isatu.visitor.data.PersonDto
 import ph.edu.isatu.visitor.data.QrPassDto
 
 /** Whether the guard can scan the pass now, later, or no more. */
@@ -64,11 +65,20 @@ private fun passState(pass: QrPassDto, nowMillis: Long): PassState = when {
 }
 
 /**
- * The visitor pass the way the guard needs it: the QR code first, then whose it is.
+ * The visitor pass the way the guard needs it: the QR code first, then whose it is, and the people
+ * coming with the visitor (GROUP_VISITS.md), with Change while the list can still change.
  * While the pass can be scanned, the screen is at full brightness.
  */
 @Composable
-internal fun PassCard(payload: String, visitorName: String, reference: String?, pass: QrPassDto) {
+internal fun PassCard(
+    payload: String,
+    visitorName: String,
+    reference: String?,
+    pass: QrPassDto,
+    people: List<PersonDto> = emptyList(),
+    onChangePeople: (() -> Unit)? = null,
+) {
+    val adultsWithYou = peopleWithVisitor(people).any { it.isAdult }
     val bitmap = remember(payload) { generateQrBitmap(payload) }
     val state = passState(pass, System.currentTimeMillis())
     if (state == PassState.READY) FullBrightness()
@@ -94,13 +104,26 @@ internal fun PassCard(payload: String, visitorName: String, reference: String?, 
                 Text(visitorName, style = MaterialTheme.typography.titleMedium)
                 reference?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MutedInk) }
             }
+            PassPeopleBox(people, onChangePeople)
             when (state) {
                 PassState.READY -> PassHint(
                     Icons.Rounded.LightMode,
                     Color(0xFF9A6700),
-                    "Show it with a valid ID. The screen is at full brightness for the scan.",
+                    if (adultsWithYou) {
+                        "Show it with your valid ID. Adults with you show theirs too. The screen is at full brightness for the scan."
+                    } else {
+                        "Show it with a valid ID. The screen is at full brightness for the scan."
+                    },
                 )
-                PassState.LATER -> PassHint(Icons.Rounded.Info, IsatuBlue, "Show it to the guard with a valid ID when you arrive.")
+                PassState.LATER -> PassHint(
+                    Icons.Rounded.Info,
+                    IsatuBlue,
+                    if (adultsWithYou) {
+                        "Show it to the guard with your valid ID when you arrive. Adults with you show theirs too."
+                    } else {
+                        "Show it to the guard with a valid ID when you arrive."
+                    },
+                )
                 PassState.ENDED -> Unit
             }
         }

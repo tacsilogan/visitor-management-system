@@ -40,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,9 +50,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import ph.edu.isatu.visitor.data.AvailabilitySlotDto
+import ph.edu.isatu.visitor.data.PersonRequest
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -67,10 +70,16 @@ private val visitPurposes = listOf(
     "Other",
 )
 
+/**
+ * [onAddPerson] opens "Add a person" over the whole screen (MainShell draws the sheet) and hands
+ * the person to the given function, which puts them on this form's list.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
+fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel, onAddPerson: ((PersonRequest) -> Unit) -> Unit = {}) {
     var visitType by remember { mutableStateOf("walk_in") }
+    // The people coming with the visitor (GROUP_VISITS.md), for one office or several.
+    val people = remember { mutableStateListOf<PersonRequest>() }
     var officeCode by remember { mutableStateOf("") }
     var date by remember { mutableStateOf("") }
     var selectedSlot by remember { mutableStateOf<AvailabilitySlotDto?>(null) }
@@ -201,6 +210,14 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
             }
         }
 
+        item {
+            PeopleWithYouCard(
+                people = people,
+                onAdd = { onAddPerson { person -> if (people.size < MAX_PEOPLE_WITH_VISITOR) people.add(person) } },
+                onRemove = { index -> if (index in people.indices) people.removeAt(index) },
+            )
+        }
+
         if (multipleOffices) {
             val walkIn = visitType == "walk_in"
             multiStopBookingItems(
@@ -210,7 +227,7 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
                 date = date,
                 purposes = visitPurposes,
                 onPickDate = { showDatePicker = true },
-                onSubmit = { viewModel.createVisit(visitType, multiStop.toRequests(walkIn)) },
+                onSubmit = { viewModel.createVisit(visitType, multiStop.toRequests(walkIn), people.toList()) },
             )
             item { Spacer(Modifier.height(12.dp)) }
             return@LazyColumn
@@ -381,6 +398,7 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
                         details = details,
                         start = selectedSlot?.scheduledStartAt.orEmpty(),
                         end = selectedSlot?.scheduledEndAt.orEmpty(),
+                        people = people.toList(),
                     )
                 },
                 modifier = Modifier.fillMaxWidth(),
@@ -430,15 +448,17 @@ fun BookingScreen(state: VisitorUiState, viewModel: AppViewModel) {
 }
 
 @Composable
-private fun VisitTypeButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+internal fun VisitTypeButton(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // Narrow side padding, so "Appointment" stays on one line on a 360 dp phone.
     OutlinedButton(
         onClick = onClick,
         modifier = modifier.height(52.dp),
         shape = RoundedCornerShape(10.dp),
         border = BorderStroke(1.dp, if (selected) IsatuBlue else BorderSoft),
+        contentPadding = PaddingValues(horizontal = 10.dp),
     ) {
         RadioButton(selected = selected, onClick = null)
-        Text(text, color = if (selected) IsatuBlueDark else Ink)
+        Text(text, color = if (selected) IsatuBlueDark else Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

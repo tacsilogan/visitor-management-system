@@ -71,6 +71,8 @@ jobs:
         run: docker exec web php /var/www/html/phone_tracker/tools/gate_registration_test.php
       - name: Visitors' own accounts, and monitoring is Security's alone
         run: docker exec web php /var/www/html/phone_tracker/tools/visitor_rights_test.php
+      - name: People with a visitor, the ID check, and publishing the app
+        run: docker exec web php /var/www/html/phone_tracker/tools/group_visits_test.php
 
       # Each failed check is written as an error note, which shows on the pull request
       # without opening the log.

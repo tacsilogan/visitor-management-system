@@ -60,6 +60,7 @@
     };
 
     const ICON = {
+        people: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20"/><circle cx="9.5" cy="7.5" r="3.5"/><path d="M17 11a3 3 0 1 0 0-6M21 20v-1.5a4 4 0 0 0-3-3.9"/></svg>',
         clock: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
         check: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
         chev: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
@@ -741,6 +742,31 @@
         };
     }
 
+    /*
+     * The people coming with a visitor (GROUP_VISITS.md): before the gate, everyone on the list;
+     * after it, those who came in and haven't left. The office sees their names, never their IDs.
+     */
+    function peopleWith(row) {
+        return (Array.isArray(row.people) ? row.people : []).filter(function (person) {
+            return person.gate_status === "expected" || (person.gate_status === "in" && !person.left_at);
+        });
+    }
+
+    function namesText(people) {
+        const names = people.map(function (person) {
+            return person.full_name + (person.is_adult ? "" : " (under 18)");
+        });
+        if (names.length <= 1) {
+            return names.join("");
+        }
+        return names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+    }
+
+    function groupChip(row) {
+        const count = peopleWith(row).length;
+        return count ? '<span class="ofc-chip is-blue grp-chip" title="Coming with ' + count + (count === 1 ? " other" : " others") + '">' + ICON.people + "+" + count + "</span>" : "";
+    }
+
     function todayItem(row, group) {
         const help = helpFor(row.id);
         const start = parseServerDate(row.scheduled_start_at);
@@ -773,11 +799,17 @@
         if (group === "done") {
             classes.push("is-done");
         }
+        const people = group === "done"
+            ? (row.people || []).filter(function (person) { return person.gate_status === "in"; })
+            : peopleWith(row);
+        const names = people.length
+            ? '<span class="grp-tnames">' + ICON.people + "<span>With " + esc(namesText(people)) + "</span></span>"
+            : "";
         return '<li class="' + classes.join(" ") + '">' +
             '<span class="ofc-ttime"><b>' + esc(time.replace(/\s?[AP]M$/i, "")) + "</b><small>" + esc((time.match(/[AP]M$/i) || [""])[0]) + "</small></span>" +
             '<button class="ofc-tbody" type="button" data-open-appointment="' + Number(row.id) + '">' +
-            "<strong>" + esc(row.visitor_full_name) + (row.visit_type === "walk_in" ? '<span class="ofc-chip">Walk-in</span>' : "") + "</strong>" +
-            "<span>" + esc(purposeLine(row)) + "</span>" + notes.join("") + "</button>" +
+            "<strong>" + esc(row.visitor_full_name) + (row.visit_type === "walk_in" ? '<span class="ofc-chip">Walk-in</span>' : "") + groupChip(row) + "</strong>" +
+            "<span>" + esc(purposeLine(row)) + "</span>" + names + notes.join("") + "</button>" +
             (canFinish ? '<button class="ofc-btn is-small" type="button" data-meeting-done="' + Number(row.id) + '">' + ICON.check + "Meeting done</button>" : "") +
             "</li>";
     }
@@ -836,11 +868,13 @@
             " · " + esc(timeRange(row.scheduled_start_at, row.scheduled_end_at));
         const stop = stopLabel(row);
         const meta = "Asked " + agoText(row.created_at) + (soon ? " · expires " + deadlineText(row.scheduled_end_at) : "");
+        const people = peopleWith(row);
         return '<li class="ofc-rcard' + (soon ? " is-soon" : "") + '">' +
             '<button class="ofc-rmain" type="button" data-open-appointment="' + Number(row.id) + '">' +
             '<span class="ofc-rtop"><strong>' + esc(row.visitor_full_name) + "</strong>" + ICON.chev + "</span>" +
             '<span class="ofc-rwhy">' + esc(purposeLine(row)) + "</span>" +
             '<span class="ofc-rwhen">' + ICON.clock + "<span>" + when + "</span></span>" +
+            (people.length ? '<span class="ofc-rgroup">' + ICON.people + "<span>" + (people.length + 1) + " people: with " + esc(namesText(people)) + "</span></span>" : "") +
             (stop ? '<span class="ofc-rmulti">' + esc(stop) + "</span>" : "") +
             '<span class="ofc-rmeta' + (soon ? " is-warn" : "") + '">' + esc(meta) + "</span></button>" +
             '<div class="ofc-ractions">' +
@@ -1051,10 +1085,30 @@
             fact("Phone", appointment.contact_number) +
             fact("Email", atGate ? "" : appointment.visitor_email) +
             fact("Visit type", atGate ? "Walk-in, registered at the gate" : appointment.visit_type === "walk_in" ? "Walk-in" : "Appointment") +
-            fact("ID checked", atGate ? appointment.id_type_shown : "") +
+            fact("ID checked", appointment.id_type_shown || "") +
             fact(atGate ? "Registered" : "Asked", fullDate(appointment.created_at)) + "</dl>");
         if (appointment.visitor_email && !atGate) {
             parts.push('<a class="ofc-btn is-quiet ofc-mail" href="mailto:' + esc(encodeURI(appointment.visitor_email)) + '">' + ICON.mail + "Email the visitor</a>");
+        }
+        // The people coming with the visitor, and whether each came in (GROUP_VISITS.md).
+        const people = Array.isArray(appointment.people) ? appointment.people : [];
+        if (people.length) {
+            const status = function (person) {
+                if (person.gate_status === "absent") {
+                    return "didn't come";
+                }
+                if (person.gate_status === "refused") {
+                    return "not let in at the gate";
+                }
+                if (person.left_at) {
+                    return "left at " + clock(person.left_at);
+                }
+                return person.gate_status === "in" ? "came in" : "";
+            };
+            parts.push('<p class="ofc-label">People with them · ' + people.length + '</p><ul class="ofc-people">' + people.map(function (person) {
+                const notes = [person.is_adult ? "18 or older" : "Under 18", status(person)].filter(Boolean);
+                return "<li>" + ICON.people + "<span><strong>" + esc(person.full_name) + "</strong><small>" + esc(notes.join(" · ")) + "</small></span></li>";
+            }).join("") + "</ul>");
         }
 
         const history = Array.isArray(data.history) ? data.history : [];

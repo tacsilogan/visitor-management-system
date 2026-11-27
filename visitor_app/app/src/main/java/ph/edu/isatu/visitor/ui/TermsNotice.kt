@@ -21,8 +21,21 @@ object TermsNotice {
     /** The last words in the box, since Version 5: the server keeps which version each visitor agreed to. */
     const val AGE_PART = "I am 18 or older, or my parent or guardian agrees for me."
 
+    /**
+     * When Version 6 takes effect: the day app 0.13.0 is published on the website (the user's
+     * choice, GROUP_VISITS.md). Set it to that day when building the release.
+     */
+    const val EFFECTIVE_DATE = "November 27, 2026"
+
+    /** "What changed" on the agree-again screen: each change, and the part of the notice it is in. */
+    val WHAT_CHANGED: List<Pair<String, String>> = listOf(
+        "Your pass covers the people you add when you book. Adults with you show a valid ID too." to "Your pass",
+        "We keep their names, and whether each is 18 or older, with your visit. Tell them before you add them." to "People with you · What we collect",
+        "The guard notes the type of each ID, never its number. Only your phone is tracked." to "What we collect · Your location",
+    )
+
     val BLOCKS: List<NoticeBlock> = listOf(
-        NoticeBlock.Fine("ISATU Visits app. Version 5, effective November 17, 2026."),
+        NoticeBlock.Fine("ISATU Visits app. Version 6, effective $EFFECTIVE_DATE."),
         NoticeBlock.Summary(
             "In short",
             listOf(
@@ -41,8 +54,14 @@ object TermsNotice {
         ),
         NoticeBlock.Heading("Your pass"),
         NoticeBlock.Paragraph(
-            "Your pass is for you alone. Show it to the guard with a valid ID. It works from 30 minutes " +
-                "before your visit until the visit's scheduled end.",
+            "Your pass is for you and the people you add to your visit. Show it to the guard with a valid ID; " +
+                "each adult with you shows one too, and the guard checks that the names match. It works from " +
+                "30 minutes before your visit until the visit's scheduled end.",
+        ),
+        NoticeBlock.Heading("People with you"),
+        NoticeBlock.Paragraph(
+            "If you add people to your visit, tell them first that ISATU keeps their names with your visit. " +
+                "Add someone under 18 only if their parent or guardian agrees. They follow the same campus rules as you.",
         ),
         NoticeBlock.Heading("Your visit"),
         NoticeBlock.Paragraph(
@@ -78,8 +97,10 @@ object TermsNotice {
                 "scrambled form that nobody can read.",
         ),
         NoticeBlock.Point(
-            "**Visits:** the office, date and time, purpose, subject, and any details you add; your check-in " +
-                "and check-out times; and when you say you have arrived or need help.",
+            "**Visits:** the office, date and time, purpose, subject, and any details you add; the names of the " +
+                "people with you, and whether each is 18 or older; the type of ID you and each adult with you show " +
+                "the guard (never its number); your check-in and check-out times; and when you say you have " +
+                "arrived or need help.",
         ),
         NoticeBlock.Point("**Location:** see the next section."),
         NoticeBlock.Point(
@@ -104,6 +125,7 @@ object TermsNotice {
                 "25 meters of the boundary count as inside, because GPS can drift.",
         ),
         NoticeBlock.Point("The moment-to-moment position that guides you on the map stays on your phone."),
+        NoticeBlock.Point("Only your own phone shares its position. The people with you are not tracked."),
         NoticeBlock.Point(
             "You can tap **Stop sharing my location** at any time. Your visit and directions keep working.",
         ),
@@ -116,8 +138,9 @@ object TermsNotice {
 
         NoticeBlock.Heading("Who can see it"),
         NoticeBlock.Point(
-            "**The office you are visiting:** your name, email, contact number, visit details, and when you " +
-                "arrive or ask for help. Offices can't see your position on a map.",
+            "**The office you are visiting:** your name, email, contact number, visit details (including the " +
+                "names of the people with you), and when you arrive or ask for help. Offices can't see your " +
+                "position on a map.",
         ),
 
         NoticeBlock.Point(
@@ -140,7 +163,8 @@ object TermsNotice {
         NoticeBlock.Point("**Location positions:** 90 days, then deleted automatically."),
         NoticeBlock.Point("**Sign-in attempts:** 90 days."),
         NoticeBlock.Point(
-            "**Visits, consent records, and activity records:** 1 year after the visit or activity, then deleted automatically.",
+            "**Visits (with the names of the people with you), consent records, and activity records:** 1 year " +
+                "after the visit or activity, then deleted automatically.",
         ),
         NoticeBlock.Point(
             "**Your account:** deleted right away when you delete it in Profile, or automatically after 1 year " +
